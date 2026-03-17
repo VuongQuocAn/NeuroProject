@@ -1,0 +1,27 @@
+[HỒ SƠ DỰ ÁN NCKH - NEURODIAGNOSIS AI]
+Mã số đề tài: TT/P.QLPTKHCN/13/BM02 (Đại học Tôn Đức Thắng)
+Tên đề tài: Phát triển mô hình học sâu đa mô thức ứng dụng XAI trong hỗ trợ chẩn đoán và tiên lượng bệnh u não.
+
+1. TRẠNG THÁI HIỆN TẠI (Đến cuối tháng 02/2026):
+Nhóm đã hoàn thành xuất sắc Giai đoạn 1: Xây dựng nền tảng Backend & Cơ sở dữ liệu. Hạ tầng đã được đóng gói và chạy ổn định bằng Docker Compose.
+
+2. KIẾN TRÚC HỆ THỐNG ĐÃ TRIỂN KHAI:
+
+Tech Stack: Python 3.10, FastAPI, PostgreSQL, MinIO, Redis, Docker.
+Database Schema (SQLAlchemy):
+	Patient: Lưu id, patient_external_id, age, gender.
+	Image: Lưu patient_id, modality (MRI, WSI), scan_date, file_path 	(đường dẫn trên MinIO).
+	Diagnosis: Lược đồ chuẩn bị sẵn để lưu kết quả AI dạng JSON và 	access_log.
+
+3. CÁC TÍNH NĂNG ĐÃ HOÀN THIỆN (RESTful API):
+
+Quản lý bệnh nhân: 
+	POST /patients/ (Tạo mới), 
+	PATCH /records/patients/{id} (Cập nhật), 
+	GET /records/patients/{id} (Truy xuất kèm Pre-signed URL từ MinIO).
+
+Upload & Ẩn danh (Core NCKH):
+	POST /upload/mri/: Xử lý file DICOM, dùng pydicom tự động ẩn danh (xóa/mã hóa PatientName, PatientID, v.v.) trước khi lưu lên MinIO bucket medical-data.
+	POST /upload/wsi/: Xử lý file Mô bệnh học khổng lồ bằng cơ chế Streaming (chia chunk 10MB) đẩy trực tiếp lên MinIO, ngăn tràn RAM server.
+
+Xóa dữ liệu an toàn: DELETE /records/images/{id} (Xóa metadata trong DB và dọn dẹp file vật lý trên MinIO).

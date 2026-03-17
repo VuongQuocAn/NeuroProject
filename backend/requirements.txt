@@ -1,0 +1,21 @@
+fastapi==0.115.12
+uvicorn==0.34.0
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+pydicom==2.4.3
+minio==7.2.0
+python-multipart==0.0.20
+
+# Async task queue
+celery==5.3.6
+redis==5.0.1
+
+# JWT Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# RNA-seq file validation
+pandas==2.1.4
+
+# Environment variables
+python-dotenv==1.0.0

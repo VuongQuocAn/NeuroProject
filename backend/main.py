@@ -1,0 +1,66 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+import models
+from database import engine
+from routers import upload, records, multimodal, inference, analysis, auth, admin
+
+# Tự động tạo tất cả bảng trong PostgreSQL khi khởi động
+models.Base.metadata.create_all(bind=engine)
+
+app = FastAPI(
+    title="NeuroDiagnosis AI Backend",
+    description=(
+        "Backend API cho hệ thống chẩn đoán và tiên lượng u não đa mô thức. "
+        "Hỗ trợ MRI (YOLOv5 + U-Net + DenseNet-ViT), WSI, RNA-seq và Fusion Model."
+    ),
+    version="2.0.0",
+)
+
+# CORS — cấu hình cho môi trường phát triển
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ============================================================
+# ĐĂNG KÝ CÁC ROUTER
+# ============================================================
+
+# --- Nhóm Upload (hiện có) ---
+app.include_router(upload.router)
+
+# --- Nhóm Quản lý hồ sơ (hiện có) ---
+app.include_router(records.router)
+
+# --- Nhóm Dữ liệu Đa mô thức (RNA + Lâm sàng) ---
+app.include_router(multimodal.router)
+
+# --- Nhóm AI Inference (Celery bất đồng bộ) ---
+app.include_router(inference.router)
+
+# --- Nhóm Kết quả & XAI (Grad-CAM, Survival Curve) ---
+app.include_router(analysis.router)
+
+# --- Nhóm Xác thực (JWT) ---
+app.include_router(auth.router)
+
+# --- Nhóm Quản trị (Access Log) ---
+app.include_router(admin.router)
+
+
+# ============================================================
+# HEALTH CHECK
+# ============================================================
+
+@app.get("/", tags=["Health"])
+def read_root():
+    return {
+        "status": "running",
+        "project": "NeuroDiagnosis AI Backend",
+        "version": "2.0.0",
+        "docs": "/docs",
+    }

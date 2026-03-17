@@ -1,0 +1,19 @@
+Một số góp ý để hoàn thiện (Theo lộ trình Giai đoạn 2)
+Để chuẩn bị cho việc tích hợp các mô hình AI (YOLOv5, ViT) và XAI trong các tháng tới, bạn nên xem xét bổ sung hoặc điều chỉnh các điểm sau:
+
+Bổ sung Endpoint dự đoán (Inference):
+
+Hiện tại bạn đã có lược đồ Diagnosis để lưu kết quả. Bạn cần sớm phát triển endpoint POST /diagnosis/predict/{image_id}.
+
+Endpoint này nên hỗ trợ Background Tasks của FastAPI để gọi mô hình AI xử lý, vì các mô hình học sâu đa mô thức thường mất thời gian tính toán lâu hơn một request HTTP thông thường.
+
+
+Tích hợp Redis cho XAI: * Trong stack công nghệ có Redis. Bạn nên tận dụng Redis để làm cache cho các bản đồ nhiệt (Heatmaps) từ Grad-CAM/Score-CAM. Khi bác sĩ yêu cầu giải thích kết quả nhiều lần cho cùng một ảnh, hệ thống sẽ phản hồi tức thì thay vì phải chạy lại mô hình XAI.
+
+Quản lý phiên bản dữ liệu (Data Versioning):
+
+Trong nghiên cứu khoa học, việc truy vết dữ liệu nào đã dùng để train mô hình nào rất quan trọng. Bạn có thể cân nhắc thêm trường version hoặc tag trong bảng Image hoặc Diagnosis để phục vụ việc viết báo cáo nghiệm thu sau này.
+
+Xử lý lỗi (Error Handling):
+
+Đảm bảo các API có cơ chế validation chặt chẽ (Pydantic). Ví dụ: kiểm tra định dạng file ảnh MRI trước khi xử lý ẩn danh để tránh crash server khi người dùng upload sai định dạng.

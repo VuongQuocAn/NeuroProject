@@ -1,0 +1,68 @@
+services:
+  # 1.2. Hệ quản trị cơ sở dữ liệu (PostgreSQL)
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: neuro_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+    ports:
+      - "5432:5432"
+    networks:
+      - neuro_net
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # 1.3. Lưu trữ dữ liệu khối lớn (MinIO)
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Giao diện quản lý
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    command: server /data --console-address ":9001"
+    networks:
+      - neuro_net
+    volumes:
+      - minio_data:/data
+
+  # Hàng đợi xử lý file ảnh WSI lớn (Redis)
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - neuro_net
+
+  # API Cốt lõi (FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql://admin:password123@db:5432/neuro_db
+      - MINIO_URL=minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password123
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - minio
+      - redis
+    networks:
+      - neuro_net
+
+# Khai báo mạng và ổ đĩa lưu trữ
+networks:
+  neuro_net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  minio_data:
