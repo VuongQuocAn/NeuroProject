@@ -13,6 +13,10 @@ export default function HistoryPage() {
       // res.data corresponds to mockHistory
       setHistory(res.data);
       setLoading(false);
+    }).catch(err => {
+      console.error(err);
+      setHistory([]);
+      setLoading(false);
     });
   }, []);
 

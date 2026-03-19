@@ -60,8 +60,14 @@ export const apiService = {
     },
     getHistory: async () => {
       if (USE_MOCK) return { data: mockHistory };
-      // In a real app, this might be a specific endpoint or combined from records
       return api.get("/records/patients/"); 
+    },
+    getById: async (id: string) => {
+      if (USE_MOCK) {
+        const patient = mockPatients.find(p => p.id.includes(id) || id.includes(p.id.replace('#', '')));
+        return { data: { patient: patient || mockPatients[0], images: [] } };
+      }
+      return api.get(`/records/patients/${id}`);
     }
   },
   analysis: {

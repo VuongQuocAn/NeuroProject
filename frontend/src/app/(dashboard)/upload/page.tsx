@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { UploadCloud, FileType, CheckCircle2, Clock, PlayCircle, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { UploadCloud, FileType, CheckCircle2, Clock, PlayCircle, Loader2, ArrowRight } from "lucide-react";
 import { apiService } from "@/lib/api";
 
 const recentUploads = [
@@ -12,6 +13,7 @@ const recentUploads = [
 ];
 
 export default function UploadPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"dicom" | "rna" | "clinical">("dicom");
   const [uploading, setUploading] = useState(false);
   const [patientId, setPatientId] = useState("");
@@ -39,7 +41,15 @@ export default function UploadPage() {
       setStatusMsg({ text: "Tải lên MRI thành công!", type: "success" });
       setFile(null);
     } catch (err: any) {
-      setStatusMsg({ text: "Lỗi upload: " + err.message, type: "error" });
+      const detail = err.response?.data?.detail;
+      const errorMessage = typeof detail === 'string' 
+        ? detail 
+        : Array.isArray(detail) 
+          ? detail.map((e: any) => e.msg).join(", ")
+          : typeof detail === 'object'
+            ? JSON.stringify(detail)
+            : err.message;
+      setStatusMsg({ text: "Lỗi upload: " + errorMessage, type: "error" });
     } finally {
       setUploading(false);
     }
@@ -57,7 +67,15 @@ export default function UploadPage() {
       setStatusMsg({ text: "Tải lên dữ liệu giải trình tự Gen thành công!", type: "success" });
       setFile(null);
     } catch (err: any) {
-      setStatusMsg({ text: err.response?.data?.detail || "Lỗi upload RNA. Đảm bảo file có cột patient_id hợp lệ.", type: "error" });
+      const detail = err.response?.data?.detail;
+      const errorMessage = typeof detail === 'string' 
+        ? detail 
+        : Array.isArray(detail) 
+          ? detail.map((e: any) => e.msg).join(", ")
+          : typeof detail === 'object'
+            ? JSON.stringify(detail)
+            : err.message || "Lỗi upload RNA. Đảm bảo file có cột patient_id hợp lệ.";
+      setStatusMsg({ text: "Lỗi upload: " + errorMessage, type: "error" });
     } finally {
       setUploading(false);
     }
@@ -75,7 +93,15 @@ export default function UploadPage() {
       setStatusMsg({ text: "Cập nhật thông tin lâm sàng thành công!", type: "success" });
       setKi67("");
     } catch (err: any) {
-      setStatusMsg({ text: "Lỗi cập nhật: " + err.message, type: "error" });
+      const detail = err.response?.data?.detail;
+      const errorMessage = typeof detail === 'string' 
+        ? detail 
+        : Array.isArray(detail) 
+          ? detail.map((e: any) => e.msg).join(", ")
+          : typeof detail === 'object'
+            ? JSON.stringify(detail)
+            : err.message;
+      setStatusMsg({ text: "Lỗi cập nhật: " + errorMessage, type: "error" });
     } finally {
       setUploading(false);
     }
@@ -120,8 +146,16 @@ export default function UploadPage() {
 
         {/* Status Message */}
         {statusMsg.text && (
-          <div className={`mb-4 p-4 rounded-lg border ${statusMsg.type === 'error' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'}`}>
-            {statusMsg.text}
+          <div className={`mb-4 p-4 rounded-lg border flex items-center justify-between ${statusMsg.type === 'error' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'}`}>
+            <span>{statusMsg.text}</span>
+            {statusMsg.type === 'success' && patientId && (
+              <button 
+                onClick={() => router.push(`/patients/${patientId}`)}
+                className="flex items-center gap-1 text-sm font-bold underline hover:no-underline"
+              >
+                Xem hồ sơ <ArrowRight className="h-4 w-4" />
+              </button>
+            )}
           </div>
         )}
 
@@ -254,8 +288,12 @@ export default function UploadPage() {
                   {item.desc && <span className="flex items-center gap-2 animate-pulse"><Loader2 className="h-3.5 w-3.5 animate-spin"/> {item.desc}</span>}
                </div>
 
-               <button disabled={item.status !== 'READY'} className="ml-2 py-2 w-full rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:hover:bg-slate-800 text-sm font-medium text-white transition-colors flex items-center justify-center gap-2">
-                 {item.status === 'READY' ? <><PlayCircle className="h-4 w-4" /> Phân tích bằng AI</> : 'Đang xử lý dữ liệu...'}
+               <button 
+                 disabled={item.status !== 'READY'} 
+                 onClick={() => router.push(`/patients/1`)} // Defaulting to ID 1 for mock UI
+                 className="ml-2 py-2 w-full rounded-lg bg-slate-800 hover:bg-teal-600 disabled:opacity-50 disabled:hover:bg-slate-800 text-sm font-medium text-white transition-colors flex items-center justify-center gap-2"
+               >
+                 {item.status === 'READY' ? <><PlayCircle className="h-4 w-4" /> Xem hồ sơ & Phân tích</> : 'Đang xử lý dữ liệu...'}
                </button>
             </div>
           ))}

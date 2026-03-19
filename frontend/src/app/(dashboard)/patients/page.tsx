@@ -1,19 +1,43 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { apiService } from "@/lib/api";
 import { Search, UserPlus, FileSpreadsheet, AlertTriangle, BadgeCheck, ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function PatientsPage() {
+  const router = useRouter();
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     apiService.patients.getAll().then(res => {
       setPatients(res.data);
       setLoading(false);
+    }).catch(err => {
+      console.error(err);
+      setPatients([]);
+      setLoading(false);
     });
   }, []);
+
+  // Pagination Logic
+  const totalItems = patients.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  const currentPatients = patients.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
 
   // Helper for rendering AI Risk Bar in table
   const renderRiskBar = (score: number) => {
@@ -32,19 +56,20 @@ export default function PatientsPage() {
   };
 
   // Helper for Status Badge
-  const renderStatusBadge = (diagnosis: string) => {
+  const renderStatusBadge = (diagnosis?: string) => {
+    const label = diagnosis || "Chưa có";
     let bgClasses = "bg-slate-800 text-slate-400 border border-slate-700";
-    if (diagnosis.includes("Rủi ro cao") || diagnosis.includes("GBM") || diagnosis.includes("Glioma")) {
+    if (label.includes("Rủi ro cao") || label.includes("GBM") || label.includes("Glioma")) {
       bgClasses = "bg-red-500/10 text-red-500 border border-red-500/20";
-    } else if (diagnosis.includes("Meningioma") || diagnosis.includes("Aneurysm")) {
+    } else if (label.includes("Meningioma") || label.includes("Aneurysm")) {
       bgClasses = "bg-blue-500/10 text-blue-400 border border-blue-500/20";
-    } else if (diagnosis.includes("Sclerosis")) {
+    } else if (label.includes("Sclerosis")) {
       bgClasses = "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20";
     }
     
     return (
       <span className={`px-2.5 py-1 text-xs font-semibold rounded-md ${bgClasses}`}>
-        {diagnosis}
+        {label}
       </span>
     );
   };
@@ -63,7 +88,10 @@ export default function PatientsPage() {
           />
         </div>
         
-        <button className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 hover:bg-teal-500 transition-all active:scale-95">
+        <button 
+          onClick={() => router.push("/upload")}
+          className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 hover:bg-teal-500 transition-all active:scale-95"
+        >
           <UserPlus className="h-4 w-4" />
           Thêm bệnh nhân mới
         </button>
@@ -96,20 +124,23 @@ export default function PatientsPage() {
                     </div>
                   </td>
                 </tr>
-              ) : patients.map((p, idx) => (
-                <tr key={idx} className="hover:bg-slate-800/20 transition-colors group cursor-pointer">
-                  <td className="px-6 py-4 font-mono text-slate-500">{p.id}</td>
-                  <td className="px-6 py-4 font-medium text-slate-200">{p.name}</td>
-                  <td className="px-6 py-4 text-slate-300">{p.age} / {p.gender}</td>
-                  <td className="px-6 py-4 text-slate-400">{p.lastVisit}</td>
+              ) : currentPatients.map((p, idx) => (
+                <tr key={p.id || idx} className="hover:bg-slate-800/20 transition-colors group cursor-pointer">
+                  <td className="px-6 py-4 font-mono text-slate-500">{p.external_id || p.id}</td>
+                  <td className="px-6 py-4 font-medium text-slate-200">{p.name || `Bệnh nhân #${p.id}`}</td>
+                  <td className="px-6 py-4 text-slate-300">{p.age ?? '—'} / {p.gender ?? '—'}</td>
+                  <td className="px-6 py-4 text-slate-400">{p.lastVisit || '—'}</td>
                   <td className="px-6 py-4">
                     {renderStatusBadge(p.diagnosis)}
                   </td>
                   <td className="px-6 py-4">
-                    {renderRiskBar(p.riskScore)}
+                    {renderRiskBar(p.riskScore ?? 0)}
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <button className="text-teal-500 font-semibold hover:text-teal-400 opacity-80 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => router.push(`/patients/${p.id}`)}
+                      className="text-teal-500 font-semibold hover:text-teal-400 opacity-80 group-hover:opacity-100 transition-opacity"
+                    >
                       Xem chi tiết
                     </button>
                   </td>
@@ -122,16 +153,38 @@ export default function PatientsPage() {
         {/* Pagination Footer */}
         <div className="flex items-center justify-between border-t border-slate-800 bg-[#151f32]/50 px-6 py-3">
           <span className="text-sm text-slate-500">
-            Showing <span className="font-semibold text-slate-300">1</span> to <span className="font-semibold text-slate-300">6</span> of <span className="font-semibold text-slate-300">248</span> patients
+            Hiển thị <span className="font-semibold text-slate-300">{totalItems > 0 ? startIndex + 1 : 0}</span> đến <span className="font-semibold text-slate-300">{endIndex}</span> trong <span className="font-semibold text-slate-300">{totalItems}</span> bệnh nhân
           </span>
           <div className="flex items-center gap-1">
-            <button className="p-2 rounded-lg text-slate-500 hover:bg-slate-800 disabled:opacity-50"><ChevronLeft className="h-4 w-4" /></button>
-            <button className="w-8 h-8 rounded-lg bg-teal-600 text-white font-medium text-sm shadow-md shadow-teal-500/20">1</button>
-            <button className="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-800 font-medium text-sm">2</button>
-            <button className="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-800 font-medium text-sm">3</button>
-            <span className="text-slate-500 px-1">...</span>
-            <button className="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-800 font-medium text-sm">42</button>
-            <button className="p-2 rounded-lg text-slate-400 hover:bg-slate-800"><ChevronRight className="h-4 w-4" /></button>
+            <button 
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="p-2 rounded-lg text-slate-500 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`w-8 h-8 rounded-lg font-medium text-sm transition-all ${
+                  currentPage === page 
+                    ? "bg-teal-600 text-white shadow-md shadow-teal-500/20" 
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button 
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </div>

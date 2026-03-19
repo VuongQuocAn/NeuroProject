@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
+import crud
 from database import get_db
 from utils import minio_client, ensure_bucket_exists, get_current_user
 
@@ -22,7 +23,7 @@ REQUIRED_RNA_COLUMN = "patient_id"
 
 @router.post("/upload/rna/", response_model=schemas.RnaDataResponse)
 async def upload_rna(
-    patient_id: int,
+    patient_id: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
@@ -69,11 +70,11 @@ async def upload_rna(
                    f"Các ID tìm thấy trong file: {file_patient_ids[:5]}",
         )
 
-    db_patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    db_patient = crud.get_patient_by_id_or_external(db, patient_id)
     if not db_patient:
         raise HTTPException(
             status_code=404,
-            detail=f"Không tìm thấy bệnh nhân với id={patient_id} trong hệ thống",
+            detail=f"Không tìm thấy bệnh nhân với id='{patient_id}' trong hệ thống",
         )
 
     # --- LƯU FILE LÊN MINIO ---
@@ -91,7 +92,7 @@ async def upload_rna(
     # --- LƯU METADATA VÀO DB ---
     num_genes = len(header_df.columns) - 1  # Trừ cột patient_id
     new_rna = models.RnaData(
-        patient_id=patient_id,
+        patient_id=db_patient.id,
         file_path=f"/{RNA_BUCKET}/{unique_filename}",
         file_format=extension,
         num_genes=num_genes,
@@ -110,23 +111,23 @@ async def upload_rna(
 
 @router.patch("/records/patients/{patient_id}/clinical", response_model=schemas.ClinicalDataResponse)
 def update_clinical_data(
-    patient_id: int,
+    patient_id: str,
     payload: schemas.ClinicalDataUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    # Xác minh bệnh nhân tồn tại
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    # Xác minh bệnh nhân tồn tại (Hỗ trợ cả ID và External ID)
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
     if not patient:
-        raise HTTPException(status_code=404, detail="Không tìm thấy bệnh nhân")
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy bệnh nhân '{patient_id}'")
 
-    # Upsert: lấy hoặc tạo mới bản ghi ClinicalData
+    # Upsert: lấy hoặc tạo mới bản ghi ClinicalData (Sử dụng ID nội bộ)
     clinical = db.query(models.ClinicalData).filter(
-        models.ClinicalData.patient_id == patient_id
+        models.ClinicalData.patient_id == patient.id
     ).first()
 
     if not clinical:
-        clinical = models.ClinicalData(patient_id=patient_id)
+        clinical = models.ClinicalData(patient_id=patient.id)
         db.add(clinical)
 
     # Cập nhật các trường được truyền lên (partial update)

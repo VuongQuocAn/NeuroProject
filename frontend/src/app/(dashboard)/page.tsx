@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiService } from "@/lib/api";
+import { mockAnalysisResult } from "@/lib/mock-data";
 import { 
   BarChart3, 
   Activity, 
@@ -12,7 +13,8 @@ import {
   Contrast,
   Image as ImageIcon,
   RotateCw,
-  Eye
+  Eye,
+  Info
 } from "lucide-react";
 import { GaugeChart } from "@/components/ui/GaugeChart";
 
@@ -47,16 +49,30 @@ function ConfidenceBar({ label, value, isPrimary = false }: { label: string, val
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isDemo, setIsDemo] = useState(false);
 
   useEffect(() => {
-    // Fetch mock analysis result for patient "ND-8829-X"
-    apiService.analysis.getResult("ND-8829-X").then((res) => {
-      setData(res.data);
-      setLoading(false);
-    });
+    apiService.analysis.getResult("1")
+      .then((res) => {
+        const resultData = Array.isArray(res.data) ? res.data[0] : res.data;
+        if (resultData) {
+          setData(resultData);
+        } else {
+          // Fallback to demo data when no real results exist
+          setData(mockAnalysisResult);
+          setIsDemo(true);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        // Fallback to demo data so the dashboard always looks complete
+        setData(mockAnalysisResult);
+        setIsDemo(true);
+        setLoading(false);
+      });
   }, []);
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-6rem)]">
         <div className="animate-pulse flex flex-col items-center">
@@ -68,7 +84,17 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 h-[calc(100vh-6rem)]">
+    <div className="flex flex-col gap-6 h-[calc(100vh-6rem)]">
+      
+      {/* Demo mode banner */}
+      {isDemo && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm shrink-0">
+          <Info className="h-4 w-4 shrink-0" />
+          <span>Đang hiển thị dữ liệu mẫu (Demo) vì chưa có kết quả phân tích AI thực tế. Hãy Upload ảnh MRI và chạy Pipeline AI để xem dữ liệu thật.</span>
+        </div>
+      )}
+      
+    <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 flex-1 min-h-0">
       
       {/* ------------------------------------------------------------------ */}
       {/* Left Column: MRI Viewer (Takes 3 columns on large screens) */}
@@ -220,6 +246,7 @@ export default function DashboardPage() {
         </div>
 
       </div>
+    </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 import uuid
+import crud
 
 import models
 from database import get_db
@@ -11,11 +12,11 @@ BUCKET_NAME = "medical-data"
 
 # API NHÁP: Tải lên file DICOM MRI (với ẩn danh tự động)
 @router.post("/mri/")
-async def upload_mri(patient_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    # 1. Kiểm tra bệnh nhân có tồn tại trong DB không
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+async def upload_mri(patient_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    # 1. Kiểm tra bệnh nhân có tồn tại trong DB không (Hỗ trợ cả ID và External ID)
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
     if not patient:
-        raise HTTPException(status_code=404, detail="Không tìm thấy bệnh nhân trong hệ thống")
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy bệnh nhân '{patient_id}' trong hệ thống")
     
     # 2. Đảm bảo kho lưu trữ MinIO đã sẵn sàng
     ensure_bucket_exists(BUCKET_NAME)
@@ -56,11 +57,11 @@ async def upload_mri(patient_id: int, file: UploadFile = File(...), db: Session 
     
 # API NHÁP: Tải lên WSI (Whole Slide Image) - File rất lớn, cần cơ chế streaming để tránh treo máy chủ
 @router.post("/wsi/")
-async def upload_wsi(patient_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    # 1. Kiểm tra bệnh nhân có tồn tại trong hệ thống không
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+async def upload_wsi(patient_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    # 1. Kiểm tra bệnh nhân có tồn tại trong hệ thống không (Hỗ trợ cả ID và External ID)
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
     if not patient:
-        raise HTTPException(status_code=404, detail="Không tìm thấy bệnh nhân trong hệ thống")
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy bệnh nhân '{patient_id}' trong hệ thống")
     
     # Đảm bảo bucket MinIO đã tồn tại
     ensure_bucket_exists(BUCKET_NAME)

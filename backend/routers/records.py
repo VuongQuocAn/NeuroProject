@@ -4,19 +4,24 @@ import models
 import schemas
 from database import get_db
 from utils import minio_client
+import crud
 
 router = APIRouter(prefix="/records", tags=["Records"])
 BUCKET_NAME = "medical-data"
 
 # 1. READ (GET): Truy xuất thông tin bệnh nhân và danh sách ảnh 
+@router.get("/patients/")
+def get_all_patients(db: Session = Depends(get_db)):
+    patients = db.query(models.Patient).all()
+    return [{"id": p.id, "external_id": p.patient_external_id, "age": p.age, "gender": p.gender} for p in patients]
 @router.get("/patients/{patient_id}")
-def get_patient_records(patient_id: int, db: Session = Depends(get_db)):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
     if not patient:
         raise HTTPException(status_code=404, detail="Không tìm thấy bệnh nhân")
     
-    # Lấy danh sách hình ảnh của bệnh nhân này
-    images = db.query(models.Image).filter(models.Image.patient_id == patient_id).all()
+    # Lấy danh sách hình ảnh của bệnh nhân này (Sử dụng ID nội bộ)
+    images = db.query(models.Image).filter(models.Image.patient_id == patient.id).all()
     
     # Tạo URL tạm thời (Presigned URL) để Frontend có thể hiển thị ảnh từ MinIO 
     image_list = []
@@ -42,8 +47,8 @@ def get_patient_records(patient_id: int, db: Session = Depends(get_db)):
 
 # 2. UPDATE (PUT/PATCH): Cập nhật thông tin lâm sàng
 @router.patch("/patients/{patient_id}")
-def update_patient_info(patient_id: int, patient_update: schemas.PatientUpdate, db: Session = Depends(get_db)):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+def update_patient_info(patient_id: str, patient_update: schemas.PatientUpdate, db: Session = Depends(get_db)):
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
     if not patient:
         raise HTTPException(status_code=404, detail="Không tìm thấy bệnh nhân")
     
