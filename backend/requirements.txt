@@ -1,7 +1,7 @@
 fastapi==0.115.12
 uvicorn==0.34.0
-sqlalchemy==2.0.23
-psycopg2-binary==2.9.9
+sqlalchemy==2.0.35
+psycopg2-binary==2.9.10
 pydicom==2.4.3
 minio==7.2.0
 python-multipart==0.0.20
@@ -16,7 +16,13 @@ passlib[bcrypt]==1.7.4
 bcrypt==3.2.2
 
 # RNA-seq file validation
-pandas==2.1.4
+pandas===3.0.0
 
 # Environment variables
 python-dotenv==1.0.0
+
+# AI/ML Dependencies
+torch>=2.0.0
+torchvision>=0.15.0
+lifelines>=0.28.0
+ipython>=8.0.0
