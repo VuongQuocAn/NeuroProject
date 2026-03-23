@@ -16,7 +16,7 @@ passlib[bcrypt]==1.7.4
 bcrypt==3.2.2
 
 # RNA-seq file validation
-pandas===3.0.0
+pandas==2.2.3
 
 # Environment variables
 python-dotenv==1.0.0

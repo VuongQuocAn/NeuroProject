@@ -9,6 +9,7 @@ export default function PatientsPage() {
   const router = useRouter();
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -25,13 +26,24 @@ export default function PatientsPage() {
     });
   }, []);
 
+  // Search Logic
+  const filteredPatients = patients.filter(p => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.external_id && p.external_id.toLowerCase().includes(q)) ||
+      (p.id && String(p.id).toLowerCase().includes(q))
+    );
+  });
+
   // Pagination Logic
-  const totalItems = patients.length;
+  const totalItems = filteredPatients.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalItems);
-  const currentPatients = patients.slice(startIndex, endIndex);
+  const currentPatients = filteredPatients.slice(startIndex, endIndex);
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -84,6 +96,8 @@ export default function PatientsPage() {
           <input
             type="text"
             placeholder="Tìm kiếm ID, Tên, hoặc DOB (YYYY-MM-DD)..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-xl border border-slate-800 bg-slate-900/50 py-3 pl-10 pr-4 text-sm text-slate-200 placeholder:text-slate-500 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 transition-all shadow-sm"
           />
         </div>

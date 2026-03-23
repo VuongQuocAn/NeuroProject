@@ -1,15 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { Bell, Moon, Sun, Search } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function Header() {
   const { user, logout } = useAuth();
   const isDoctor = user?.role === "doctor" || !user;
+  const [lang, setLang] = useState<"VN" | "EN">("VN");
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-800 bg-slate-900/80 px-6 backdrop-blur-sm">
-      {/* Search Bar - Optional in some screens */}
+      {/* Search Bar */}
       <div className="flex flex-1 items-center">
         <div className="w-full max-w-md relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -25,8 +27,29 @@ export function Header() {
       <div className="flex items-center gap-4">
         {/* Language Toggle */}
         <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-0.5">
-          <button className="rounded bg-teal-600 px-2 py-1 text-xs font-medium text-white">VN</button>
-          <button className="rounded px-2 py-1 text-xs font-medium text-slate-400 hover:text-slate-200">EN</button>
+          <button
+            onClick={() => setLang("VN")}
+            className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+              lang === "VN"
+                ? "bg-teal-600 text-white"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            VN
+          </button>
+          <button
+            onClick={() => {
+              setLang("EN");
+              alert("English localization is under development. The UI will remain in Vietnamese for now.");
+            }}
+            className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+              lang === "EN"
+                ? "bg-teal-600 text-white"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            EN
+          </button>
         </div>
 
         {/* Theme Toggle */}

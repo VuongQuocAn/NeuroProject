@@ -116,25 +116,104 @@ export default function SettingsPage() {
            )}
 
            {activeTab === "notifications" && (
-             <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                <Bell className="h-12 w-12 mb-4 opacity-20" />
-                <p>Thông báo & Cảnh báo settings placehoder</p>
-             </div>
-           )}
+              <div className="space-y-8 animate-in fade-in duration-300">
+                 <div className="border-b border-slate-800 pb-4 mb-6">
+                   <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                     <Bell className="h-5 w-5 text-teal-500" /> Cài đặt Thông báo
+                   </h2>
+                   <p className="text-sm text-slate-400 mt-1">Quản lý cách bạn nhận thông báo từ hệ thống.</p>
+                 </div>
+                 <div className="space-y-6 max-w-2xl">
+                   <div className="flex items-center justify-between p-4 rounded-xl border border-slate-800 bg-slate-800/30">
+                     <div>
+                       <span className="block font-bold text-slate-200">Chẩn đoán hoàn thành</span>
+                       <span className="text-xs text-slate-500">Nhận thông báo khi AI hoàn tất chẩn đoán.</span>
+                     </div>
+                     <input type="checkbox" defaultChecked className="h-5 w-5 accent-teal-500 bg-slate-800 border-slate-600 rounded" />
+                   </div>
+                   <div className="flex items-center justify-between p-4 rounded-xl border border-slate-800 bg-slate-800/30">
+                     <div>
+                       <span className="block font-bold text-slate-200">Cảnh báo rủi ro cao</span>
+                       <span className="text-xs text-slate-500">Nhận cảnh báo khi phát hiện ca rủi ro cao.</span>
+                     </div>
+                     <input type="checkbox" defaultChecked className="h-5 w-5 accent-teal-500 bg-slate-800 border-slate-600 rounded" />
+                   </div>
+                   <div className="flex items-center justify-between p-4 rounded-xl border border-slate-800 bg-slate-800/30">
+                     <div>
+                       <span className="block font-bold text-slate-200">Email tổng hợp hàng ngày</span>
+                       <span className="text-xs text-slate-500">Nhận báo cáo tổng hợp qua email mỗi ngày.</span>
+                     </div>
+                     <input type="checkbox" className="h-5 w-5 accent-teal-500 bg-slate-800 border-slate-600 rounded" />
+                   </div>
+                 </div>
+              </div>
+            )}
 
            {activeTab === "display" && (
-             <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                <Monitor className="h-12 w-12 mb-4 opacity-20" />
-                <p>Giao diện & Hiển thị settings placeholder</p>
-             </div>
-           )}
+              <div className="space-y-8 animate-in fade-in duration-300">
+                 <div className="border-b border-slate-800 pb-4 mb-6">
+                   <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                     <Monitor className="h-5 w-5 text-teal-500" /> Giao diện & Hiển thị
+                   </h2>
+                   <p className="text-sm text-slate-400 mt-1">Tùy chỉnh giao diện và cách hiển thị dữ liệu.</p>
+                 </div>
+                 <div className="space-y-6 max-w-2xl">
+                   <div className="space-y-3">
+                      <label className="block text-sm font-bold text-slate-300 uppercase tracking-wider">Chế độ giao diện</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <label className="flex items-center gap-3 p-4 border border-teal-500/30 bg-teal-500/5 rounded-xl cursor-pointer">
+                           <input type="radio" name="theme" defaultChecked className="accent-teal-500" />
+                           <span className="font-bold text-slate-200">Dark Mode</span>
+                        </label>
+                        <label className="flex items-center gap-3 p-4 border border-slate-800 bg-slate-900 rounded-xl cursor-pointer hover:border-slate-700">
+                           <input type="radio" name="theme" className="accent-teal-500" />
+                           <span className="font-bold text-slate-200">Light Mode</span>
+                        </label>
+                      </div>
+                   </div>
+                   <div className="space-y-3 pt-2 border-t border-slate-800/50">
+                      <label className="block text-sm font-bold text-slate-300 uppercase tracking-wider">Kích thước chữ</label>
+                      <select defaultValue="Vừa (14px)" className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-4 py-3 focus:outline-none focus:border-teal-500">
+                         <option>Nhỏ (12px)</option>
+                         <option>Vừa (14px)</option>
+                         <option>Lớn (16px)</option>
+                      </select>
+                   </div>
+                 </div>
+              </div>
+            )}
 
            {activeTab === "security" && (
-             <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                <Shield className="h-12 w-12 mb-4 opacity-20" />
-                <p>Bảo mật & Phân quyền settings placeholder</p>
-             </div>
-           )}
+              <div className="space-y-8 animate-in fade-in duration-300">
+                 <div className="border-b border-slate-800 pb-4 mb-6">
+                   <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                     <Shield className="h-5 w-5 text-teal-500" /> Bảo mật & Phân quyền
+                   </h2>
+                   <p className="text-sm text-slate-400 mt-1">Quản lý mật khẩu và phiên đăng nhập.</p>
+                 </div>
+                 <div className="space-y-6 max-w-2xl">
+                   <div className="space-y-3">
+                      <label className="block text-sm font-bold text-slate-300 uppercase tracking-wider">Đổi mật khẩu</label>
+                      <input type="password" placeholder="Mật khẩu hiện tại" className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-4 py-3 focus:outline-none focus:border-teal-500" />
+                      <input type="password" placeholder="Mật khẩu mới" className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-4 py-3 focus:outline-none focus:border-teal-500" />
+                      <input type="password" placeholder="Xác nhận mật khẩu mới" className="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-4 py-3 focus:outline-none focus:border-teal-500" />
+                      <button onClick={() => alert('Đổi mật khẩu thành công!')} className="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl transition-all">
+                        Cập nhật mật khẩu
+                      </button>
+                   </div>
+                   <div className="space-y-3 pt-4 border-t border-slate-800/50">
+                      <label className="block text-sm font-bold text-slate-300 uppercase tracking-wider">Phiên đăng nhập</label>
+                      <div className="p-4 rounded-xl border border-slate-800 bg-slate-800/30 flex items-center justify-between">
+                        <div>
+                          <span className="block font-bold text-slate-200">Phiên hiện tại</span>
+                          <span className="text-xs text-slate-500">Windows • Chrome • Đăng nhập lúc {new Date().toLocaleTimeString('vi-VN')}</span>
+                        </div>
+                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-teal-500/10 text-teal-500 border border-teal-500/20">Đang hoạt động</span>
+                      </div>
+                   </div>
+                 </div>
+              </div>
+            )}
 
         </div>
 

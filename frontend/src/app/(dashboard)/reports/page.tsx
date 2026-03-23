@@ -14,13 +14,25 @@ export default function ReportPage() {
           NeuroDiagnosis AI: Báo cáo Lâm sàng
         </h1>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-lg border border-slate-700 transition">
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              alert("Đã sao chép liên kết báo cáo vào clipboard!");
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-lg border border-slate-700 transition"
+          >
             <Share2 className="h-4 w-4" /> Chia sẻ
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-lg border border-slate-700 transition">
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-lg border border-slate-700 transition"
+          >
              <Printer className="h-4 w-4" /> In Báo Cáo
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg shadow-lg shadow-teal-500/20 transition">
+          <button
+            onClick={() => alert("Chức năng xuất PDF đang được phát triển. Bạn có thể sử dụng In Báo Cáo > Save as PDF.")}
+            className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg shadow-lg shadow-teal-500/20 transition"
+          >
             <Download className="h-4 w-4" /> Xuất PDF
           </button>
         </div>
@@ -49,7 +61,7 @@ export default function ReportPage() {
                
                <div className="text-right flex flex-col gap-1 text-sm font-mono text-slate-600">
                   <span className="bg-slate-200 px-3 py-1 rounded inline-block font-bold self-end mb-2">REPORT # REP-2023-8829</span>
-                  <span><strong>Date:</strong> {new Date().toLocaleDateString('vi-VN')}</span>
+                  <span suppressHydrationWarning><strong>Date:</strong> {new Date().toLocaleDateString('vi-VN')}</span>
                   <span><strong>Model Ver:</strong> Core-V4.2.1-Fusion</span>
                </div>
              </div>

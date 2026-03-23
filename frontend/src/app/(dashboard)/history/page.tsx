@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { apiService } from "@/lib/api";
 import { Search, ShieldAlert, CheckCircle2, AlertTriangle, ExternalLink, FileText } from "lucide-react";
 
 export default function HistoryPage() {
+  const router = useRouter();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -104,11 +106,17 @@ export default function HistoryPage() {
 
              {/* Action Buttons */}
              <div className="flex items-center gap-3">
-               <button className="px-5 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-800 hover:text-white transition-colors flex items-center gap-2">
+               <button
+                onClick={() => router.push("/reports")}
+                className="px-5 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-800 hover:text-white transition-colors flex items-center gap-2"
+              >
                  <FileText className="h-4 w-4" />
                  Xem Báo cáo
                </button>
-               <button className="px-5 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold shadow-lg shadow-teal-500/20 hover:bg-teal-500 transition-colors flex items-center gap-2">
+               <button
+                onClick={() => alert("Chức năng trình xem ảnh DICOM đang được phát triển.")}
+                className="px-5 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold shadow-lg shadow-teal-500/20 hover:bg-teal-500 transition-colors flex items-center gap-2"
+              >
                  Mở trong trình xem
                  <ExternalLink className="h-4 w-4" />
                </button>
