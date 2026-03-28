@@ -1,7 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+
+// Dynamically import Recharts with SSR disabled to prevent hydration warnings
+const PieChart = dynamic(() => import("recharts").then(m => m.PieChart), { ssr: false });
+const Pie = dynamic(() => import("recharts").then(m => m.Pie), { ssr: false });
+const Cell = dynamic(() => import("recharts").then(m => m.Cell), { ssr: false });
+const ResponsiveContainer = dynamic(() => import("recharts").then(m => m.ResponsiveContainer), { ssr: false });
 
 interface GaugeChartProps {
   value: number; // 0 to 100 or 0 to 1
@@ -20,7 +26,7 @@ export function GaugeChart({ value, label, sublabel }: GaugeChartProps) {
   
   const data = [
     { name: "Risk", value: normalizedValue, color: normalizedValue > 60 ? "#ef4444" : normalizedValue > 30 ? "#f59e0b" : "#14b8a6" },
-    { name: "Rest", value: 100 - normalizedValue, color: "#334155" } // slate-700
+    { name: "Rest", value: 100 - normalizedValue, color: "#334155" }
   ];
 
   if (!isMounted) return <div className="h-40 w-full animate-pulse bg-slate-800/50 rounded-lg"></div>;

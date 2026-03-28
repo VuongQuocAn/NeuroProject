@@ -206,7 +206,7 @@ export default function SettingsPage() {
                       <div className="p-4 rounded-xl border border-slate-800 bg-slate-800/30 flex items-center justify-between">
                         <div>
                           <span className="block font-bold text-slate-200">Phiên hiện tại</span>
-                          <span className="text-xs text-slate-500">Windows • Chrome • Đăng nhập lúc {new Date().toLocaleTimeString('vi-VN')}</span>
+                          <span className="text-xs text-slate-500">Windows • Chrome • Đăng nhập lúc {'phiên này'}</span>
                         </div>
                         <span className="px-3 py-1 rounded-full text-xs font-bold bg-teal-500/10 text-teal-500 border border-teal-500/20">Đang hoạt động</span>
                       </div>

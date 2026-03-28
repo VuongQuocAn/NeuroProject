@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { apiService } from "@/lib/api";
 import { 
   ArrowLeft, 
@@ -13,18 +14,42 @@ import {
   Activity,
   ChevronRight,
   ExternalLink,
-  Download
+  Download,
+  Edit3,
+  PlusCircle,
+  Loader2
 } from "lucide-react";
+
+const DicomViewer = dynamic(() => import("@/components/dicom/DicomViewer"), { ssr: false });
+
+// Client-only date formatter to avoid hydration mismatch
+function ClientDate({ date }: { date: string }) {
+  const [formatted, setFormatted] = useState<string>("—");
+  useEffect(() => {
+    if (date) {
+      setFormatted(
+        new Date(date).toLocaleDateString("vi-VN", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      );
+    }
+  }, [date]);
+  return <>{formatted}</>;
+}
 
 export default function PatientDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [viewerImage, setViewerImage] = useState<{ url?: string; imageId?: string; modality?: string } | null>(null);
 
   useEffect(() => {
-    // In our backend, patient_id is often an integer, but external_id is a string.
-    // The API /records/patients/{id} expects the database ID (integer).
     apiService.patients.getById(id).then(res => {
       setData(res.data);
       setLoading(false);
@@ -33,6 +58,18 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
       setLoading(false);
     });
   }, [id]);
+
+  const handleAnalyze = (img: any) => {
+    setViewerImage({
+      url: img.minio_url,
+      imageId: img.image_id,
+      modality: img.modality,
+    });
+  };
+
+  const handleExportPdf = () => {
+    alert("Đang tạo file PDF báo cáo... (Tính năng sẽ sớm được hoàn thiện)");
+  };
 
   if (loading) return (
     <div className="flex items-center justify-center h-[calc(100vh-6rem)]">
@@ -80,8 +117,20 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
         </div>
         
         <div className="flex items-center gap-3">
-           <button className="px-5 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-sm font-medium text-slate-200 transition-all active:scale-95">Sửa thông tin</button>
-           <button className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold shadow-lg shadow-teal-500/20 transition-all active:scale-95">Tạo chẩn đoán mới</button>
+           <button
+             onClick={() => alert("Chức năng sửa thông tin đang được phát triển.")}
+             className="px-5 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-sm font-medium text-slate-200 transition-all active:scale-95 flex items-center gap-2"
+           >
+             <Edit3 className="h-4 w-4" />
+             Sửa thông tin
+           </button>
+           <button
+             onClick={() => router.push('/upload')}
+             className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold shadow-lg shadow-teal-500/20 transition-all active:scale-95 flex items-center gap-2"
+           >
+             <PlusCircle className="h-4 w-4" />
+             Tạo chẩn đoán mới
+           </button>
         </div>
       </div>
 
@@ -130,13 +179,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                         </div>
                       </td>
                       <td className="px-6 py-5 text-slate-400">
-                         {img.scan_date ? new Date(img.scan_date).toLocaleDateString('vi-VN', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                         }) : '—'}
+                        <ClientDate date={img.scan_date} />
                       </td>
                       <td className="px-6 py-5">
                          <span className="px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-500 text-[10px] font-bold border border-emerald-500/20 uppercase tracking-widest">
@@ -157,9 +200,13 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                               </a>
                            )}
                            <button 
-                             onClick={() => router.push(`/`)} 
-                             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-teal-600 text-slate-200 text-xs font-bold transition-all shadow-md active:scale-95"
+                             onClick={() => handleAnalyze(img.image_id)}
+                             disabled={analyzingId === img.image_id}
+                             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-teal-600 text-slate-200 text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50"
                            >
+                             {analyzingId === img.image_id ? (
+                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                             ) : null}
                              PHÂN TÍCH <ChevronRight className="h-3.5 w-3.5" />
                            </button>
                         </div>
@@ -181,7 +228,10 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
               </h3>
               <div className="p-5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 text-center">
                  <p className="text-xs text-slate-400 mb-4 leading-relaxed">Kết hợp dữ liệu giải trình tự gen để tăng độ chính xác của tiên lượng sinh tồn.</p>
-                 <button className="w-full py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white text-xs font-bold transition-all border border-indigo-600/30 flex items-center justify-center gap-2">
+                 <button
+                   onClick={() => router.push('/upload')}
+                   className="w-full py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white text-xs font-bold transition-all border border-indigo-600/30 flex items-center justify-center gap-2"
+                 >
                     KẾT NỐI RNA-SEQ <ExternalLink className="h-3.5 w-3.5" />
                  </button>
               </div>
@@ -189,9 +239,9 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
 
            {/* Clinical History Summary */}
            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
-              <h1 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-6">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-6">
                  <FileText className="h-5 w-5 text-amber-500" /> Chỉ số lâm sàng
-              </h1>
+              </h2>
               <div className="space-y-5">
                  <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-500">Chỉ số KI-67</span>
@@ -202,13 +252,40 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                     <span className="text-slate-400">Chưa có</span>
                  </div>
                  <hr className="border-slate-800" />
-                 <button className="w-full py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold transition-all">
+                 <button
+                   onClick={() => router.push('/upload')}
+                   className="w-full py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold transition-all"
+                 >
                     CẬP NHẬT LÂM SÀNG
                  </button>
               </div>
            </div>
+
+           {/* Quick Actions */}
+           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-200 mb-4">Thao tác nhanh</h2>
+              <div className="space-y-3">
+                <button
+                  onClick={handleExportPdf}
+                  className="w-full py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold transition-all flex items-center justify-center gap-2"
+                >
+                  <FileText className="h-3.5 w-3.5" /> Xuất báo cáo PDF
+                </button>
+              </div>
+           </div>
         </div>
       </div>
+
+      {viewerImage && (
+        <DicomViewer
+          open={!!viewerImage}
+          onClose={() => setViewerImage(null)}
+          imageUrl={viewerImage.url}
+          imageId={viewerImage.imageId}
+          patientId={id}
+          modality={viewerImage.modality}
+        />
+      )}
     </div>
   );
 }

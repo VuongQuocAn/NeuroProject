@@ -3,15 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@cornerstonejs/core": "^4.20.0",
+    "@cornerstonejs/dicom-image-loader": "^4.20.0",
+    "@cornerstonejs/streaming-image-volume-loader": "^1.86.1",
+    "@cornerstonejs/tools": "^4.20.0",
     "axios": "^1.13.6",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "dicom-parser": "^1.8.21",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^0.577.0",
     "next": "16.1.7",

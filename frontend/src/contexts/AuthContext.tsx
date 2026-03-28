@@ -2,6 +2,7 @@
 
 import { jwtDecode } from "jwt-decode";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { setTokenCookie, removeTokenCookie } from "@/lib/cookie";
 
 interface User {
   id: string;
@@ -26,19 +27,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const logout = () => {
+    localStorage.removeItem("token");
+    removeTokenCookie();
+    setUser(null);
+    window.location.href = "/login";
+  };
+
   useEffect(() => {
-    // Check if token exists on load
     const token = localStorage.getItem("token");
     if (token) {
       try {
         const decoded = jwtDecode(token) as any;
-        // Check if token is expired
         if (decoded.exp * 1000 < Date.now()) {
           logout();
         } else {
+          // Re-sync cookie on page load (covers tab restore / refresh)
+          setTokenCookie(token);
           setUser({ id: decoded.sub, role: decoded.role });
         }
-      } catch (error) {
+      } catch {
         logout();
       }
     }
@@ -47,14 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (token: string, role: string) => {
     localStorage.setItem("token", token);
+    setTokenCookie(token);
     const decoded = jwtDecode(token) as any;
     setUser({ id: decoded.sub, role: role as any });
-  };
-
-  const logout = () => {
-    localStorage.removeItem("token");
-    setUser(null);
-    window.location.href = "/login";
   };
 
   return (

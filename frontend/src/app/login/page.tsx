@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiService } from "@/lib/api";
 import { BrainCircuit, Lock, User, Loader2 } from "lucide-react";
@@ -11,6 +12,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect') || '/';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,8 +24,7 @@ export default function LoginPage() {
       const response = await apiService.auth.login({ username, password });
       const { access_token, role } = response.data;
       login(access_token, role);
-      // Redirect to dashboard is handled by AuthContext taking them to "/"
-      window.location.href = "/";
+      window.location.href = redirectTo;
     } catch (err: any) {
       setError(err.response?.data?.detail || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
     } finally {

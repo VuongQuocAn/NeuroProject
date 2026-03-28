@@ -1,0 +1,149 @@
+﻿
+> frontend@0.1.0 lint
+> eslint
+
+
+D:\Antigravity\NeuroProject\frontend\src\app\(dashboard)\history\page.tsx
+   7:10  warning  'Search' is defined but never used                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+  14:42  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  79:16  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+D:\Antigravity\NeuroProject\frontend\src\app\(dashboard)\page.tsx
+   50:36  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  143:14  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  187:51  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  216:45  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+
+D:\Antigravity\NeuroProject\frontend\src\app\(dashboard)\patients\[id]\page.tsx
+   30:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\Antigravity\NeuroProject\frontend\src\app\(dashboard)\patients\[id]\page.tsx:30:7
+  28 |   useEffect(() => {
+  29 |     if (date) {
+> 30 |       setFormatted(
+     |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  31 |         new Date(date).toLocaleDateString("vi-VN", {
+  32 |           year: "numeric",
+  33 |           month: "long",  react-hooks/set-state-in-effect
+   47:36  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-explicit-any
+   49:23  warning  'setAnalyzingId' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+   62:31  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-explicit-any
+  168:40  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-explicit-any
+
+D:\Antigravity\NeuroProject\frontend\src\app\(dashboard)\patients\page.tsx
+   43:19  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+  137:44  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+  159:5   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\Antigravity\NeuroProject\frontend\src\app\(dashboard)\patients\page.tsx:159:5
+  157 |   // Reset to page 1 whenever search query changes
+  158 |   useEffect(() => {
+> 159 |     setCurrentPage(1);
+      |     ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  160 |   }, [searchQuery]);
+  161 |
+  162 |   // Search Logic  react-hooks/set-state-in-effect
+
+D:\Antigravity\NeuroProject\frontend\src\app\(dashboard)\reports\page.tsx
+  163:25  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  169:25  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+D:\Antigravity\NeuroProject\frontend\src\app\(dashboard)\settings\page.tsx
+  4:10  warning  'Settings' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\Antigravity\NeuroProject\frontend\src\app\(dashboard)\upload\page.tsx
+    5:33  warning  'CheckCircle2' is defined but never used  @typescript-eslint/no-unused-vars
+   43:19  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   48:28  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   69:19  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   74:28  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   95:19  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  100:28  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\Antigravity\NeuroProject\frontend\src\app\login\page.tsx
+  28:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\Antigravity\NeuroProject\frontend\src\components\dicom\DicomViewer.tsx
+  56:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\Antigravity\NeuroProject\frontend\src\components\layout\Header.tsx
+  46:13  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+D:\Antigravity\NeuroProject\frontend\src\components\layout\Sidebar.tsx
+  13:3  warning  'Activity' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\Antigravity\NeuroProject\frontend\src\components\ui\GaugeChart.tsx
+  22:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\Antigravity\NeuroProject\frontend\src\components\ui\GaugeChart.tsx:22:5
+  20 |   
+  21 |   useEffect(() => {
+> 22 |     setIsMounted(true);
+     |     ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  23 |   }, []);
+  24 |
+  25 |   const normalizedValue = value <= 1 ? value * 100 : value;  react-hooks/set-state-in-effect
+
+D:\Antigravity\NeuroProject\frontend\src\contexts\AuthContext.tsx
+  34:45  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+  36:11  error  Error: Cannot access variable before it is declared
+
+`logout` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+D:\Antigravity\NeuroProject\frontend\src\contexts\AuthContext.tsx:36:11
+  34 |         const decoded = jwtDecode(token) as any;
+  35 |         if (decoded.exp * 1000 < Date.now()) {
+> 36 |           logout();
+     |           ^^^^^^ `logout` accessed before it is declared
+  37 |         } else {
+  38 |           // Re-sync cookie on page load (covers tab restore / refresh)
+  39 |           setTokenCookie(token);
+
+D:\Antigravity\NeuroProject\frontend\src\contexts\AuthContext.tsx:56:3
+  54 |   };
+  55 |
+> 56 |   const logout = () => {
+     |   ^^^^^^^^^^^^^^^^^^^^^^
+> 57 |     localStorage.removeItem("token");
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 58 |     removeTokenCookie();
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 59 |     setUser(null);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 60 |     window.location.href = "/login";
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 61 |   };
+     | ^^^^^ `logout` is declared here
+  62 |
+  63 |   return (
+  64 |     <AuthContext.Provider value={{ user, loading, login, logout }}>  react-hooks/immutability
+  52:41  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+  53:46  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+
+D:\Antigravity\NeuroProject\frontend\src\lib\api.ts
+  42:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  92:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\Antigravity\NeuroProject\frontend\src\lib\mock-data.ts
+  1:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+Γ£û 37 problems (27 errors, 10 warnings)
+

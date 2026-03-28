@@ -2,11 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { apiService } from "@/lib/api";
 import { Search, ShieldAlert, CheckCircle2, AlertTriangle, ExternalLink, FileText } from "lucide-react";
 
+const DicomViewer = dynamic(() => import("@/components/dicom/DicomViewer"), { ssr: false });
+
 export default function HistoryPage() {
   const router = useRouter();
+  const [viewerImage, setViewerImage] = useState<{ patientId: string } | null>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -114,7 +118,7 @@ export default function HistoryPage() {
                  Xem Báo cáo
                </button>
                <button
-                onClick={() => alert("Chức năng trình xem ảnh DICOM đang được phát triển.")}
+                onClick={() => setViewerImage({ patientId: item.patientId })}
                 className="px-5 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold shadow-lg shadow-teal-500/20 hover:bg-teal-500 transition-colors flex items-center gap-2"
               >
                  Mở trong trình xem
@@ -136,6 +140,15 @@ export default function HistoryPage() {
            <button className="w-8 h-8 rounded-lg text-slate-400 hover:bg-slate-800 font-medium text-sm flex items-center justify-center">3</button>
         </div>
       </div>
+
+      {viewerImage && (
+        <DicomViewer
+          open={!!viewerImage}
+          onClose={() => setViewerImage(null)}
+          patientId={viewerImage?.patientId}
+          modality="MRI"
+        />
+      )}
     </div>
   );
 }

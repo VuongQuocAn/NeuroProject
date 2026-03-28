@@ -3,17 +3,145 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiService } from "@/lib/api";
-import { Search, UserPlus, FileSpreadsheet, AlertTriangle, BadgeCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, UserPlus, FileSpreadsheet, AlertTriangle, BadgeCheck, ChevronLeft, ChevronRight, X, Loader2 } from "lucide-react";
 
+// ---------------------------------------------------------------------------
+// Create Patient Modal
+// ---------------------------------------------------------------------------
+function CreatePatientModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [name, setName] = useState("");
+  const [externalId, setExternalId] = useState("");
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState("M");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
+
+  if (!open) return null;
+
+  const handleCreate = async () => {
+    if (!name.trim()) {
+      setError("Vui lòng nhập họ tên bệnh nhân.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await apiService.patients.create({
+        name: name.trim(),
+        external_id: externalId.trim() || undefined,
+        age: age ? parseInt(age) : undefined,
+        gender,
+      });
+      const newId = res.data?.id || res.data?.patient_id;
+      onClose();
+      if (newId) {
+        router.push(`/patients/${newId}`);
+      } else {
+        router.refresh();
+      }
+    } catch (err: any) {
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : "Không thể tạo bệnh nhân. Vui lòng thử lại.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-8 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-white">Thêm bệnh nhân mới</h2>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-red-500/10 text-red-400 text-sm border border-red-500/20">{error}</div>
+        )}
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-400 mb-1.5">Họ và tên *</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nguyễn Văn A"
+              className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:border-teal-500 outline-none transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-400 mb-1.5">Mã bệnh nhân (External ID)</label>
+            <input
+              type="text"
+              value={externalId}
+              onChange={(e) => setExternalId(e.target.value)}
+              placeholder="VD: UCSF-001"
+              className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:border-teal-500 outline-none transition-colors"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-1.5">Tuổi</label>
+              <input
+                type="number"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                placeholder="45"
+                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:border-teal-500 outline-none transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-1.5">Giới tính</label>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:border-teal-500 outline-none transition-colors"
+              >
+                <option value="M">Nam</option>
+                <option value="F">Nữ</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-8">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 font-medium hover:bg-slate-800 transition-colors">
+            Hủy
+          </button>
+          <button
+            onClick={handleCreate}
+            disabled={saving}
+            className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-lg shadow-teal-500/20 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            Tạo bệnh nhân
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Patients Page
+// ---------------------------------------------------------------------------
 export default function PatientsPage() {
   const router = useRouter();
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize] = useState(10);
 
   useEffect(() => {
     apiService.patients.getAll().then(res => {
@@ -25,6 +153,11 @@ export default function PatientsPage() {
       setLoading(false);
     });
   }, []);
+
+  // Reset to page 1 whenever search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   // Search Logic
   const filteredPatients = patients.filter(p => {
@@ -103,7 +236,7 @@ export default function PatientsPage() {
         </div>
         
         <button 
-          onClick={() => router.push("/upload")}
+          onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 hover:bg-teal-500 transition-all active:scale-95"
         >
           <UserPlus className="h-4 w-4" />
@@ -136,6 +269,12 @@ export default function PatientsPage() {
                        <div className="h-4 w-4 rounded-full border-2 border-t-teal-500 border-slate-700 animate-spin" />
                        Đang tải dữ liệu...
                     </div>
+                  </td>
+                </tr>
+              ) : currentPatients.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                    {searchQuery ? `Không tìm thấy bệnh nhân nào khớp với "${searchQuery}"` : "Chưa có dữ liệu bệnh nhân."}
                   </td>
                 </tr>
               ) : currentPatients.map((p, idx) => (
@@ -248,6 +387,8 @@ export default function PatientsPage() {
         </div>
       </div>
 
+      {/* Create Patient Modal */}
+      <CreatePatientModal open={showCreateModal} onClose={() => setShowCreateModal(false)} />
     </div>
   );
 }
