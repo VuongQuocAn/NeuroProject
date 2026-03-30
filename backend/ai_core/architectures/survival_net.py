@@ -1,3 +1,7 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 class SliceAttention(nn.Module):
     def __init__(self, feature_dim = 512, hidden_dim = 128):
         super(SliceAttention, self).__init__()

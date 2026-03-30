@@ -2,12 +2,14 @@ import os
 import torch
 import cv2
 from PIL import Image
-from torchvision.transform import transforms
+import torchvision.transforms as transforms
+import numpy as np
+
 
 from .architectures.survival_net import MultimodalBrainTumorModel
-# from .architectures.unet import UNetSegmentator
-# from .architectures.yolo_net import YOLODetector
-# from .architectures.xai import GradCAMExplainer
+from .architectures.unet import UNetSegmenter
+from .architectures.yolo_net import YOLODetector
+from .architectures.xai_gradcam import GradCAMExplainer
 
 class TumorAnalysisPipeline:
     def __init__(self, weights_dir: str, device: str = 'cuda'):
@@ -16,20 +18,16 @@ class TumorAnalysisPipeline:
 
         self.detector = YOLODetector() # sửa tuỳ vào kiến trúc
         self.detector.load_weights(os.path.join(weights_dir, 'yolo_weights.pth'))
-        self.detector.to(device)
-        self.detector.eval()
 
-        self.segmentor = UNetSegmentator() # sửa tuỳ vào kiến trúc
+        self.segmentor = UNetSegmenter() # sửa tuỳ vào kiến trúc
         self.segmentor.load_weights(os.path.join(weights_dir, 'unet_weights.pth'))
-        self.segmentor.to(device)
-        self.segmentor.eval()
 
-        self.survival_model = MultimodalBrainTumorModel(num_genes = 60644, feature_dim = 512) 
+        self.survival_model = MultimodalBrainTumorModel(num_genes = 60664, feature_dim = 512) 
         self.survival_model.load_state_dict(torch.load(os.path.join(weights_dir, "best_multimodal_model.pth"), map_location=device))
-        self.survival_model.to(device)
         self.survival_model.eval()
 
-        targer_layer = self.survival_model.mri_encoder.feature_extractor.denseblock4.denselayer16.conv2
+        # target_layer = self.survival_model.mri_encoder.feature_extractor.denseblock4.denselayer16.conv2
+        target_layer = self.survival_model.mri_encoder.feature_extractor
         self.explainer = GradCAMExplainer(self.survival_model, target_layer)
 
     def run_inference(self, image_path: str, output_dir: str):
@@ -83,7 +81,9 @@ class TumorAnalysisPipeline:
 
 
             # BƯỚC 4: EXPLAINABLE AI (Grad-CAM)
-            heatmap = self.explainer.explain(mri_tensor, masks['mri_mask'])
+            heatmap = self.explainer.generate_heatmap(
+                mri_tensor, wsi_dummy, rna_dummy, clinical_dummy, masks
+            )
             
             heatmap_save_path = os.path.join(output_dir, "step3_heatmap.png")
             self.save_overlay_heatmap(cropped_img, heatmap, heatmap_save_path)
@@ -98,31 +98,37 @@ class TumorAnalysisPipeline:
 
     def crop_image(self, image_path: str, bbox: list) -> np.ndarray:
         img = cv2.imread(image_path)
-        x1, y1, x2, y2 = bbox
-        return img[y1:y2, x1:x2]
+        x_min, y_min, x_max, y_max = map(int, bbox)
+        cropped = img[y_min:y_max, x_min:x_max]
+        return cropped
 
     def preprocess_for_survival(self, image: np.ndarray) -> torch.Tensor:
-        img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        img_pil = Image.fromarray(img)
+        img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        pil_img = Image.fromarray(img_rgb)
+        
         transform = transforms.Compose([
-            transforms.Resize((224, 224)),
+            transforms.Resize((256, 256)),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
-        return transform(img_pil).unsqueeze(0).to(self.device)
+        
+        # Thêm chiều Slices và Batch -> [1, 1, 3, 256, 256]
+        tensor = transform(pil_img).unsqueeze(0).unsqueeze(0).to(self.device)
+        return tensor
 
     def create_dummy_data(self):
-        batch_size = 1
-        wsi_dummy = torch.zeros(batch_size, 512, 1024, device=self.device)
-        rna_dummy = torch.zeros(batch_size, 60644, device=self.device)
-        clinical_dummy = torch.zeros(batch_size, 10, device=self.device)
+        """Tạo dữ liệu Zero-padding cho WSI, RNA, Clinical"""
+        wsi_dummy = torch.zeros(1, 1, 3, 256, 256).to(self.device)
+        rna_dummy = torch.zeros(1, 60664).to(self.device)
+        clinical_dummy = torch.zeros(1, 18).to(self.device)
+        
         masks = {
-            'has_mri': torch.tensor([True], device=self.device),
-            'has_wsi': torch.tensor([False], device=self.device),
-            'has_rna': torch.tensor([False], device=self.device),
-            'has_clinical': torch.tensor([False], device=self.device),
-            'mri_mask': torch.ones(batch_size, 1, 224, 224, device=self.device),
-            'wsi_mask': None
+            'has_mri': torch.tensor([1.0]).to(self.device),
+            'has_wsi': torch.tensor([0.0]).to(self.device),
+            'has_rna': torch.tensor([0.0]).to(self.device),
+            'has_clinical': torch.tensor([0.0]).to(self.device),
+            'mri_mask': torch.tensor([[1.0]]).to(self.device),
+            'wsi_mask': torch.tensor([[0.0]]).to(self.device)
         }
         return wsi_dummy, rna_dummy, clinical_dummy, masks
 
@@ -134,10 +140,14 @@ class TumorAnalysisPipeline:
 
 
     def save_overlay_heatmap(self, image: np.ndarray, heatmap: np.ndarray, save_path: str):
-        heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
-        heatmap = np.uint8(255 * heatmap)
-        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-        overlay = cv2.addWeighted(image, 0.6, heatmap, 0.4, 0)
+        """Mix ảnh gốc đã cắt và heatmap, sau đó lưu lại"""
+        # Đảm bảo heatmap cùng kích thước 256x256
+        img_resized = cv2.resize(image, (256, 256))
+        
+        # Chuyển heatmap thành màu
+        heatmap_colored = cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
+        
+        # Phủ lên nhau (60% gốc, 40% heatmap)
+        overlay = cv2.addWeighted(img_resized, 0.6, heatmap_colored, 0.4, 0)
         cv2.imwrite(save_path, overlay)
-
         
