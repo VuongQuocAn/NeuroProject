@@ -77,3 +77,9 @@ npm run dev
 
 - Mở trình duyệt web và truy cập vào: **[http://localhost:3000](http://localhost:3000)**
 - **Đăng nhập mặc định:** Sử dụng username là `admin` và mật khẩu : `123456` để đăng nhập và xem bảng điều khiển.
+
+*(Lưu ý: Nếu đây là lần cài đặt đầu tiên mà hệ thống chưa sinh tài khoản mặc định, bạn hãy mở một Terminal/CMD mới và chạy lệnh sau để cấp quyền)*:
+
+```bash
+docker exec -it neuroproject-backend-1 python create_user.py
+```

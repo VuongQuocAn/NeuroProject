@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import models
-from database import engine
+from database import engine, SessionLocal
+from utils import hash_password
 from routers import upload, records, multimodal, inference, analysis, auth, admin
 
 # Tự động tạo tất cả bảng trong PostgreSQL khi khởi động
@@ -25,6 +26,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+def init_default_admin():
+    db = SessionLocal()
+    existing_user = db.query(models.User).filter(models.User.username == "admin").first()
+    if not existing_user:
+        new_user = models.User(
+            username="admin",
+            hashed_password=hash_password("123456"),
+            role="researcher"
+        )
+        db.add(new_user)
+        db.commit()
+    db.close()
 
 # ============================================================
 # ĐĂNG KÝ CÁC ROUTER
