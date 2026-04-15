@@ -2,6 +2,7 @@
 
 import { jwtDecode } from "jwt-decode";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { setTokenCookie, removeTokenCookie } from "@/lib/cookie";
 
 interface User {
@@ -26,12 +27,13 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   const logout = () => {
     localStorage.removeItem("token");
     removeTokenCookie();
     setUser(null);
-    window.location.href = "/login";
+    router.push("/login");
   };
 
   useEffect(() => {

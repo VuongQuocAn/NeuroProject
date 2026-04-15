@@ -8,9 +8,10 @@ class Patient(Base):
     __tablename__ = "patients"
 
     id = Column(Integer, primary_key=True, index=True)
-    patient_external_id = Column(String, unique=True, index=True)
-    age = Column(Integer)
-    gender = Column(String)
+    name = Column(String, nullable=True)
+    patient_external_id = Column(String, unique=True, index=True, nullable=True)
+    age = Column(Integer, nullable=True)
+    gender = Column(String, nullable=True)
 
     images = relationship("Image", back_populates="owner")
     rna_data = relationship("RnaData", back_populates="patient")

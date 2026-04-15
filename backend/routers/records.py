@@ -9,11 +9,31 @@ import crud
 router = APIRouter(prefix="/records", tags=["Records"])
 BUCKET_NAME = "medical-data"
 
-# 1. READ (GET): Truy xuất thông tin bệnh nhân và danh sách ảnh 
+# 0. CREATE (POST): Tạo bệnh nhân mới
+@router.post("/patients/", status_code=201)
+def create_patient(patient: schemas.PatientCreate, db: Session = Depends(get_db)):
+    new_patient = models.Patient(
+        name=patient.name,
+        patient_external_id=patient.external_id,
+        age=patient.age,
+        gender=patient.gender,
+    )
+    db.add(new_patient)
+    db.commit()
+    db.refresh(new_patient)
+    return {
+        "id": new_patient.id,
+        "name": new_patient.name,
+        "external_id": new_patient.patient_external_id,
+        "age": new_patient.age,
+        "gender": new_patient.gender,
+    }
+
+# 1. READ (GET): Truy xuất danh sách bệnh nhân
 @router.get("/patients/")
 def get_all_patients(db: Session = Depends(get_db)):
     patients = db.query(models.Patient).all()
-    return [{"id": p.id, "external_id": p.patient_external_id, "age": p.age, "gender": p.gender} for p in patients]
+    return [{"id": p.id, "name": p.name, "external_id": p.patient_external_id, "age": p.age, "gender": p.gender} for p in patients]
 @router.get("/patients/{patient_id}")
 def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
     patient = crud.get_patient_by_id_or_external(db, patient_id)

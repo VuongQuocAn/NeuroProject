@@ -8,12 +8,10 @@ from datetime import datetime
 # ============================================================
 
 class PatientCreate(BaseModel):
-    patient_external_id: str
-    age: int
-    gender: str
-
-    class Config:
-        from_attributes = True
+    name: str
+    external_id: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
 
 
 class PatientUpdate(BaseModel):

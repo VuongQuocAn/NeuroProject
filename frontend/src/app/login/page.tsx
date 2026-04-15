@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiService } from "@/lib/api";
 import { BrainCircuit, Lock, User, Loader2 } from "lucide-react";
@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const redirectTo = searchParams.get('redirect') || '/';
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -24,7 +25,7 @@ export default function LoginPage() {
       const response = await apiService.auth.login({ username, password });
       const { access_token, role } = response.data;
       login(access_token, role);
-      window.location.href = redirectTo;
+      router.push(redirectTo);
     } catch (err: any) {
       setError(err.response?.data?.detail || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
     } finally {
