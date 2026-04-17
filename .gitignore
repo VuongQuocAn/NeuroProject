@@ -1,0 +1,33 @@
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+instance/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node/Frontend
+node_modules/
+.next/
+dist/
+build/
+.cache/
+.eslintcache
+*.log
+
+# Project specific
+backend/medical_data/
+backend/analysis_results/
+backend/ai_core/weights/*.pth
+!backend/ai_core/weights/placeholder.txt
+ke_hoach/
+.gemini/

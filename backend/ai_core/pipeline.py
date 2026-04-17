@@ -132,10 +132,98 @@ class TumorAnalysisPipeline:
         }
         return wsi_dummy, rna_dummy, clinical_dummy, masks
 
+    def run_multimodal_inference(self, image_path: str, rna_data: np.ndarray = None, clinical_data: dict = None, output_dir: str = "results"):
+        """
+        Phiên bản nâng cao hỗ trợ dữ liệu thật cho RNA và Lâm sàng.
+        """
+        result_dict = {
+            "status": "success",
+            "risk_score": 0.0,
+            "risk_level": "Low",
+            "heatmap_path": "",
+            "bbox_image_path": "",
+            "seg_mask_path": "",
+            "error_msg": ""
+        }
+
+        try:
+            # 1. MRI Processing (Reuse existing logic)
+            bbox, bbox_img = self.detector.predict(image_path)
+            os.makedirs(output_dir, exist_ok=True)
+            
+            bbox_save_path = os.path.join(output_dir, "mri_bbox.png")
+            cv2.imwrite(bbox_save_path, bbox_img)
+            result_dict["bbox_image_path"] = bbox_save_path
+
+            cropped_img = self.crop_image(image_path, bbox)
+            seg_mask = self.segmentor.predict(cropped_img)
+            seg_save_path = os.path.join(output_dir, "mri_seg.png")
+            cv2.imwrite(seg_save_path, seg_mask)
+            result_dict["seg_mask_path"] = seg_save_path
+
+            mri_tensor = self.preprocess_for_survival(cropped_img)
+
+            # 2. Prepare real modalities
+            wsi_dummy = torch.zeros(1, 1, 3, 256, 256).to(self.device) # Giả định chưa có WSI thực tế
+            
+            # RNA Mapping
+            if rna_data is not None:
+                rna_tensor = torch.from_numpy(rna_data).float().to(self.device)
+                if rna_tensor.ndim == 1: rna_tensor = rna_tensor.unsqueeze(0)
+                has_rna = 1.0
+            else:
+                rna_tensor = torch.zeros(1, 60664).to(self.device)
+                has_rna = 0.0
+
+            # Clinical Mapping: Chuyển dict thành vector 18 chiều (theo kiến trúc survival_net)
+            clinical_vec = torch.zeros(1, 18).to(self.device)
+            has_clinical = 0.0
+            if clinical_data:
+                # Map các field từ DB vào vector (tạm thời map KI-67 vào vị trí 0)
+                if "ki67_index" in clinical_data:
+                    clinical_vec[0, 0] = float(clinical_data["ki67_index"]) / 100.0
+                    has_clinical = 1.0
+
+            masks = {
+                'has_mri': torch.tensor([1.0]).to(self.device),
+                'has_wsi': torch.tensor([0.0]).to(self.device),
+                'has_rna': torch.tensor([has_rna]).to(self.device),
+                'has_clinical': torch.tensor([has_clinical]).to(self.device),
+                'mri_mask': torch.tensor([[1.0]]).to(self.device),
+                'wsi_mask': torch.tensor([[0.0]]).to(self.device)
+            }
+
+            # 3. Model Inference
+            with torch.no_grad():
+                risk_score, _ = self.survival_model(
+                    mri_tensor, wsi_dummy, rna_tensor, clinical_vec,
+                    masks['has_mri'], masks['has_wsi'], masks['has_rna'], masks['has_clinical'],
+                    mri_mask=masks['mri_mask'], wsi_mask=masks['wsi_mask']
+                )
+
+            score_val = risk_score.item()
+            result_dict["risk_score"] = round(score_val, 4)
+            result_dict["risk_level"] = self.get_risk_level(score_val)
+
+            # 4. Grad-CAM
+            heatmap = self.explainer.generate_heatmap(
+                mri_tensor, wsi_dummy, rna_tensor, clinical_vec, masks
+            )
+            heatmap_save_path = os.path.join(output_dir, "mri_xai_heatmap.png")
+            self.save_overlay_heatmap(cropped_img, heatmap, heatmap_save_path)
+            result_dict["heatmap_path"] = heatmap_save_path
+
+            return result_dict
+
+        except Exception as e:
+            result_dict["status"] = "error"
+            result_dict["error_msg"] = str(e)
+            return result_dict
+
     def get_risk_level(self, score: float) -> str:
         if score > 1.5: return "Very High"
-        elif score > 0: return "High"
-        elif score > -1.5: return "Medium"
+        elif score > 0.5: return "High"
+        elif score > -0.5: return "Medium"
         return "Low"
 
 

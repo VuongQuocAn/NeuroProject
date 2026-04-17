@@ -1,9 +1,52 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Printer, Download, Share2, CheckCircle2, AlertOctagon, FileText, Beaker, Brain } from "lucide-react";
 import { GaugeChart } from "@/components/ui/GaugeChart";
+import { SurvivalCurve } from "@/components/ui/SurvivalCurve";
+import { apiService } from "@/lib/api";
 
 export default function ReportPage() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Trong thực tế, ID bệnh nhân sẽ lấy từ URL hoặc state quản lý
+    apiService.analysis.getResult("1")
+      .then(res => {
+        setData(res.data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-6rem)]">
+        <div className="animate-spin h-10 w-10 border-4 border-t-teal-500 border-slate-700 rounded-full" />
+      </div>
+    );
+  }
+
+  // Dữ liệu mẫu nếu chưa có kết quả thực
+  const result = data || {
+    patient_id: "ND-8829-X",
+    tumor_label: "Glioblastoma (GBM)",
+    classification_confidence: 0.942,
+    risk_score: 84,
+    risk_group: "High",
+    survival_curve_data: [
+      { month: 0, prob: 1.0 },
+      { month: 6, prob: 0.92 },
+      { month: 12, prob: 0.85 },
+      { month: 18, prob: 0.65 },
+      { month: 24, prob: 0.42 },
+      { month: 36, prob: 0.28 }
+    ]
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] relative overflow-hidden">
       
@@ -60,7 +103,7 @@ export default function ReportPage() {
                </div>
                
                <div className="text-right flex flex-col gap-1 text-sm font-mono text-slate-600">
-                  <span className="bg-slate-200 px-3 py-1 rounded inline-block font-bold self-end mb-2">REPORT # REP-2023-8829</span>
+                  <span className="bg-slate-200 px-3 py-1 rounded inline-block font-bold self-end mb-2">REPORT # REP-2023-{result.patient_id}</span>
                   <span suppressHydrationWarning><strong>Date:</strong> {new Date().toLocaleDateString('vi-VN')}</span>
                   <span><strong>Model Ver:</strong> Core-V4.2.1-Fusion</span>
                </div>
@@ -70,7 +113,7 @@ export default function ReportPage() {
              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 bg-white p-6 rounded-lg shadow-sm border border-slate-200 mb-8">
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Mã BN (Patient ID)</span>
-                  <span className="font-mono font-bold text-slate-800 border-b border-teal-200 pb-1">ND-8829-X</span>
+                  <span className="font-mono font-bold text-slate-800 border-b border-teal-200 pb-1">{result.patient_id}</span>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Họ Và Tên</span>
@@ -103,21 +146,16 @@ export default function ReportPage() {
                    </h3>
                    
                    <div className="flex flex-col mb-4">
-                     <span className="text-4xl font-black text-slate-800 mb-1">Glioblastoma (GBM)</span>
+                     <span className="text-4xl font-black text-slate-800 mb-1">{result.tumor_label}</span>
                      <span className="text-sm font-medium text-slate-500 bg-slate-100 self-start px-2 py-0.5 rounded">Grade IV Astrocytoma</span>
                    </div>
 
                    <div className="w-full bg-slate-200 rounded-full h-2 mb-2">
-                     <div className="bg-teal-600 h-2 rounded-full" style={{ width: "94%" }}></div>
+                     <div className="bg-teal-600 h-2 rounded-full" style={{ width: `${result.classification_confidence * 100}%` }}></div>
                    </div>
                    <div className="flex justify-between text-xs font-bold text-slate-600 mb-4 border-b border-slate-100 pb-4">
                       <span>Độ tin cậy:</span>
-                      <span className="text-teal-700">94.2%</span>
-                   </div>
-
-                   <div className="text-sm space-y-2 mt-4">
-                     <div className="flex justify-between"><span className="text-slate-500">Astrocytoma (Lower Grade):</span> <span className="font-mono">4.1%</span></div>
-                     <div className="flex justify-between"><span className="text-slate-500">Oligodendroglioma:</span> <span className="font-mono">1.7%</span></div>
+                      <span className="text-teal-700">{(result.classification_confidence * 100).toFixed(1)}%</span>
                    </div>
                  </div>
 
@@ -127,23 +165,25 @@ export default function ReportPage() {
                       <Beaker className="h-4 w-4" /> 2. Tiên lượng & Yếu tố Rủi ro
                    </h3>
                    
-                   <div className="flex items-center gap-6">
+                   <div className="flex items-center gap-6 mb-8">
                       <div className="w-40 shrink-0 opacity-90 filter invert hue-rotate-180 brightness-75 drop-shadow-md">
-                         <GaugeChart value={84} />
+                         <GaugeChart value={result.risk_score} />
                       </div>
                       
                       <div className="flex flex-col gap-3">
-                         <div className="bg-red-50 p-3 rounded border border-red-100">
-                           <span className="block text-xs font-bold uppercase text-red-500 mb-1">Chỉ số rủi ro sinh tồn</span>
-                           <span className="text-2xl font-bold text-red-700">84 <span className="text-sm font-normal text-red-500">/ 100</span></span>
-                         </div>
-                         
-                         <div className="flex flex-col text-sm border-l-2 border-slate-200 pl-3">
-                            <span className="text-slate-500">Chỉ số sinh học hỗ trợ:</span>
-                            <span className="font-bold text-slate-700">KI-67: 28% (Mức cao)</span>
-                            <span className="font-bold text-slate-700">Thể tích: 34.2 cm³</span>
+                         <div className={`p-3 rounded border ${result.risk_group === 'High' ? 'bg-red-50 border-red-100 text-red-700' : 'bg-teal-50 border-teal-100 text-teal-700'}`}>
+                           <span className="block text-xs font-bold uppercase mb-1">Chỉ số rủi ro sinh tồn</span>
+                           <span className="text-2xl font-bold">{result.risk_score} <span className="text-sm font-normal">/ 100</span></span>
                          </div>
                       </div>
+                   </div>
+
+                   {/* Kaplan-Meier Chart */}
+                   <div className="mt-4 border-t border-slate-100 pt-6">
+                      <SurvivalCurve 
+                        data={result.survival_curve_data} 
+                        color={result.risk_group === 'High' ? "#ef4444" : "#14b8a6"} 
+                      />
                    </div>
                  </div>
 
@@ -182,10 +222,10 @@ export default function ReportPage() {
                   <Brain className="h-5 w-5" /> Tóm tắt & Gợi ý (AI Sinh tạo)
                </h4>
                <p className="text-sm leading-relaxed mb-4 text-slate-600">
-                 Phân tích đa mô thức (Ảnh MRI + Chỉ số KI-67) chỉ ra khả năng cao bệnh nhân mắc Glioblastoma (độ tin cậy 94.2%). Khối u có biểu hiện hoại tử trung tâm và bắt thuốc viền đặc trưng trên MRI. Chỉ số tăng sinh KI-67 (28%) ủng hộ kết quả phân loại khối u ác tính. Mô hình tiên lượng dự đoán nguy cơ cao.
+                 Dựa trên phân tích đa mô thức (MRI + Gen + Lâm sàng), bệnh nhân thuộc nhóm nguy cơ <strong>{result.risk_group}</strong>. Đường cong sinh tồn tiên lượng xác suất sống sót giảm mạnh sau 18 tháng nếu không can thiệp.
                </p>
                <p className="text-sm font-bold text-teal-700">
-                 Gợi ý: Đề xuất sinh thiết để xác định chẩn đoán. Cân nhắc chuẩn bị hội chẩn đa chuyên khoa (Tumor Board) cho phương án xạ trị/hóa trị kết hợp.
+                 Gợi ý: Hội chẩn đa chuyên khoa khẩn cấp.
                </p>
              </div>
 

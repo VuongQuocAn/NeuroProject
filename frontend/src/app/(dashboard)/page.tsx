@@ -17,6 +17,7 @@ import {
   Info
 } from "lucide-react";
 import { GaugeChart } from "@/components/ui/GaugeChart";
+import { SurvivalCurve } from "@/components/ui/SurvivalCurve";
 
 // ---------------------------------------------------------------------------
 // Inline ConfidenceBar to match specific Stitch styling
@@ -198,8 +199,22 @@ export default function DashboardPage() {
             <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200">Tiên lượng sinh tồn</h3>
           </div>
           
-          <div className="py-2">
-             <GaugeChart value={data.risk_score} label="High Risk" sublabel="Based on volumetric and demographic analysis" />
+          <div className="py-2 mb-4">
+             <GaugeChart value={data.risk_score} label={data.risk_group || "High Risk"} />
+          </div>
+
+          {/* Mini Survival Curve on Dashboard */}
+          <div className="mt-2">
+             <SurvivalCurve 
+                data={data.survival_curve_data || [
+                  { time: 0, survival_probability: 1.0 },
+                  { time: 12, survival_probability: 0.8 },
+                  { time: 24, survival_probability: 0.5 },
+                  { time: 36, survival_probability: 0.3 }
+                ]} 
+                color={data.risk_score > 60 ? "#ef4444" : "#14b8a6"}
+                title="Sống còn dự kiến"
+             />
           </div>
         </div>
 

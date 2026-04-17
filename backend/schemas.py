@@ -108,6 +108,7 @@ class AnalysisResultResponse(BaseModel):
     c_index: Optional[float]
     risk_score: Optional[float]
     risk_group: Optional[str]
+    survival_curve_data: Optional[List[dict]] = None
 
     created_at: datetime
 
