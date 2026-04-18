@@ -16,6 +16,7 @@ import {
   Eye,
   Info
 } from "lucide-react";
+import { InferenceViewer } from "@/components/analysis/InferenceViewer";
 import { GaugeChart } from "@/components/ui/GaugeChart";
 import { SurvivalCurve } from "@/components/ui/SurvivalCurve";
 
@@ -49,6 +50,8 @@ function ConfidenceBar({ label, value, isPrimary = false }: { label: string, val
 // ---------------------------------------------------------------------------
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
+  const [xaiData, setXaiData] = useState<any>(null);
+  const [mriUrl, setMriUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
 
@@ -58,6 +61,27 @@ export default function DashboardPage() {
         const resultData = Array.isArray(res.data) ? res.data[0] : res.data;
         if (resultData) {
           setData(resultData);
+          
+          // Fetch XAI Overlays
+          if (resultData.image_id) {
+            apiService.analysis.getXaiOverlay(resultData.image_id)
+              .then(xai => setXaiData(xai.data))
+              .catch(() => console.log("No XAI overlay found"));
+          }
+
+          // Fetch Patient Images
+          if (resultData.patient_id) {
+            apiService.patients.getById(resultData.patient_id)
+              .then(patientData => {
+                const images = patientData.data.images;
+                if (images && images.length > 0) {
+                  const targetImage = images.find((i: any) => i.image_id === resultData.image_id) || images[0];
+                  setMriUrl(targetImage.minio_url);
+                }
+              })
+              .catch(() => console.log("No MRI image found"));
+          }
+
         } else {
           // Fallback to demo data when no real results exist
           setData(mockAnalysisResult);
@@ -100,69 +124,15 @@ export default function DashboardPage() {
       {/* ------------------------------------------------------------------ */}
       {/* Left Column: MRI Viewer (Takes 3 columns on large screens) */}
       {/* ------------------------------------------------------------------ */}
-      <div className="xl:col-span-3 flex flex-col rounded-2xl border border-slate-800 bg-slate-900/50 backdrop-blur-sm overflow-hidden">
-        
-        {/* Viewer Toolbar */}
-        <div className="flex items-center justify-between border-b border-slate-800 p-4 bg-slate-900">
-          <div className="flex items-center gap-4 text-slate-400">
-            <button className="hover:text-teal-400 transition-colors"><Search className="h-5 w-5" /></button>
-            <button className="hover:text-teal-400 transition-colors"><Hand className="h-5 w-5" /></button>
-            <button className="hover:text-teal-400 transition-colors"><Contrast className="h-5 w-5" /></button>
-            <button className="hover:text-teal-400 transition-colors"><ImageIcon className="h-5 w-5" /></button>
-            <button className="hover:text-teal-400 transition-colors"><RotateCw className="h-5 w-5" /></button>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <span className="text-xs font-mono text-slate-400 bg-slate-800 px-3 py-1.5 rounded-md border border-slate-700">
-              SLIDE: <span className="text-slate-200 font-bold">68</span> / 134
-            </span>
-            <button className="flex items-center gap-2 text-xs font-semibold px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-md transition-colors">
-              <Eye className="h-4 w-4" /> COMPARE MODE
-            </button>
-          </div>
-        </div>
-
-        {/* MRI Canvas Area */}
-        <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
-          
-          {/* Top Left Metadata Overlay */}
-          <div className="absolute top-4 left-4 border border-teal-900/50 bg-teal-950/20 backdrop-blur-sm rounded-lg p-3 inline-flex flex-col text-xs font-mono text-teal-500 shadow-lg">
-            <span>PATIENT: #{data.patient_id}</span>
-            <span>STUDY: MRI_HEAD_W_WO_CONTRAST</span>
-            <span>SERIES: T2 AXIAL</span>
-          </div>
-          
-          {/* Top Right Metadata Overlay */}
-          <div className="absolute top-4 right-4 text-right inline-flex flex-col text-xs font-mono text-slate-400 drop-shadow-md">
-            <span>ACQUISITION: 2023-11-24</span>
-            <span>FIELD STRENGTH: 3.0T</span>
-            <span>RESOLUTION: 512 x 512</span>
-          </div>
-
-          {/* Dummy Image representing MRI slice */}
-          <div className="relative w-full max-w-2xl aspect-square bg-[#0a0a0a] rounded-full overflow-hidden shadow-2xl ring-1 ring-slate-800/50">
-             <img 
-               src="https://images.unsplash.com/photo-1559757175-9b78a05eacbe?auto=format&fit=crop&q=80&w=800" 
-               alt="MRI Scan" 
-               className="object-cover w-full h-full opacity-80 mix-blend-screen mix-blend-luminosity filter contrast-125"
-             />
-             
-             {/* Mock segmentation/tumor highlight mask */}
-             <div className="absolute inset-0 flex items-center justify-center opacity-70">
-                <div className="w-1/3 h-1/4 rounded-full border-2 border-teal-500 blur-sm mix-blend-screen bg-teal-500/20 translate-x-4 -translate-y-4 shadow-[0_0_50px_rgba(20,184,166,0.3)]"></div>
-             </div>
-          </div>
-        </div>
-
-        {/* Bottom Status Bar */}
-        <div className="border-t border-slate-800 p-4 bg-slate-900">
-          <div className="flex items-center justify-between text-xs font-mono text-slate-400 bg-slate-800/50 rounded-full px-6 py-2 border border-slate-700/50">
-            <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.6)] animate-pulse"/> INFERENCE: 420MS</span>
-            <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"/> MODEL : V4.2-RESNET50</span>
-            <span className="tracking-widest opacity-50">NEURODIAGNOSIS-ENGINE v2.0.4</span>
-            <span className="font-bold text-slate-300">75%</span>
-          </div>
-        </div>
+      <div className="xl:col-span-3 h-full">
+        <InferenceViewer 
+           mriUrl={mriUrl || undefined}
+           heatmapUrl={xaiData?.gradcam_url}
+           maskUrl={xaiData?.mask_url}
+           patientId={data?.patient_id?.toString()}
+           confidence={data?.classification_confidence}
+           tumorLabel={data?.tumor_label}
+        />
       </div>
 
       {/* ------------------------------------------------------------------ */}

@@ -38,12 +38,12 @@ export default function ReportPage() {
     risk_score: 84,
     risk_group: "High",
     survival_curve_data: [
-      { month: 0, prob: 1.0 },
-      { month: 6, prob: 0.92 },
-      { month: 12, prob: 0.85 },
-      { month: 18, prob: 0.65 },
-      { month: 24, prob: 0.42 },
-      { month: 36, prob: 0.28 }
+      { time: 0, survival_probability: 1.0 },
+      { time: 6, survival_probability: 0.92 },
+      { time: 12, survival_probability: 0.85 },
+      { time: 18, survival_probability: 0.65 },
+      { time: 24, survival_probability: 0.42 },
+      { time: 36, survival_probability: 0.28 }
     ]
   };
 
@@ -82,9 +82,9 @@ export default function ReportPage() {
       </div>
 
       {/* Main Report Content - A4 Proportions with shadow styling inner container */}
-      <div className="flex-1 overflow-auto custom-scrollbar p-6 lg:p-10 flex justify-center bg-slate-950/50">
+      <div className="flex-1 overflow-auto p-6 lg:p-10 flex justify-center bg-slate-950/50">
         
-        <div className="w-full max-w-4xl bg-[#eff1f5] rounded-xl shadow-2xl relative overflow-hidden text-slate-900 flex flex-col min-h-full">
+        <div className="w-full max-w-4xl bg-[#eff1f5] rounded-xl shadow-2xl relative text-slate-900 flex flex-col h-fit mb-12">
            
            {/* Report Header Band */}
            <div className="h-4 w-full bg-teal-600 shrink-0"></div>
