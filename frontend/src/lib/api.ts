@@ -61,6 +61,9 @@ export const apiService = {
     },
     create: async (data: { name: string; external_id?: string; age?: number; gender?: string }) => {
       return api.post("/records/patients/", data);
+    },
+    deleteImage: async (imageId: string | number) => {
+      return api.delete(`/records/images/${imageId}`);
     }
   },
   analysis: {
@@ -72,7 +75,46 @@ export const apiService = {
     },
     getXaiOverlay: async (imageId: string) => {
       return api.get(`/records/analysis/${imageId}/xai-overlay`);
+    },
+    getImageResult: async (imageId: string | number) => {
+      return api.get(`/records/analysis/image/${imageId}`);
+    },
+    downloadReport: async (imageId: string | number) => {
+      return api.get(`/records/analysis/image/${imageId}/report`, {
+        responseType: "blob",
+      });
     }
+  },
+  inference: {
+    runMri: async (imageId: string | number) => {
+      return api.post(`/inference/mri/${imageId}`);
+    },
+    runPrognosis: async (patientId: string | number) => {
+      return api.post(`/inference/prognosis/${patientId}`);
+    },
+    getTask: async (taskId: string | number) => {
+      return api.get(`/inference/tasks/${taskId}`);
+    },
+    waitForTask: async (taskId: string | number, intervalMs = 2000, timeoutMs = 180000) => {
+      const startedAt = Date.now();
+
+      while (Date.now() - startedAt < timeoutMs) {
+        const response = await api.get(`/inference/tasks/${taskId}`);
+        const task = response.data;
+
+        if (task.status === "done" || task.status === "completed") {
+          return task;
+        }
+
+        if (task.status === "failed") {
+          throw new Error(task.error_message || "AI task failed");
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+
+      throw new Error("Inference timeout");
+    },
   },
   upload: {
     mri: async (patientId: string, file: File) => {
@@ -82,10 +124,10 @@ export const apiService = {
         headers: { "Content-Type": "multipart/form-data" }
       });
     },
-    rna: async (file: File) => {
+    rna: async (patientId: string, file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      return api.post(`/upload/rna/`, formData, {
+      return api.post(`/upload/rna/?patient_id=${encodeURIComponent(patientId)}`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
     },

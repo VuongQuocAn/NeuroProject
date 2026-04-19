@@ -1,21 +1,16 @@
 import uuid
-from celery import Celery
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 import models
 import schemas
+from celery_app import celery_app
 from database import get_db
 from utils import get_current_user
 
 router = APIRouter(prefix="/inference", tags=["AI Inference"])
 
 # Kết nối tới Celery broker (Redis) — cấu hình qua biến môi trường
-import os
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
-
-celery_app = Celery("neuro_tasks", broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND)
 
 
 def _create_inference_task(
@@ -164,4 +159,13 @@ def get_task_status(
     if not task:
         raise HTTPException(status_code=404, detail=f"Không tìm thấy tác vụ id={task_id}")
 
-    return task
+    return schemas.InferenceTaskStatus(
+        task_id=task.id,
+        celery_task_id=task.celery_task_id,
+        task_type=task.task_type,
+        status=task.status,
+        result=task.result,
+        error_message=task.error_message,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+    )
