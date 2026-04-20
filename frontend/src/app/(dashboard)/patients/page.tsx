@@ -5,6 +5,17 @@ import { useRouter } from "next/navigation";
 import { apiService } from "@/lib/api";
 import { Search, UserPlus, FileSpreadsheet, AlertTriangle, BadgeCheck, ChevronLeft, ChevronRight, X, Loader2 } from "lucide-react";
 
+const LABEL_MAP: Record<string, string> = {
+  class_0: "Glioma",
+  class_1: "Meningioma",
+  class_2: "Pituitary tumor",
+};
+
+function displayDiagnosis(label?: string | null) {
+  if (!label) return "Chưa có";
+  return LABEL_MAP[label] || label;
+}
+
 // ---------------------------------------------------------------------------
 // Create Patient Modal
 // ---------------------------------------------------------------------------
@@ -202,7 +213,7 @@ export default function PatientsPage() {
 
   // Helper for Status Badge
   const renderStatusBadge = (diagnosis?: string) => {
-    const label = diagnosis || "Chưa có";
+    const label = displayDiagnosis(diagnosis);
     let bgClasses = "bg-slate-800 text-slate-400 border border-slate-700";
     if (label.includes("Rủi ro cao") || label.includes("GBM") || label.includes("Glioma")) {
       bgClasses = "bg-red-500/10 text-red-500 border border-red-500/20";

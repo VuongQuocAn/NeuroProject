@@ -505,7 +505,6 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
               title="Kết quả MRI"
               result={resultModal.data}
               loading={resultModal.loading}
-              onClose={() => setResultModal({ open: false, loading: false, data: null })}
               onRetry={
                 resultModal.data?.image_id
                   ? () => {

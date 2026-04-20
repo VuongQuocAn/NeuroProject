@@ -13,6 +13,18 @@ from utils import minio_client
 router = APIRouter(prefix="/records", tags=["Records"])
 BUCKET_NAME = "medical-data"
 
+LABEL_MAP = {
+    "class_0": "Glioma",
+    "class_1": "Meningioma",
+    "class_2": "Pituitary tumor",
+}
+
+
+def _display_diagnosis(label: str | None) -> str | None:
+    if not label:
+        return None
+    return LABEL_MAP.get(label, label)
+
 
 @router.post("/patients/", status_code=201)
 def create_patient(patient: schemas.PatientCreate, db: Session = Depends(get_db)):
@@ -61,7 +73,7 @@ def get_all_patients(db: Session = Depends(get_db)):
                 "age": patient.age,
                 "gender": patient.gender,
                 "lastVisit": latest_image.scan_date.isoformat() if latest_image and latest_image.scan_date else None,
-                "diagnosis": latest_analysis.tumor_label if latest_analysis else None,
+                "diagnosis": _display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None,
                 "riskScore": latest_analysis.risk_score if latest_analysis and latest_analysis.risk_score is not None else None,
             }
         )
