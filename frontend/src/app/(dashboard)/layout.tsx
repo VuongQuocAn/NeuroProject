@@ -16,23 +16,21 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace("/login");
+      window.location.href = "/login";
     }
   }, [user, loading, router]);
 
-  if (loading) {
+  if (loading || (!loading && !user)) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center border-t-teal-500">
         <div className="flex flex-col items-center gap-4">
           <div className="h-10 w-10 rounded-full border-4 border-t-teal-500 border-slate-700 animate-spin" />
-          <span className="text-slate-400 text-sm">Đang xác thực...</span>
+          <span className="text-slate-400 text-sm">
+            {!loading && !user ? "Đang chuyển hướng đến trang đăng nhập..." : "Đang xác thực..."}
+          </span>
         </div>
       </div>
     );
-  }
-
-  if (!user) {
-    return null;
   }
 
   return (

@@ -51,6 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         logout();
       }
+    } else {
+      removeTokenCookie();
     }
     setLoading(false);
   }, []);
