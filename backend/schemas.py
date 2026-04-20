@@ -116,6 +116,26 @@ class AnalysisResultResponse(BaseModel):
         from_attributes = True
 
 
+class ImageAIResultResponse(BaseModel):
+    image_id: int
+    patient_id: Optional[int] = None
+    task_id: Optional[int] = None
+    status: str
+    no_tumor_detected: Optional[bool] = None
+    error_message: Optional[str] = None
+    bbox: Optional[List[int]] = None
+    bbox_confidence: Optional[float] = None
+    tumor_label: Optional[str] = None
+    classification_confidence: Optional[float] = None
+    class_probabilities: Optional[List[float]] = None
+    bbox_overlay_data_url: Optional[str] = None
+    mask_data_url: Optional[str] = None
+    mask_overlay_data_url: Optional[str] = None
+    contour_overlay_data_url: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
 class XAIOverlayResponse(BaseModel):
     """URL tạm thời để Frontend tải ảnh Grad-CAM và Mask."""
     image_id: int

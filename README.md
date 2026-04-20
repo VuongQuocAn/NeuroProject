@@ -72,3 +72,21 @@ The backend is built with FastAPI, integrating Celery for asynchronous AI proces
   - `multimodal`: Endpoints to handle and validate DICOM, WSI, and RNA expressions.
   - `inference`: Asynchronous task delegation to Celery for heavy image processing tasks.
   - `analysis`: Synthesis of tumor classification score and survival index (C-index based).
+
+
+
+
+
+  @'
+from ai_core.pipeline import TumorAnalysisPipeline
+import os
+
+weights_dir = os.path.join(os.getcwd(), "ai_core", "weights")
+pipeline = TumorAnalysisPipeline(weights_dir=weights_dir, device="cpu")
+
+result = pipeline.run_inference(
+    image_source=os.path.join(os.getcwd(), "test_mri.dcm"),
+    output_dir=os.path.join(os.getcwd(), "test_output_manual")
+)
+print(result)
+'@ | python -

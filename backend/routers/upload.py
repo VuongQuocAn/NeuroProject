@@ -5,7 +5,7 @@ import crud
 
 import models
 from database import get_db
-from utils import minio_client, ensure_bucket_exists, anonymize_dicom
+from utils import minio_client, ensure_bucket_exists, prepare_mri_upload
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 BUCKET_NAME = "medical-data"
@@ -22,18 +22,19 @@ async def upload_mri(patient_id: str, file: UploadFile = File(...), db: Session 
     ensure_bucket_exists(BUCKET_NAME)
     
     try:
-        # 3. Đọc và ẩn danh file DICOM
+        # 3. Chuẩn bị bytes MRI.
+        # Hỗ trợ cả DICOM chuẩn, DICOM thiếu preamble, và ảnh thường để test pipeline.
         file_bytes = await file.read()
-        clean_dicom_stream = anonymize_dicom(file_bytes)
+        prepared_stream, content_type = prepare_mri_upload(file_bytes, file.filename)
         
         # 4. Lưu file đã ẩn danh lên MinIO
         unique_filename = f"{uuid.uuid4()}_{file.filename}"
         minio_client.put_object(
             bucket_name=BUCKET_NAME,
             object_name=unique_filename,
-            data=clean_dicom_stream,
-            length=clean_dicom_stream.getbuffer().nbytes,
-            content_type="application/dicom"
+            data=prepared_stream,
+            length=prepared_stream.getbuffer().nbytes,
+            content_type=content_type,
         )
         
         # 5. Lưu đường dẫn và metadata không nhạy cảm vào PostgreSQL
@@ -47,7 +48,7 @@ async def upload_mri(patient_id: str, file: UploadFile = File(...), db: Session 
         db.refresh(new_image)
         
         return {
-            "message": "Tải lên và ẩn danh thành công",
+            "message": "Tải lên MRI thành công",
             "image_id": new_image.id,
             "minio_path": new_image.file_path
         }

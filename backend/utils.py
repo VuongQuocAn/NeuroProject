@@ -1,6 +1,7 @@
 import io
 import os
 from datetime import datetime, timedelta
+from typing import Tuple
 
 import pydicom
 from minio import Minio
@@ -14,7 +15,7 @@ from fastapi.security import OAuth2PasswordBearer
 # ============================================================
 
 minio_client = Minio(
-    "minio:9000",
+    os.getenv("MINIO_URL", "minio:9000"),
     access_key=os.getenv("MINIO_ACCESS_KEY", "admin"),
     secret_key=os.getenv("MINIO_SECRET_KEY", "password123"),
     secure=False,
@@ -28,8 +29,18 @@ def ensure_bucket_exists(bucket_name: str):
 
 
 def anonymize_dicom(file_bytes: bytes) -> io.BytesIO:
-    """Đọc và tự động ẩn danh các trường thông tin nhạy cảm trong file DICOM."""
-    dicom_file = pydicom.dcmread(io.BytesIO(file_bytes))
+    """Đọc và tự động ẩn danh các trường thông tin nhạy cảm trong file DICOM.
+
+    Hỗ trợ cả các file DICOM thiếu File Meta Information/prefix `DICM`.
+    """
+    try:
+        dicom_file = pydicom.dcmread(io.BytesIO(file_bytes))
+    except Exception:
+        dicom_file = pydicom.dcmread(io.BytesIO(file_bytes), force=True)
+
+    # Tranh doc nham anh JPEG/PNG hoac file bat ky thanh "DICOM" khi force=True.
+    if "PixelData" not in dicom_file:
+        raise ValueError("File khong co PixelData, khong du dieu kien xu ly nhu DICOM.")
 
     sensitive_tags = {
         "PatientName": "ANONYMOUS",
@@ -45,6 +56,31 @@ def anonymize_dicom(file_bytes: bytes) -> io.BytesIO:
     dicom_file.save_as(output)
     output.seek(0)
     return output
+
+
+def prepare_mri_upload(file_bytes: bytes, filename: str | None) -> Tuple[io.BytesIO, str]:
+    """Chuẩn bị bytes để upload MRI.
+
+    - Nếu là DICOM chuẩn hoặc DICOM thiếu preamble: đọc và ẩn danh, trả content type DICOM.
+    - Nếu không đọc được như DICOM: giữ nguyên bytes để hỗ trợ ảnh thường dùng cho test.
+    """
+    try:
+        clean_stream = anonymize_dicom(file_bytes)
+        return clean_stream, "application/dicom"
+    except Exception:
+        fallback_stream = io.BytesIO(file_bytes)
+        fallback_stream.seek(0)
+
+        extension = (filename or "").rsplit(".", 1)[-1].lower() if filename and "." in filename else ""
+        content_type_map = {
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "bmp": "image/bmp",
+            "tif": "image/tiff",
+            "tiff": "image/tiff",
+        }
+        return fallback_stream, content_type_map.get(extension, "application/octet-stream")
 
 
 # ============================================================
