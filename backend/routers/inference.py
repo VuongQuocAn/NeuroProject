@@ -109,13 +109,11 @@ def trigger_prognosis_inference(
         raise HTTPException(status_code=404, detail="Không tìm thấy bệnh nhân")
 
     # Kiểm tra dữ liệu RNA đã được tải lên chưa (cần thiết cho Fusion Model)
+    # RnaData is no longer strictly mandatory since the model handles missing data gracefully via masking,
+    # but we still check if the patient has any data uploaded.
     rna = db.query(models.RnaData).filter(models.RnaData.patient_id == patient_id).first()
     if not rna:
-        raise HTTPException(
-            status_code=422,
-            detail="Chưa có dữ liệu RNA-seq cho bệnh nhân này. "
-                   "Vui lòng tải lên qua POST /upload/rna/ trước.",
-        )
+        print(f"[Warning] Không có dữ liệu RNA-seq cho bệnh nhân {patient_id}. Mô hình sẽ tự động bỏ qua qua Attention Mask.")
 
     # Kiểm tra tác vụ đang chạy
     existing = db.query(models.InferenceTask).filter(

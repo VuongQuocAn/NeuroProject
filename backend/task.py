@@ -85,7 +85,44 @@ def run_mri_pipeline(task_id: int, image_id: int):
         output_dir = os.path.join(os.path.dirname(__file__), "analysis_results", str(image_id))
         os.makedirs(output_dir, exist_ok=True)
 
-        result = get_ai_pipeline().run_inference(image_source=image_bytes, output_dir=output_dir)
+        # Fetch RNA data if available
+        rna_record = db.query(models.RnaData).filter(models.RnaData.patient_id == image_record.patient_id).first()
+        rna_vector = None
+        if rna_record:
+            try:
+                rna_bucket, rna_object = _parse_minio_path(rna_record.file_path)
+                rna_response = minio_client.get_object(rna_bucket, rna_object)
+                try:
+                    rna_bytes = rna_response.read()
+                finally:
+                    rna_response.close()
+                    rna_response.release_conn()
+
+                separator = "\t" if rna_record.file_format == "tsv" else ","
+                df = pd.read_csv(io.BytesIO(rna_bytes), sep=separator)
+                numeric_df = df.select_dtypes(include=["number"])
+                if "patient_id" in numeric_df.columns:
+                    numeric_df = numeric_df.drop(columns=["patient_id"])
+                rna_vector = numeric_df.to_numpy(dtype=np.float32).flatten()
+            except Exception as e:
+                print(f"[CELERY WORKER] Loi khi doc RNA: {e}")
+
+        # Fetch Clinical data if available
+        clinical_record = db.query(models.ClinicalData).filter(models.ClinicalData.patient_id == image_record.patient_id).first()
+        clinical_dict = {}
+        if clinical_record:
+            clinical_dict = {
+                "ki67_index": clinical_record.ki67_index,
+                "biochemistry_markers": clinical_record.biochemistry_markers,
+                "initial_status": clinical_record.initial_status,
+            }
+
+        result = get_ai_pipeline().run_multimodal_inference(
+            image_source=image_bytes,
+            rna_data=rna_vector,
+            clinical_data=clinical_dict,
+            output_dir=output_dir,
+        )
 
         if result["status"] != "success":
             raise Exception(result["error_msg"])
@@ -101,17 +138,17 @@ def run_mri_pipeline(task_id: int, image_id: int):
             )
             db.add(analysis)
 
-        analysis.tumor_label = result["tumor_label"]
-        analysis.classification_confidence = result["classification_confidence"]
-        analysis.mask_path = result["seg_mask_path"] or None
+        analysis.tumor_label = result.get("tumor_label")
+        analysis.classification_confidence = result.get("classification_confidence")
+        analysis.mask_path = result.get("seg_mask_path") or None
         analysis.gradcam_path = None
         analysis.dice_score = None
         analysis.iou_score = None
         analysis.accuracy = None
         analysis.c_index = None
-        analysis.risk_score = None
-        analysis.risk_group = None
-        analysis.survival_curve_data = None
+        analysis.risk_score = result.get("risk_score")
+        analysis.risk_group = result.get("risk_group")
+        analysis.survival_curve_data = result.get("survival_curve_data")
 
         db.commit()
 
