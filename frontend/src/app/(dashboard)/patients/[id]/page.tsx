@@ -472,7 +472,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
             <div className="space-y-3">
               <button
                 onClick={handleRunPrognosis}
-                disabled={prognosisLoading || !rna_uploaded || !clinical_data}
+                disabled={prognosisLoading || images.length === 0}
                 className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center justify-center gap-2"
               >
                 {prognosisLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

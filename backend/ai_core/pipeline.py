@@ -87,7 +87,7 @@ class TumorAnalysisPipeline:
             }
 
         result_dict = self._run_mri_core(image_source=image_source, output_dir=output_dir)
-        if result_dict["status"] != "success":
+        if result_dict["status"] != "success" or result_dict.get("no_tumor_detected"):
             result_dict.pop("_cropped_img", None)
             result_dict.pop("_seg_mask", None)
             result_dict.pop("_masked_roi", None)
