@@ -404,6 +404,9 @@ def _build_professional_report_pdf(
     cropped_roi_image: Image.Image | None,
     mask_image: Image.Image | None,
     overlay_image: Image.Image | None,
+    risk_score: float | None = None,
+    risk_group: str | None = None,
+    survival_curve_data: list[dict] | None = None,
 ) -> bytes:
     page_size = (1240, 1754)
     page1 = Image.new("RGB", page_size, "white")
@@ -507,8 +510,154 @@ def _build_professional_report_pdf(
         current_y = _draw_wrapped_text(draw2, line, (90, current_y), font_body, TEXT, max_width=1040, line_spacing=8)
         current_y += 10
 
+    # ── Page 3: Multimodal Prognosis ──────────────────────────
+    all_pages = [page2]
+
+    if multimodal_available and risk_score is not None:
+        page3 = Image.new("RGB", page_size, "white")
+        draw3 = ImageDraw.Draw(page3)
+        font_big_number = _load_font(52, bold=True)
+
+        draw3.rectangle((0, 0, page_size[0], 110), fill=NAVY)
+        draw3.text((60, 38), "Multimodal Prognosis Analysis", font=font_h1, fill="white")
+        draw3.text((page_size[0] - 260, 44), f"Report ID: {report_id}", font=font_small, fill=(220, 232, 240))
+
+        # ── Risk Score + Risk Group cards ──
+        draw3.text((60, 150), "Prognosis Summary", font=font_h2, fill=TEXT)
+
+        # Risk Score card
+        rs_box = (60, 195, 600, 420)
+        draw3.rounded_rectangle(rs_box, radius=18, fill=LIGHT_GRAY, outline=BORDER, width=2)
+        draw3.text((90, 215), "Risk Score", font=font_small, fill=TEXT_MUTED)
+        rs_display = f"{risk_score:.4f}"
+        draw3.text((90, 250), rs_display, font=font_big_number, fill=TEXT)
+
+        # Risk level bar
+        bar_x, bar_y, bar_w, bar_h = 90, 330, 480, 22
+        draw3.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=8, fill=(220, 226, 230))
+        normalized_risk = max(0.0, min(1.0, (risk_score + 2) / 4))  # map [-2, 2] -> [0, 1]
+        fill_w = int(bar_w * normalized_risk)
+        if fill_w > 0:
+            bar_color = (177, 58, 58) if normalized_risk > 0.6 else (185, 117, 45) if normalized_risk > 0.3 else (38, 120, 133)
+            draw3.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=8, fill=bar_color)
+        draw3.text((90, 362), "Low", font=font_small, fill=(38, 120, 133))
+        draw3.text((bar_x + bar_w // 2 - 25, 362), "Medium", font=font_small, fill=(185, 117, 45))
+        draw3.text((bar_x + bar_w - 30, 362), "High", font=font_small, fill=(177, 58, 58))
+
+        # Risk Group card
+        rg_box = (640, 195, 1180, 420)
+        draw3.rounded_rectangle(rg_box, radius=18, fill=LIGHT_GRAY, outline=BORDER, width=2)
+        draw3.text((670, 215), "Risk Group", font=font_small, fill=TEXT_MUTED)
+        rg_display = risk_group or "N/A"
+        rg_color = (177, 58, 58) if rg_display == "High" else (185, 117, 45) if rg_display == "Medium" else (38, 120, 133)
+        draw3.text((670, 250), rg_display, font=font_big_number, fill=rg_color)
+
+        # Data source indicators
+        draw3.text((670, 330), "Data sources used:", font=font_small, fill=TEXT_MUTED)
+        draw3.text((670, 355), "MRI imaging  [provided]", font=font_label, fill=(38, 120, 133))
+        draw3.text((670, 380), "RNA-seq / Clinical  [if available]", font=font_small, fill=TEXT_MUTED)
+
+        # ── Survival Curve chart ──
+        draw3.text((60, 460), "Predicted Survival Curve (Kaplan-Meier)", font=font_h2, fill=TEXT)
+        chart_box = (60, 500, 1180, 1080)
+        draw3.rounded_rectangle(chart_box, radius=18, fill=(250, 251, 252), outline=BORDER, width=2)
+
+        if survival_curve_data and len(survival_curve_data) > 1:
+            chart_left, chart_top = 130, 560
+            chart_right, chart_bottom = 1140, 1040
+            chart_w = chart_right - chart_left
+            chart_h = chart_bottom - chart_top
+
+            # Axes
+            draw3.line((chart_left, chart_bottom, chart_right, chart_bottom), fill=BORDER, width=2)
+            draw3.line((chart_left, chart_top, chart_left, chart_bottom), fill=BORDER, width=2)
+
+            # Grid lines
+            for i in range(1, 5):
+                gy = chart_bottom - int(chart_h * i / 4)
+                draw3.line((chart_left, gy, chart_right, gy), fill=(235, 238, 240), width=1)
+                draw3.text((chart_left - 50, gy - 8), f"{i * 25}%", font=font_small, fill=TEXT_MUTED)
+            draw3.text((chart_left - 35, chart_bottom - 8), "0%", font=font_small, fill=TEXT_MUTED)
+
+            # Axis labels
+            draw3.text((chart_left + chart_w // 2 - 30, chart_bottom + 20), "Time (months)", font=font_small, fill=TEXT_MUTED)
+
+            # Plot data points
+            times = [pt.get("time", 0) for pt in survival_curve_data]
+            probs = [pt.get("survival_probability", 0) for pt in survival_curve_data]
+            max_time = max(times) if times else 1
+
+            # X-axis ticks
+            tick_count = min(6, len(times))
+            for i in range(tick_count + 1):
+                t_val = max_time * i / tick_count
+                tx = chart_left + int(chart_w * i / tick_count)
+                draw3.text((tx - 10, chart_bottom + 4), f"{t_val:.0f}", font=font_small, fill=TEXT_MUTED)
+
+            # Draw filled area + step line
+            points_for_fill = []
+            prev_x, prev_y = None, None
+            for t, p in zip(times, probs):
+                x = chart_left + int(chart_w * t / max_time) if max_time > 0 else chart_left
+                y = chart_bottom - int(chart_h * p)
+                if prev_x is not None and prev_y is not None:
+                    # Step line: horizontal then vertical
+                    draw3.line((prev_x, prev_y, x, prev_y), fill=TEAL, width=3)
+                    draw3.line((x, prev_y, x, y), fill=TEAL, width=3)
+                    points_for_fill.append((x, prev_y))
+                else:
+                    points_for_fill.append((x, y))
+                points_for_fill.append((x, y))
+                prev_x, prev_y = x, y
+
+            # Close polygon for fill
+            if points_for_fill:
+                fill_polygon = list(points_for_fill) + [(prev_x, chart_bottom), (points_for_fill[0][0], chart_bottom)]
+                try:
+                    overlay = Image.new("RGBA", page_size, (0, 0, 0, 0))
+                    overlay_draw = ImageDraw.Draw(overlay)
+                    overlay_draw.polygon(fill_polygon, fill=(38, 120, 133, 40))
+                    page3 = Image.alpha_composite(page3.convert("RGBA"), overlay).convert("RGB")
+                    draw3 = ImageDraw.Draw(page3)
+                except Exception:
+                    pass
+
+            # Draw data point dots
+            for t, p in zip(times, probs):
+                x = chart_left + int(chart_w * t / max_time) if max_time > 0 else chart_left
+                y = chart_bottom - int(chart_h * p)
+                draw3.ellipse((x - 4, y - 4, x + 4, y + 4), fill=TEAL, outline="white", width=1)
+        else:
+            draw3.text((400, 760), "No survival curve data available", font=font_body, fill=TEXT_MUTED)
+
+        # ── Methodology note ──
+        draw3.text((60, 1120), "Methodology", font=font_h2, fill=TEXT)
+        method_box = (60, 1160, 1180, 1400)
+        draw3.rounded_rectangle(method_box, radius=18, fill=LIGHT_GRAY, outline=BORDER, width=2)
+        method_lines = [
+            "Risk prediction uses SurvivalNet, an Attention-based Multi-Modal Fusion model",
+            "combining MRI imaging features, RNA-seq gene expression, and clinical biomarkers.",
+            "Missing modalities are handled via learned attention masking.",
+            "Survival probabilities are estimated using the Cox proportional hazards framework.",
+        ]
+        my = 1190
+        for ml in method_lines:
+            my = _draw_wrapped_text(draw3, ml, (90, my), font_small, TEXT, max_width=1060, line_spacing=6)
+            my += 4
+
+        # Disclaimer on page 3
+        draw3.text((60, 1440), "Disclaimer", font=font_h2, fill=TEXT)
+        disc3_box = (60, 1480, 1180, 1700)
+        draw3.rounded_rectangle(disc3_box, radius=18, fill=(252, 248, 247), outline=(230, 214, 210), width=2)
+        disc3_y = 1510
+        for line in disclaimer_lines:
+            disc3_y = _draw_wrapped_text(draw3, line, (90, disc3_y), font_body, TEXT, max_width=1040, line_spacing=8)
+            disc3_y += 10
+
+        all_pages.append(page3)
+
     buffer = BytesIO()
-    page1.save(buffer, format="PDF", save_all=True, append_images=[page2], resolution=150)
+    page1.save(buffer, format="PDF", save_all=True, append_images=all_pages, resolution=150)
     return buffer.getvalue()
 
 
@@ -608,6 +757,9 @@ def get_image_analysis_detail(
         mask_data_url=_local_image_to_data_url(result_payload.get("seg_mask_path")),
         mask_overlay_data_url=mask_overlay_data_url,
         contour_overlay_data_url=contour_overlay_data_url,
+        risk_score=result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis else None),
+        risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
+        survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
         created_at=created_at,
         updated_at=updated_at,
     )
@@ -662,6 +814,9 @@ def download_image_report(
         mask_image=_bgr_path_to_pil(result_payload.get("seg_mask_path")),
         overlay_image=_bgr_path_to_pil(result_payload.get("mask_overlay_path"))
         or _bgr_path_to_pil(result_payload.get("masked_roi_path")),
+        risk_score=analysis.risk_score if analysis else None,
+        risk_group=analysis.risk_group if analysis else None,
+        survival_curve_data=analysis.survival_curve_data if analysis else None,
     )
     return Response(
         content=pdf_bytes,

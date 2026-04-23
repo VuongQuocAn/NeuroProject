@@ -27,6 +27,10 @@ type MriResult = {
   mask_data_url?: string | null;
   mask_overlay_data_url?: string | null;
   contour_overlay_data_url?: string | null;
+  // Multimodal prognosis fields
+  risk_score?: number | null;
+  risk_group?: string | null;
+  survival_curve_data?: { time: number; survival_probability: number }[] | null;
 };
 
 type Props = {
@@ -325,11 +329,40 @@ export default function MriResultCard({
                 </div>
               </div>
 
+              {result?.risk_score != null && (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5">
+                  <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    Multimodal Prognosis
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Risk Score</div>
+                      <div className="text-2xl font-bold text-white">{result.risk_score.toFixed(4)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Risk Group</div>
+                      <span className={`inline-block px-3 py-1.5 rounded-lg text-sm font-bold border ${
+                        result.risk_group === "High"
+                          ? "bg-red-500/15 text-red-400 border-red-500/25"
+                          : result.risk_group === "Medium"
+                            ? "bg-amber-500/15 text-amber-400 border-amber-500/25"
+                            : "bg-emerald-500/15 text-emerald-400 border-emerald-500/25"
+                      }`}>
+                        {result.risk_group || "--"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {isDone && (
                 <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 flex items-center gap-3 text-emerald-300">
                   <CheckCircle2 className="h-5 w-5" />
                   <span className="text-sm font-medium">
-                    Kết quả MRI đã sẵn sàng để xem, tải báo cáo hoặc xóa.
+                    {result?.risk_score != null
+                      ? "Kết quả MRI & Multimodal Prognosis đã sẵn sàng."
+                      : "Kết quả MRI đã sẵn sàng để xem, tải báo cáo hoặc xóa."}
                   </span>
                 </div>
               )}

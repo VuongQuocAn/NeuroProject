@@ -132,6 +132,10 @@ class ImageAIResultResponse(BaseModel):
     mask_data_url: Optional[str] = None
     mask_overlay_data_url: Optional[str] = None
     contour_overlay_data_url: Optional[str] = None
+    # Multimodal prognosis fields
+    risk_score: Optional[float] = None
+    risk_group: Optional[str] = None
+    survival_curve_data: Optional[List[dict]] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
