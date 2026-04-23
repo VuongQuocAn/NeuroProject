@@ -127,6 +127,10 @@ def main():
                         print(f" -> Classification Confidence: {result.get('classification_confidence')}")
                         print(f" -> Risk Score: {result.get('risk_score')}")
                         print(f" -> Risk Group: {result.get('risk_group')}")
+                        has_heatmap = result.get("gradcam_heatmap_path") is not None
+                        has_attention = result.get("fusion_attention") is not None
+                        print(f" -> Grad-CAM Heatmap: {'YES' if has_heatmap else 'NO'}")
+                        print(f" -> Fusion Attention: {result.get('fusion_attention')}")
                         if result.get("risk_score") is not None:
                             print(" SUCCESS: Multimodal risk_score was calculated!")
                         else:

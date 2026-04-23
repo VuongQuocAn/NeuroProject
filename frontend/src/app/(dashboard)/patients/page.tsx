@@ -293,7 +293,7 @@ export default function PatientsPage() {
                   <td className="px-6 py-4 font-mono text-slate-500">{p.external_id || p.id}</td>
                   <td className="px-6 py-4 font-medium text-slate-200">{p.name || `Bệnh nhân #${p.id}`}</td>
                   <td className="px-6 py-4 text-slate-300">{p.age ?? '—'} / {p.gender ?? '—'}</td>
-                  <td className="px-6 py-4 text-slate-400">{p.lastVisit || '—'}</td>
+                  <td className="px-6 py-4 text-slate-400">{p.lastVisit ? (() => { let d = p.lastVisit; if (d && !d.endsWith("Z") && !d.includes("+") && d.includes("T")) d += "Z"; return new Date(d).toLocaleDateString("vi-VN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }); })() : '—'}</td>
                   <td className="px-6 py-4">
                     {renderStatusBadge(p.diagnosis)}
                   </td>

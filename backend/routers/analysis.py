@@ -407,6 +407,8 @@ def _build_professional_report_pdf(
     risk_score: float | None = None,
     risk_group: str | None = None,
     survival_curve_data: list[dict] | None = None,
+    heatmap_image: Image.Image | None = None,
+    fusion_attention: list[float] | None = None,
 ) -> bytes:
     page_size = (1240, 1754)
     page1 = Image.new("RGB", page_size, "white")
@@ -557,14 +559,67 @@ def _build_professional_report_pdf(
         draw3.text((670, 355), "MRI imaging  [provided]", font=font_label, fill=(38, 120, 133))
         draw3.text((670, 380), "RNA-seq / Clinical  [if available]", font=font_small, fill=TEXT_MUTED)
 
+        # ── Grad-CAM Heatmap + Attention Weights ──
+        current_y3 = 440
+        if heatmap_image is not None or (fusion_attention and len(fusion_attention) > 0):
+            draw3.text((60, current_y3), "Explainability (XAI)", font=font_h2, fill=TEXT)
+            current_y3 += 40
+
+            if heatmap_image is not None:
+                hm_box = (60, current_y3, 580, current_y3 + 420)
+                _draw_image_card(page3, "Grad-CAM Heatmap (ROI)", heatmap_image, hm_box, font_label, font_small)
+
+            if fusion_attention and len(fusion_attention) >= 4:
+                attn_x = 620 if heatmap_image is not None else 60
+                attn_box = (attn_x, current_y3, 1180, current_y3 + 420)
+                draw3.rounded_rectangle(attn_box, radius=18, fill=LIGHT_GRAY, outline=BORDER, width=2)
+                draw3.text((attn_x + 30, current_y3 + 15), "Fusion Attention Weights", font=font_label, fill=TEXT)
+                draw3.text((attn_x + 30, current_y3 + 40), "How much each modality contributes to the prediction", font=font_small, fill=TEXT_MUTED)
+
+                labels = ["MRI", "WSI", "RNA", "Clinical"]
+                colors = [(38, 120, 133), (100, 116, 139), (185, 117, 45), (120, 80, 160)]
+                bar_max_w = attn_box[2] - attn_box[0] - 140
+                by = current_y3 + 80
+                max_attn = max(fusion_attention[:4]) if max(fusion_attention[:4]) > 0 else 1.0
+                for i, (lbl, clr) in enumerate(zip(labels, colors)):
+                    val = fusion_attention[i] if i < len(fusion_attention) else 0.0
+                    draw3.text((attn_x + 30, by), lbl, font=font_label, fill=TEXT)
+                    bar_bg = (attn_x + 110, by + 2, attn_x + 110 + bar_max_w, by + 22)
+                    draw3.rounded_rectangle(bar_bg, radius=6, fill=(220, 226, 230))
+                    fill_bar_w = int(bar_max_w * (val / max_attn))
+                    if fill_bar_w > 0:
+                        draw3.rounded_rectangle((attn_x + 110, by + 2, attn_x + 110 + fill_bar_w, by + 22), radius=6, fill=clr)
+                    pct_text = f"{val * 100:.1f}%"
+                    draw3.text((attn_x + 115 + bar_max_w, by + 2), pct_text, font=font_small, fill=TEXT)
+                    by += 50
+
+            current_y3 += 450
+        else:
+            current_y3 = 440
+
         # ── Survival Curve chart ──
-        draw3.text((60, 460), "Predicted Survival Curve (Kaplan-Meier)", font=font_h2, fill=TEXT)
-        chart_box = (60, 500, 1180, 1080)
+        # If XAI section pushed us too far down, create a new page
+        if current_y3 > 600:
+            all_pages.append(page3)
+            page3 = Image.new("RGB", page_size, "white")
+            draw3 = ImageDraw.Draw(page3)
+            draw3.rectangle((0, 0, page_size[0], 110), fill=NAVY)
+            draw3.text((60, 38), "Multimodal Prognosis - Survival Analysis", font=font_h1, fill="white")
+            draw3.text((page_size[0] - 260, 44), f"Report ID: {report_id}", font=font_small, fill=(220, 232, 240))
+            current_y3 = 140
+
+        sc_y = current_y3 + 10
+        draw3.text((60, sc_y), "Predicted Survival Curve (Kaplan-Meier)", font=font_h2, fill=TEXT)
+        sc_y += 40
+        chart_height = 500
+        chart_box = (60, sc_y, 1180, sc_y + chart_height)
         draw3.rounded_rectangle(chart_box, radius=18, fill=(250, 251, 252), outline=BORDER, width=2)
 
         if survival_curve_data and len(survival_curve_data) > 1:
-            chart_left, chart_top = 130, 560
-            chart_right, chart_bottom = 1140, 1040
+            chart_left = 130
+            chart_top = sc_y + 50
+            chart_right = 1140
+            chart_bottom = sc_y + chart_height - 40
             chart_w = chart_right - chart_left
             chart_h = chart_bottom - chart_top
 
@@ -582,26 +637,24 @@ def _build_professional_report_pdf(
             # Axis labels
             draw3.text((chart_left + chart_w // 2 - 30, chart_bottom + 20), "Time (months)", font=font_small, fill=TEXT_MUTED)
 
-            # Plot data points
+            # Plot data
             times = [pt.get("time", 0) for pt in survival_curve_data]
             probs = [pt.get("survival_probability", 0) for pt in survival_curve_data]
             max_time = max(times) if times else 1
 
-            # X-axis ticks
             tick_count = min(6, len(times))
             for i in range(tick_count + 1):
                 t_val = max_time * i / tick_count
                 tx = chart_left + int(chart_w * i / tick_count)
                 draw3.text((tx - 10, chart_bottom + 4), f"{t_val:.0f}", font=font_small, fill=TEXT_MUTED)
 
-            # Draw filled area + step line
+            # Step line + fill
             points_for_fill = []
             prev_x, prev_y = None, None
             for t, p in zip(times, probs):
                 x = chart_left + int(chart_w * t / max_time) if max_time > 0 else chart_left
                 y = chart_bottom - int(chart_h * p)
                 if prev_x is not None and prev_y is not None:
-                    # Step line: horizontal then vertical
                     draw3.line((prev_x, prev_y, x, prev_y), fill=TEAL, width=3)
                     draw3.line((x, prev_y, x, y), fill=TEAL, width=3)
                     points_for_fill.append((x, prev_y))
@@ -610,29 +663,29 @@ def _build_professional_report_pdf(
                 points_for_fill.append((x, y))
                 prev_x, prev_y = x, y
 
-            # Close polygon for fill
             if points_for_fill:
                 fill_polygon = list(points_for_fill) + [(prev_x, chart_bottom), (points_for_fill[0][0], chart_bottom)]
                 try:
-                    overlay = Image.new("RGBA", page_size, (0, 0, 0, 0))
-                    overlay_draw = ImageDraw.Draw(overlay)
-                    overlay_draw.polygon(fill_polygon, fill=(38, 120, 133, 40))
-                    page3 = Image.alpha_composite(page3.convert("RGBA"), overlay).convert("RGB")
+                    fill_overlay = Image.new("RGBA", page_size, (0, 0, 0, 0))
+                    fill_draw = ImageDraw.Draw(fill_overlay)
+                    fill_draw.polygon(fill_polygon, fill=(38, 120, 133, 40))
+                    page3 = Image.alpha_composite(page3.convert("RGBA"), fill_overlay).convert("RGB")
                     draw3 = ImageDraw.Draw(page3)
                 except Exception:
                     pass
 
-            # Draw data point dots
             for t, p in zip(times, probs):
                 x = chart_left + int(chart_w * t / max_time) if max_time > 0 else chart_left
                 y = chart_bottom - int(chart_h * p)
                 draw3.ellipse((x - 4, y - 4, x + 4, y + 4), fill=TEAL, outline="white", width=1)
         else:
-            draw3.text((400, 760), "No survival curve data available", font=font_body, fill=TEXT_MUTED)
+            draw3.text((400, sc_y + chart_height // 2), "No survival curve data available", font=font_body, fill=TEXT_MUTED)
+
+        sc_end = sc_y + chart_height + 30
 
         # ── Methodology note ──
-        draw3.text((60, 1120), "Methodology", font=font_h2, fill=TEXT)
-        method_box = (60, 1160, 1180, 1400)
+        draw3.text((60, sc_end), "Methodology", font=font_h2, fill=TEXT)
+        method_box = (60, sc_end + 40, 1180, sc_end + 260)
         draw3.rounded_rectangle(method_box, radius=18, fill=LIGHT_GRAY, outline=BORDER, width=2)
         method_lines = [
             "Risk prediction uses SurvivalNet, an Attention-based Multi-Modal Fusion model",
@@ -640,16 +693,17 @@ def _build_professional_report_pdf(
             "Missing modalities are handled via learned attention masking.",
             "Survival probabilities are estimated using the Cox proportional hazards framework.",
         ]
-        my = 1190
+        my = sc_end + 70
         for ml in method_lines:
             my = _draw_wrapped_text(draw3, ml, (90, my), font_small, TEXT, max_width=1060, line_spacing=6)
             my += 4
 
-        # Disclaimer on page 3
-        draw3.text((60, 1440), "Disclaimer", font=font_h2, fill=TEXT)
-        disc3_box = (60, 1480, 1180, 1700)
+        # Disclaimer
+        disc_start = sc_end + 290
+        draw3.text((60, disc_start), "Disclaimer", font=font_h2, fill=TEXT)
+        disc3_box = (60, disc_start + 40, 1180, disc_start + 220)
         draw3.rounded_rectangle(disc3_box, radius=18, fill=(252, 248, 247), outline=(230, 214, 210), width=2)
-        disc3_y = 1510
+        disc3_y = disc_start + 70
         for line in disclaimer_lines:
             disc3_y = _draw_wrapped_text(draw3, line, (90, disc3_y), font_body, TEXT, max_width=1040, line_spacing=8)
             disc3_y += 10
@@ -760,6 +814,8 @@ def get_image_analysis_detail(
         risk_score=result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis else None),
         risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
         survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
+        gradcam_heatmap_data_url=_local_image_to_data_url(result_payload.get("gradcam_heatmap_path")),
+        fusion_attention=result_payload.get("fusion_attention"),
         created_at=created_at,
         updated_at=updated_at,
     )
@@ -817,6 +873,8 @@ def download_image_report(
         risk_score=analysis.risk_score if analysis else None,
         risk_group=analysis.risk_group if analysis else None,
         survival_curve_data=analysis.survival_curve_data if analysis else None,
+        heatmap_image=_bgr_path_to_pil(result_payload.get("gradcam_heatmap_path")),
+        fusion_attention=result_payload.get("fusion_attention"),
     )
     return Response(
         content=pdf_bytes,

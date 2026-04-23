@@ -16,6 +16,7 @@ from .architectures.densenet_classifier import DenseNetClassifier
 from .architectures.survival_net import MultimodalBrainTumorModel
 from .architectures.unet import UNetSegmenter
 from .architectures.yolo_net import YOLODetector
+from .architectures.xai_gradcam import GradCAMExplainer
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -144,6 +145,27 @@ class TumorAnalysisPipeline:
             result_dict["risk_group"] = self.get_risk_level(score_val)
             result_dict["fusion_attention"] = attn_weights.squeeze(0).detach().cpu().tolist()
             result_dict["survival_curve_data"] = self.build_survival_curve(score_val)
+
+            # ── Grad-CAM Heatmap (trên ảnh ROI) ──
+            try:
+                target_layer = self.multimodal_model.mri_encoder.feature_extractor.denseblock4
+                explainer = GradCAMExplainer(self.multimodal_model, target_layer)
+
+                heatmap = explainer.generate_heatmap(
+                    mri_tensor, wsi_dummy, rna_tensor, clinical_tensor, masks,
+                )
+
+                roi_resized = cv2.resize(masked_roi, (224, 224))
+                heatmap_colored = cv2.applyColorMap(
+                    np.uint8(255 * heatmap), cv2.COLORMAP_JET,
+                )
+                overlay = cv2.addWeighted(roi_resized, 0.6, heatmap_colored, 0.4, 0)
+                heatmap_path = os.path.join(output_dir, "step7_gradcam_heatmap.png")
+                cv2.imwrite(heatmap_path, overlay)
+                result_dict["gradcam_heatmap_path"] = heatmap_path
+            except Exception as heatmap_exc:
+                print(f"[PIPELINE] Grad-CAM generation failed (non-fatal): {heatmap_exc}")
+                result_dict["gradcam_heatmap_path"] = None
 
         except Exception as exc:
             result_dict["status"] = "error"

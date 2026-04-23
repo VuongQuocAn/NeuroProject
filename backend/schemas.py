@@ -136,6 +136,8 @@ class ImageAIResultResponse(BaseModel):
     risk_score: Optional[float] = None
     risk_group: Optional[str] = None
     survival_curve_data: Optional[List[dict]] = None
+    gradcam_heatmap_data_url: Optional[str] = None
+    fusion_attention: Optional[List[float]] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

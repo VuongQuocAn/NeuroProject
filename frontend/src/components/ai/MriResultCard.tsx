@@ -31,6 +31,8 @@ type MriResult = {
   risk_score?: number | null;
   risk_group?: string | null;
   survival_curve_data?: { time: number; survival_probability: number }[] | null;
+  gradcam_heatmap_data_url?: string | null;
+  fusion_attention?: number[] | null;
 };
 
 type Props = {
@@ -330,20 +332,22 @@ export default function MriResultCard({
               </div>
 
               {result?.risk_score != null && (
-                <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5 space-y-5">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                     Multimodal Prognosis
                   </div>
+
+                  {/* Risk Score + Risk Group */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Risk Score</div>
-                      <div className="text-2xl font-bold text-white">{result.risk_score.toFixed(4)}</div>
+                      <div className="text-2xl font-bold text-white">{result.risk_score!.toFixed(4)}</div>
                     </div>
                     <div>
                       <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Risk Group</div>
                       <span className={`inline-block px-3 py-1.5 rounded-lg text-sm font-bold border ${
-                        result.risk_group === "High"
+                        result.risk_group === "High" || result.risk_group === "Very High"
                           ? "bg-red-500/15 text-red-400 border-red-500/25"
                           : result.risk_group === "Medium"
                             ? "bg-amber-500/15 text-amber-400 border-amber-500/25"
@@ -353,6 +357,102 @@ export default function MriResultCard({
                       </span>
                     </div>
                   </div>
+
+                  {/* Grad-CAM Heatmap */}
+                  {result.gradcam_heatmap_data_url && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Grad-CAM Heatmap (ROI)</div>
+                      <button
+                        type="button"
+                        onClick={() => setPreview({ title: "Grad-CAM Heatmap", src: result.gradcam_heatmap_data_url! })}
+                        className="rounded-lg overflow-hidden border border-slate-700 hover:border-teal-500 transition-all cursor-zoom-in"
+                      >
+                        <img src={result.gradcam_heatmap_data_url} alt="Grad-CAM Heatmap" className="w-full max-w-[280px] h-auto" />
+                      </button>
+                      <p className="text-[10px] text-slate-600 mt-1">Vùng đỏ/vàng = khu vực ảnh hưởng mạnh nhất đến dự đoán rủi ro</p>
+                    </div>
+                  )}
+
+                  {/* Survival Curve (inline SVG) */}
+                  {result.survival_curve_data && result.survival_curve_data.length > 1 && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Đường cong sống sót (Kaplan-Meier)</div>
+                      <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-800">
+                        <svg viewBox="0 0 320 180" className="w-full h-auto">
+                          {/* Grid */}
+                          {[0.25, 0.5, 0.75, 1.0].map((v) => (
+                            <g key={v}>
+                              <line x1="40" y1={160 - v * 140} x2="310" y2={160 - v * 140} stroke="#334155" strokeWidth="0.5" />
+                              <text x="2" y={164 - v * 140} fill="#64748b" fontSize="8">{(v * 100).toFixed(0)}%</text>
+                            </g>
+                          ))}
+                          {/* Axes */}
+                          <line x1="40" y1="160" x2="310" y2="160" stroke="#475569" strokeWidth="1" />
+                          <line x1="40" y1="20" x2="40" y2="160" stroke="#475569" strokeWidth="1" />
+                          {/* Fill area */}
+                          {(() => {
+                            const pts = result.survival_curve_data!;
+                            const maxT = Math.max(...pts.map(p => p.time)) || 1;
+                            let pathD = "";
+                            pts.forEach((p, i) => {
+                              const x = 40 + (p.time / maxT) * 270;
+                              const y = 160 - p.survival_probability * 140;
+                              if (i === 0) pathD += `M${x},${y}`;
+                              else {
+                                const prevY = 160 - pts[i - 1].survival_probability * 140;
+                                pathD += ` L${x},${prevY} L${x},${y}`;
+                              }
+                            });
+                            const lastX = 40 + (pts[pts.length - 1].time / maxT) * 270;
+                            const firstX = 40 + (pts[0].time / maxT) * 270;
+                            const fillD = pathD + ` L${lastX},160 L${firstX},160 Z`;
+                            return (
+                              <>
+                                <path d={fillD} fill="rgba(20,184,166,0.15)" />
+                                <path d={pathD} fill="none" stroke="#14b8a6" strokeWidth="2" />
+                                {pts.map((p, i) => {
+                                  const x = 40 + (p.time / maxT) * 270;
+                                  const y = 160 - p.survival_probability * 140;
+                                  return <circle key={i} cx={x} cy={y} r="3" fill="#14b8a6" stroke="#0f172a" strokeWidth="1" />;
+                                })}
+                              </>
+                            );
+                          })()}
+                          {/* X-axis labels */}
+                          {result.survival_curve_data!.map((p) => {
+                            const maxT = Math.max(...result.survival_curve_data!.map(d => d.time)) || 1;
+                            const x = 40 + (p.time / maxT) * 270;
+                            return <text key={p.time} x={x} y="174" fill="#64748b" fontSize="7" textAnchor="middle">{p.time}m</text>;
+                          })}
+                          <text x="175" y="12" fill="#94a3b8" fontSize="7" textAnchor="middle">Survival Probability vs Time</text>
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fusion Attention Weights */}
+                  {result.fusion_attention && result.fusion_attention.length >= 4 && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Fusion Attention Weights</div>
+                      <div className="space-y-2">
+                        {["MRI", "WSI", "RNA", "Clinical"].map((label, i) => {
+                          const val = result.fusion_attention![i] || 0;
+                          const maxVal = Math.max(...result.fusion_attention!.slice(0, 4));
+                          const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
+                          const colors = ["bg-teal-500", "bg-slate-500", "bg-amber-500", "bg-violet-500"];
+                          return (
+                            <div key={label} className="flex items-center gap-2">
+                              <span className="text-[10px] text-slate-400 w-12 text-right">{label}</span>
+                              <div className="flex-1 bg-slate-800 rounded-full h-2.5">
+                                <div className={`${colors[i]} h-2.5 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-[10px] text-slate-400 w-12">{(val * 100).toFixed(1)}%</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

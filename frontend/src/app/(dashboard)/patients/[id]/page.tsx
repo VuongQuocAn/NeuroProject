@@ -40,8 +40,13 @@ function ClientDate({ date }: { date: string }) {
 
   useEffect(() => {
     if (date) {
+      // Backend stores UTC but may omit the 'Z' suffix — normalize
+      let isoDate = date;
+      if (!isoDate.endsWith("Z") && !isoDate.includes("+") && !isoDate.includes("T00:00:00")) {
+        isoDate = isoDate.endsWith("T") ? isoDate + "Z" : isoDate.includes("T") ? isoDate + "Z" : isoDate;
+      }
       setFormatted(
-        new Date(date).toLocaleDateString("vi-VN", {
+        new Date(isoDate).toLocaleDateString("vi-VN", {
           year: "numeric",
           month: "long",
           day: "numeric",
