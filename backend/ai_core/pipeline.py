@@ -146,7 +146,7 @@ class TumorAnalysisPipeline:
             result_dict["fusion_attention"] = attn_weights.squeeze(0).detach().cpu().tolist()
             result_dict["survival_curve_data"] = self.build_survival_curve(score_val)
 
-            # ── Grad-CAM Heatmap (trên ảnh ROI) ──
+            # ── Grad-CAM Heatmap (trên ảnh gốc ROI) ──
             try:
                 target_layer = self.multimodal_model.mri_encoder.feature_extractor.denseblock4
                 explainer = GradCAMExplainer(self.multimodal_model, target_layer)
@@ -155,7 +155,11 @@ class TumorAnalysisPipeline:
                     mri_tensor, wsi_dummy, rna_tensor, clinical_tensor, masks,
                 )
 
-                roi_resized = cv2.resize(masked_roi, (224, 224))
+                # Dùng ảnh ROI gốc (chưa bị mask) để overlay heatmap cho dễ nhìn context
+                roi_img = result_dict.get("_cropped_img")
+                base_img = roi_img if roi_img is not None else masked_roi
+                
+                roi_resized = cv2.resize(base_img, (224, 224))
                 heatmap_colored = cv2.applyColorMap(
                     np.uint8(255 * heatmap), cv2.COLORMAP_JET,
                 )
