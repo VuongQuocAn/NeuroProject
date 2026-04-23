@@ -93,8 +93,18 @@ class TumorAnalysisPipeline:
             result_dict.pop("_masked_roi", None)
             return result_dict
 
-        masked_roi = result_dict["_masked_roi"]
-        seg_mask = result_dict["_seg_mask"]
+        masked_roi = result_dict.get("_masked_roi")
+        seg_mask = result_dict.get("_seg_mask")
+
+        if masked_roi is None or seg_mask is None:
+            # Secondary safety check - if tumor was supposedly detected but ROI is missing
+            result_dict.pop("_cropped_img", None)
+            result_dict.pop("_seg_mask", None)
+            result_dict.pop("_masked_roi", None)
+            if not result_dict.get("no_tumor_detected"):
+                result_dict["status"] = "error"
+                result_dict["error_msg"] = "Phan tich MRI thanh cong nhung khong the trich xuat vung benh (ROI) cho prognosis."
+            return result_dict
 
         try:
             mri_tensor = self.preprocess_for_multimodal(masked_roi)
