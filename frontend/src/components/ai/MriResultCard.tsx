@@ -364,7 +364,7 @@ export default function MriResultCard({
                       <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Grad-CAM Heatmap (ROI)</div>
                       <button
                         type="button"
-                        onClick={() => setPreview({ title: "Grad-CAM Heatmap", src: result.gradcam_heatmap_data_url! })}
+                        onClick={() => setPreviewImage({ title: "Grad-CAM Heatmap", src: result.gradcam_heatmap_data_url! })}
                         className="rounded-lg overflow-hidden border border-slate-700 hover:border-teal-500 transition-all cursor-zoom-in"
                       >
                         <img src={result.gradcam_heatmap_data_url} alt="Grad-CAM Heatmap" className="w-full max-w-[280px] h-auto" />
