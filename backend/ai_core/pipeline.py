@@ -9,7 +9,6 @@ import cv2
 import numpy as np
 import pydicom
 import torch
-import random
 import torchvision.transforms as transforms
 from PIL import Image, ImageFile
 
@@ -171,7 +170,10 @@ class TumorAnalysisPipeline:
 
                 result_dict["gradcam_heatmap_path"] = cam_paths["gradcam"] # Default
                 result_dict["gradcam_plus_heatmap_path"] = cam_paths["gradcam++"]
-                result_dict["layercam_heatmap_path"] = cam_paths["layerc                # Generate Clinically Contextualized Explanation
+                result_dict["layercam_heatmap_path"] = cam_paths["layercam"]
+
+                # Generate Clinically Contextualized Explanation (Dynamic)
+                import random
                 mri_weight = float(attn_weights[0, 0].item()) * 100
                 rna_weight = float(attn_weights[0, 2].item()) * 100
                 clin_weight = float(attn_weights[0, 3].item()) * 100
@@ -179,71 +181,75 @@ class TumorAnalysisPipeline:
                 tumor_label = result_dict.get("tumor_label", "Khối u")
                 risk_group = result_dict.get("risk_group", "Medium")
 
-                # Pools of phrases for dynamic text generation
+                # Danh sách các câu cho Dữ liệu Gen (RNA)
                 rna_insights = [
-                    f"Sự chi phối của dữ liệu gen ({rna_weight:.1f}%) cho thấy tiên lượng sinh tồn bị ảnh hưởng mạnh bởi các dấu ấn phân tử (VD: trạng thái đột biến IDH, mất đoạn 1p/19q).",
-                    f"Với {rna_weight:.1f}% mức độ chú ý, cấu trúc phân tử gen (RNA-seq) được đánh giá là yếu tố quyết định, lấn át các đặc điểm hình thái trên MRI.",
-                    f"Dữ liệu RNA đóng vai trò chủ đạo ({rna_weight:.1f}%), ngụ ý rằng các đột biến gene đặc thù của khối u là nguyên nhân chính dẫn đến kết quả đánh giá rủi ro."
+                    f"Sự chi phối của dữ liệu gen ({rna_weight:.1f}%) cho thấy tiên lượng sinh tồn bị ảnh hưởng mạnh bởi các dấu ấn phân tử (VD: đột biến IDH, đồng mất đoạn 1p/19q). Đây là yếu tố cốt lõi phân loại mức độ ác tính ở cấp độ tế bào.",
+                    f"Với trọng số Attention {rna_weight:.1f}% dành cho cấu hình RNA, mô hình đánh giá cao sự bất thường về di truyền trong việc định hình quỹ đạo phát triển của khối u, vượt qua các biểu hiện hình thái đơn thuần.",
+                    f"Thông tin sinh học phân tử (chiếm {rna_weight:.1f}%) đóng vai trò then chốt trong dự đoán này. Khối u nhiều khả năng mang các đặc tính gen đột biến (genetic profiling) ảnh hưởng trực tiếp đến thời gian sinh tồn."
                 ]
-                
+
+                # Danh sách các câu cho Dữ liệu Lâm sàng
                 clinical_insights = [
-                    f"Với trọng số lâm sàng cao ({clin_weight:.1f}%), mô hình nhận định các yếu tố như độ tuổi hoặc thể trạng bệnh nhân (KPS) đóng vai trò then chốt.",
-                    f"Dữ liệu bệnh án chiếm tỷ trọng lớn ({clin_weight:.1f}%), cho thấy thể trạng nền của bệnh nhân có tính chất quyết định đến tiên lượng sinh tồn.",
-                    f"Mô hình đặc biệt chú ý vào hồ sơ lâm sàng ({clin_weight:.1f}%), chỉ ra rằng các yếu tố nhân khẩu học và thể chất phản ánh rất rõ mức độ rủi ro."
+                    f"Với trọng số lâm sàng cao ({clin_weight:.1f}%), các yếu tố như độ tuổi, giới tính hoặc chỉ số KPS (thể trạng) đang chi phối kết quả, cho thấy sức chịu đựng của cơ thể đóng vai trò quyết định hơn hình thái u.",
+                    f"Dữ liệu nhân khẩu học và bệnh sử ({clin_weight:.1f}%) được mô hình ưu tiên cao. Điều này ngụ ý rằng diễn tiến sinh tồn của bệnh nhân phụ thuộc nhiều vào yếu tố nền lâm sàng.",
+                    f"Sự phụ thuộc vào đặc trưng lâm sàng ({clin_weight:.1f}%) chỉ ra rủi ro sinh tồn gắn liền mật thiết với tuổi tác hoặc thể trạng tổng thể tại thời điểm chẩn đoán."
                 ]
-                
+
+                # Danh sách các câu cho MRI - High Risk
                 mri_high_insights = [
-                    f"Tập trung mạnh vào ảnh MRI ({mri_weight:.1f}%) để xác định rủi ro Cao, thường do sự xuất hiện của viền tăng quang không đều (contrast enhancement) hoặc hoại tử (necrosis) - được làm nổi bật trên Heatmap.",
-                    f"Với {mri_weight:.1f}% trọng số từ MRI, AI phát hiện các đặc điểm hình thái ác tính xâm lấn. Vùng Đỏ/Vàng trên bản đồ nhiệt định vị các điểm tập trung hoặc hoại tử.",
-                    f"Hình ảnh MRI đóng vai trò cốt lõi ({mri_weight:.1f}%) trong việc xác định rủi ro Cao, thường bắt nguồn từ tín hiệu không đồng nhất của khối u hoặc phù nề nghiêm trọng."
+                    f"Mô hình dựa chủ yếu vào ảnh MRI ({mri_weight:.1f}%) để xác định mức rủi ro cao. Các đặc điểm như viền tăng quang, phù nề (edema), hoặc lõi hoại tử (necrosis) - được đánh dấu Đỏ/Vàng trên Heatmap - là dấu hiệu ác tính điển hình.",
+                    f"Trọng số thị giác đạt {mri_weight:.1f}%. Heatmap (vùng nóng) khoanh vùng các cấu trúc u có dấu hiệu thâm nhiễm sâu, hoại tử mô hoặc tăng sinh mạch máu, dẫn đến đánh giá tiên lượng dè dặt (High Risk).",
+                    f"Dấu ấn hình thái ác tính trên MRI (chiếm {mri_weight:.1f}% độ quan trọng) là nguyên nhân chính dẫn đến đánh giá rủi ro này. Heatmap tập trung vào các khu vực cấu trúc mô não bị phá vỡ."
                 ]
-                
+
+                # Danh sách các câu cho MRI - Low/Medium Risk
                 mri_low_insights = [
-                    f"Dựa chủ yếu vào hình ảnh MRI ({mri_weight:.1f}%), mô hình đánh giá u có ranh giới rõ và tiến triển chậm. Vùng Đỏ/Vàng trên Heatmap chỉ ra vị trí đặc mô nhất của khối u.",
-                    f"Trọng số MRI cao ({mri_weight:.1f}%) kết hợp với rủi ro thấp/trung bình cho thấy khối u ít phù nề. Heatmap làm nổi bật vùng giới hạn giải phẫu của u.",
-                    f"Mô hình ưu tiên phân tích MRI ({mri_weight:.1f}%) và không phát hiện các dấu hiệu ác tính cao bạo phát. Bản đồ nhiệt giúp khoanh vùng khối u mà chưa thấy xâm lấn lan tỏa."
+                    f"Dựa trên hình ảnh MRI ({mri_weight:.1f}%), mô hình nhận định khối u tiến triển tương đối chậm. Vùng Đỏ/Vàng trên Heatmap chỉ ra ranh giới đặc mô nhất nhưng chưa có dấu hiệu xâm lấn rõ rệt.",
+                    f"Sự chú ý của mô hình ({mri_weight:.1f}%) tập trung vào khối u có giới hạn rõ. Hình thái ít thâm nhiễm trên Heatmap là lý do chính để xếp hạng rủi ro ở mức thấp/trung bình.",
+                    f"Phân tích MRI (trọng số {mri_weight:.1f}%) cho thấy cấu trúc khối u khá đồng nhất, ít hoại tử hay phù nề nghiêm trọng. Vùng Heatmap phản chiếu lõi u thay vì rìa xâm lấn."
                 ]
 
                 if rna_weight > mri_weight and rna_weight > clin_weight:
-                    clinical_insight = random.choice(rna_insights) + " Đây là phân loại mức độ ác tính ở cấp độ vi mô, vượt ngoài những gì thể hiện trên ảnh chụp."
+                    clinical_insight = random.choice(rna_insights)
                 elif clin_weight > mri_weight and clin_weight > rna_weight:
-                    clinical_insight = random.choice(clinical_insights) + " Những yếu tố này lấn át các rủi ro từ hình thái khối u quan sát được trên MRI."
+                    clinical_insight = random.choice(clinical_insights)
                 else:
                     if risk_group in ["High", "Very High"]:
                         clinical_insight = random.choice(mri_high_insights)
                     else:
                         clinical_insight = random.choice(mri_low_insights)
 
-                tumor_contexts = []
+                # Context U
+                glioma_contexts = [
+                    "Đối với U thần kinh đệm (Glioma), mức độ thâm nhiễm vào nhu mô não xung quanh và đặc điểm hoại tử là yếu tố quyết định sinh tồn.",
+                    "Đặc trưng của Glioma là sự lan rộng không rõ ranh giới, do đó các vùng 'bắt thuốc' hoặc viền phù nề trên phim là chỉ điểm quan trọng."
+                ]
+                meningioma_contexts = [
+                    "U màng não (Meningioma) đa phần phát triển chậm, ranh giới rõ ràng và có xu hướng đẩy lùi mô não thay vì xâm lấn phá hủy trực tiếp.",
+                    "Bản chất Meningioma phần lớn là u lành tính ngoài trục, rủi ro sinh tồn thường thấp trừ khi vị trí u gây chèn ép cấu trúc thần kinh trọng yếu."
+                ]
+                pituitary_contexts = [
+                    "U tuyến yên (Pituitary tumor) thường gây rối loạn nội tiết hoặc chèn ép giao thoa thị giác hơn là đe dọa sinh tồn trực tiếp.",
+                    "Là khối u ở hố yên, Pituitary adenoma thường lành tính và có tiên lượng sinh tồn rất tốt so với các khối u nội sọ khác."
+                ]
+
+                tumor_context = ""
                 if "Glioma" in tumor_label:
-                    tumor_contexts = [
-                        "Đối với U thần kinh đệm (Glioma), mức độ thâm nhiễm (infiltration) vào nhu mô não và đặc điểm hoại tử là yếu tố quyết định sinh tồn.",
-                        "Trong phân loại Glioma, sự hiện diện của các vi mạch tân sinh và vùng hoại tử là dấu hiệu lâm sàng quan trọng để dự báo tiến triển bệnh.",
-                        "Đặc trưng sinh lý bệnh của Glioma là tính xâm lấn lan tỏa, ảnh hưởng trực tiếp đến tiên lượng và khả năng can thiệp phẫu thuật."
-                    ]
+                    tumor_context = random.choice(glioma_contexts)
                 elif "Meningioma" in tumor_label:
-                    tumor_contexts = [
-                        "U màng não (Meningioma) đa phần phát triển chậm, ranh giới rõ và đẩy lùi nhu mô não thay vì xâm lấn trực tiếp.",
-                        "Khối u Meningioma thường có nguồn gốc từ tế bào màng nhện, phát triển ngoài trục và tiên lượng thường rất tích cực.",
-                        "Mức độ rủi ro của Meningioma thường liên quan đến vị trí khối u và sự chèn ép lên các dây thần kinh sọ hoặc mạch máu lớn."
-                    ]
+                    tumor_context = random.choice(meningioma_contexts)
                 elif "Pituitary" in tumor_label:
-                    tumor_contexts = [
-                        "U tuyến yên (Pituitary tumor) thường ảnh hưởng đến nội tiết và thị giác (chèn ép giao thoa thị giác) hơn là đe dọa sinh tồn trực tiếp.",
-                        "Tiên lượng của U tuyến yên phụ thuộc nhiều vào việc u có tăng tiết hormone hay không và kích thước tổng thể (micro/macroadenoma).",
-                        "Đa số u tuyến yên là u tuyến lành tính (adenoma), triệu chứng lâm sàng liên quan phần lớn đến các rối loạn chức năng nội tiết."
-                    ]
+                    tumor_context = random.choice(pituitary_contexts)
 
-                explanation = f"Bệnh nhân thuộc nhóm rủi ro {risk_group.upper()} đối với {tumor_label}.\n\n"
-                if tumor_contexts:
-                    explanation += f"• Sinh lý bệnh: {random.choice(tumor_contexts)}\n\n"
-                explanation += f"• Phân tích AI: {clinical_insight}\n"
-                
-                result_dict["xai_explanation"] = explanation sinh tồn trực tiếp."
+                intros = [
+                    f"Bệnh nhân được phân tầng rủi ro {risk_group.upper()} đối với {tumor_label}.",
+                    f"Dự đoán sinh tồn: Nhóm rủi ro {risk_group.upper()} ({tumor_label}).",
+                    f"Kết quả phân tích đa phương thức xếp bệnh nhân vào nhóm {risk_group.upper()} ({tumor_label})."
+                ]
 
-                explanation = f"Bệnh nhân thuộc nhóm rủi ro {risk_group.upper()} đối với {tumor_label}.\n\n"
+                explanation = f"{random.choice(intros)}\n\n"
                 if tumor_context:
-                    explanation += f"• Sinh lý bệnh: {tumor_context}\n\n"
+                    explanation += f"• Cơ sở bệnh học: {tumor_context}\n\n"
                 explanation += f"• Phân tích AI: {clinical_insight}\n\n"
                 
                 result_dict["xai_explanation"] = explanation
