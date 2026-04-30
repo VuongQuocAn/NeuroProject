@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 import pydicom
 import torch
+import random
 import torchvision.transforms as transforms
 from PIL import Image, ImageFile
 
@@ -170,9 +171,7 @@ class TumorAnalysisPipeline:
 
                 result_dict["gradcam_heatmap_path"] = cam_paths["gradcam"] # Default
                 result_dict["gradcam_plus_heatmap_path"] = cam_paths["gradcam++"]
-                result_dict["layercam_heatmap_path"] = cam_paths["layercam"]
-
-                # Generate Clinically Contextualized Explanation
+                result_dict["layercam_heatmap_path"] = cam_paths["layerc                # Generate Clinically Contextualized Explanation
                 mri_weight = float(attn_weights[0, 0].item()) * 100
                 rna_weight = float(attn_weights[0, 2].item()) * 100
                 clin_weight = float(attn_weights[0, 3].item()) * 100
@@ -180,28 +179,72 @@ class TumorAnalysisPipeline:
                 tumor_label = result_dict.get("tumor_label", "Khối u")
                 risk_group = result_dict.get("risk_group", "Medium")
 
+                # Pools of phrases for dynamic text generation
+                rna_insights = [
+                    f"Sự chi phối của dữ liệu gen ({rna_weight:.1f}%) cho thấy tiên lượng sinh tồn bị ảnh hưởng mạnh bởi các dấu ấn phân tử (VD: trạng thái đột biến IDH, mất đoạn 1p/19q).",
+                    f"Với {rna_weight:.1f}% mức độ chú ý, cấu trúc phân tử gen (RNA-seq) được đánh giá là yếu tố quyết định, lấn át các đặc điểm hình thái trên MRI.",
+                    f"Dữ liệu RNA đóng vai trò chủ đạo ({rna_weight:.1f}%), ngụ ý rằng các đột biến gene đặc thù của khối u là nguyên nhân chính dẫn đến kết quả đánh giá rủi ro."
+                ]
+                
+                clinical_insights = [
+                    f"Với trọng số lâm sàng cao ({clin_weight:.1f}%), mô hình nhận định các yếu tố như độ tuổi hoặc thể trạng bệnh nhân (KPS) đóng vai trò then chốt.",
+                    f"Dữ liệu bệnh án chiếm tỷ trọng lớn ({clin_weight:.1f}%), cho thấy thể trạng nền của bệnh nhân có tính chất quyết định đến tiên lượng sinh tồn.",
+                    f"Mô hình đặc biệt chú ý vào hồ sơ lâm sàng ({clin_weight:.1f}%), chỉ ra rằng các yếu tố nhân khẩu học và thể chất phản ánh rất rõ mức độ rủi ro."
+                ]
+                
+                mri_high_insights = [
+                    f"Tập trung mạnh vào ảnh MRI ({mri_weight:.1f}%) để xác định rủi ro Cao, thường do sự xuất hiện của viền tăng quang không đều (contrast enhancement) hoặc hoại tử (necrosis) - được làm nổi bật trên Heatmap.",
+                    f"Với {mri_weight:.1f}% trọng số từ MRI, AI phát hiện các đặc điểm hình thái ác tính xâm lấn. Vùng Đỏ/Vàng trên bản đồ nhiệt định vị các điểm tập trung hoặc hoại tử.",
+                    f"Hình ảnh MRI đóng vai trò cốt lõi ({mri_weight:.1f}%) trong việc xác định rủi ro Cao, thường bắt nguồn từ tín hiệu không đồng nhất của khối u hoặc phù nề nghiêm trọng."
+                ]
+                
+                mri_low_insights = [
+                    f"Dựa chủ yếu vào hình ảnh MRI ({mri_weight:.1f}%), mô hình đánh giá u có ranh giới rõ và tiến triển chậm. Vùng Đỏ/Vàng trên Heatmap chỉ ra vị trí đặc mô nhất của khối u.",
+                    f"Trọng số MRI cao ({mri_weight:.1f}%) kết hợp với rủi ro thấp/trung bình cho thấy khối u ít phù nề. Heatmap làm nổi bật vùng giới hạn giải phẫu của u.",
+                    f"Mô hình ưu tiên phân tích MRI ({mri_weight:.1f}%) và không phát hiện các dấu hiệu ác tính cao bạo phát. Bản đồ nhiệt giúp khoanh vùng khối u mà chưa thấy xâm lấn lan tỏa."
+                ]
+
                 if rna_weight > mri_weight and rna_weight > clin_weight:
-                    clinical_insight = f"Sự chi phối của dữ liệu gen ({rna_weight:.1f}%) cho thấy tiên lượng sinh tồn bị ảnh hưởng mạnh bởi các dấu ấn phân tử (VD: trạng thái đột biến IDH, mất đoạn 1p/19q). Đây là các yếu tố phân loại mức độ ác tính ở cấp độ tế bào, vượt ngoài những gì thể hiện trên ảnh chụp."
+                    clinical_insight = random.choice(rna_insights) + " Đây là phân loại mức độ ác tính ở cấp độ vi mô, vượt ngoài những gì thể hiện trên ảnh chụp."
                 elif clin_weight > mri_weight and clin_weight > rna_weight:
-                    clinical_insight = f"Với trọng số lâm sàng cao ({clin_weight:.1f}%), mô hình nhận định các yếu tố như độ tuổi hoặc thể trạng bệnh nhân (chỉ số KPS) đóng vai trò then chốt, lấn át các rủi ro từ hình thái khối u."
+                    clinical_insight = random.choice(clinical_insights) + " Những yếu tố này lấn át các rủi ro từ hình thái khối u quan sát được trên MRI."
                 else:
                     if risk_group in ["High", "Very High"]:
-                        clinical_insight = f"Mô hình tập trung mạnh vào ảnh MRI ({mri_weight:.1f}%) để đưa ra rủi ro Cao. Điều này thường phản ánh sự hiện diện của các dấu hiệu ác tính như viền tăng quang không đều (contrast enhancement), phù nề (edema) hoặc hoại tử trung tâm (necrosis) - được làm nổi bật ở các vùng Đỏ/Vàng trên Heatmap."
+                        clinical_insight = random.choice(mri_high_insights)
                     else:
-                        clinical_insight = f"Dựa chủ yếu vào hình ảnh MRI ({mri_weight:.1f}%), mô hình đánh giá đây là dạng u có tiến triển chậm (nguy cơ thấp/trung bình). Vùng Đỏ/Vàng trên Heatmap chỉ ra ranh giới khối u hoặc vùng đặc mô nhất, chưa có dấu hiệu xâm lấn rõ rệt vào cấu trúc xung quanh."
+                        clinical_insight = random.choice(mri_low_insights)
 
-                tumor_context = ""
+                tumor_contexts = []
                 if "Glioma" in tumor_label:
-                    tumor_context = "Đối với U thần kinh đệm (Glioma), mức độ thâm nhiễm và đặc điểm hoại tử là yếu tố quyết định sinh tồn."
+                    tumor_contexts = [
+                        "Đối với U thần kinh đệm (Glioma), mức độ thâm nhiễm (infiltration) vào nhu mô não và đặc điểm hoại tử là yếu tố quyết định sinh tồn.",
+                        "Trong phân loại Glioma, sự hiện diện của các vi mạch tân sinh và vùng hoại tử là dấu hiệu lâm sàng quan trọng để dự báo tiến triển bệnh.",
+                        "Đặc trưng sinh lý bệnh của Glioma là tính xâm lấn lan tỏa, ảnh hưởng trực tiếp đến tiên lượng và khả năng can thiệp phẫu thuật."
+                    ]
                 elif "Meningioma" in tumor_label:
-                    tumor_context = "U màng não (Meningioma) đa phần phát triển chậm, ranh giới rõ và đẩy lùi nhu mô não thay vì xâm lấn."
+                    tumor_contexts = [
+                        "U màng não (Meningioma) đa phần phát triển chậm, ranh giới rõ và đẩy lùi nhu mô não thay vì xâm lấn trực tiếp.",
+                        "Khối u Meningioma thường có nguồn gốc từ tế bào màng nhện, phát triển ngoài trục và tiên lượng thường rất tích cực.",
+                        "Mức độ rủi ro của Meningioma thường liên quan đến vị trí khối u và sự chèn ép lên các dây thần kinh sọ hoặc mạch máu lớn."
+                    ]
                 elif "Pituitary" in tumor_label:
-                    tumor_context = "U tuyến yên (Pituitary tumor) thường ảnh hưởng đến nội tiết và thị giác hơn là đe dọa sinh tồn trực tiếp."
+                    tumor_contexts = [
+                        "U tuyến yên (Pituitary tumor) thường ảnh hưởng đến nội tiết và thị giác (chèn ép giao thoa thị giác) hơn là đe dọa sinh tồn trực tiếp.",
+                        "Tiên lượng của U tuyến yên phụ thuộc nhiều vào việc u có tăng tiết hormone hay không và kích thước tổng thể (micro/macroadenoma).",
+                        "Đa số u tuyến yên là u tuyến lành tính (adenoma), triệu chứng lâm sàng liên quan phần lớn đến các rối loạn chức năng nội tiết."
+                    ]
 
-                explanation = f"🔍 Bệnh nhân thuộc nhóm rủi ro {risk_group.upper()} đối với {tumor_label}.\n\n"
+                explanation = f"Bệnh nhân thuộc nhóm rủi ro {risk_group.upper()} đối với {tumor_label}.\n\n"
+                if tumor_contexts:
+                    explanation += f"• Sinh lý bệnh: {random.choice(tumor_contexts)}\n\n"
+                explanation += f"• Phân tích AI: {clinical_insight}\n"
+                
+                result_dict["xai_explanation"] = explanation sinh tồn trực tiếp."
+
+                explanation = f"Bệnh nhân thuộc nhóm rủi ro {risk_group.upper()} đối với {tumor_label}.\n\n"
                 if tumor_context:
-                    explanation += f"• Sinh lý bệnh: {tumor_context}\n"
-                explanation += f"• Phân tích AI: {clinical_insight}"
+                    explanation += f"• Sinh lý bệnh: {tumor_context}\n\n"
+                explanation += f"• Phân tích AI: {clinical_insight}\n\n"
                 
                 result_dict["xai_explanation"] = explanation
 
