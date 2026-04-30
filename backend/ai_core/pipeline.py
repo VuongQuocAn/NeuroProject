@@ -528,9 +528,26 @@ class TumorAnalysisPipeline:
         return "Low"
 
     def build_survival_curve(self, risk_score: float) -> list[dict[str, float]]:
-        return [
-            {"time": 0, "survival_probability": 1.0},
-            {"time": 12, "survival_probability": round(max(0.0, 0.9 - (risk_score / 10.0)), 3)},
-            {"time": 24, "survival_probability": round(max(0.0, 0.7 - (risk_score / 5.0)), 3)},
-            {"time": 36, "survival_probability": round(max(0.0, 0.5 - (risk_score / 3.0)), 3)},
+        # S(t) = S0(t)^exp(risk_score)
+        # Baseline survival S0(t) typical for brain tumors (roughly)
+        baseline = [
+            (0, 1.0),
+            (6, 0.95),
+            (12, 0.85),
+            (18, 0.70),
+            (24, 0.55),
+            (30, 0.40),
+            (36, 0.30),
         ]
+        
+        # Hazard ratio = exp(risk_score)
+        # Clip risk_score to avoid overflow/underflow
+        clamped_score = max(-3.0, min(3.0, risk_score))
+        hazard_ratio = np.exp(clamped_score)
+        
+        curve = []
+        for t, s0 in baseline:
+            st = pow(s0, hazard_ratio)
+            curve.append({"time": t, "survival_probability": round(st, 3)})
+            
+        return curve
