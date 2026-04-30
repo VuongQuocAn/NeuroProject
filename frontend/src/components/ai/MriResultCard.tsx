@@ -372,19 +372,19 @@ export default function MriResultCard({
                           {result.gradcam_heatmap_data_url && (
                             <button 
                               onClick={() => setActiveHeatmap("gradcam")} 
-                              className={`text-[9px] px-2 py-1 rounded ${activeHeatmap === "gradcam" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                              className={`text-[11px] px-2 py-1 rounded ${activeHeatmap === "gradcam" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
                             >Grad-CAM</button>
                           )}
                           {result.gradcam_plus_heatmap_data_url && (
                             <button 
                               onClick={() => setActiveHeatmap("gradcam++")} 
-                              className={`text-[9px] px-2 py-1 rounded ${activeHeatmap === "gradcam++" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                              className={`text-[11px] px-2 py-1 rounded ${activeHeatmap === "gradcam++" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
                             >Grad-CAM++</button>
                           )}
                           {result.layercam_heatmap_data_url && (
                             <button 
                               onClick={() => setActiveHeatmap("layercam")} 
-                              className={`text-[9px] px-2 py-1 rounded ${activeHeatmap === "layercam" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                              className={`text-[11px] px-2 py-1 rounded ${activeHeatmap === "layercam" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
                             >Layer-CAM</button>
                           )}
                         </div>
@@ -396,19 +396,22 @@ export default function MriResultCard({
                         if (activeHeatmap === "layercam" && result.layercam_heatmap_data_url) activeUrl = result.layercam_heatmap_data_url;
                         
                         return activeUrl ? (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewImage({ title: `Bản đồ nhiệt (${activeHeatmap})`, src: activeUrl! })}
-                            className="w-full rounded-lg overflow-hidden border border-slate-700 hover:border-teal-500 transition-all cursor-zoom-in"
-                          >
-                            <img src={activeUrl} alt="XAI Heatmap" className="w-full max-w-[280px] h-auto object-cover" />
-                          </button>
+                          <div className="flex justify-center">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage({ title: `Bản đồ nhiệt (${activeHeatmap})`, src: activeUrl! })}
+                              className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
+                            >
+                              <img src={activeUrl} alt="XAI Heatmap" className="w-full max-w-[380px] h-auto object-cover" />
+                              <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                            </button>
+                          </div>
                         ) : null;
                       })()}
                       
                       {/* Clinical Plausibility Score */}
                       <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                        <div className="text-[10px] text-slate-400 mb-1">Đánh giá tính hợp lý lâm sàng (Sanity Check):</div>
+                        <div className="text-[11px] text-slate-400 mb-1">Đánh giá tính hợp lý lâm sàng (Sanity Check):</div>
                         <div className="flex gap-1 items-center">
                           {[1, 2, 3, 4, 5].map((star) => (
                             <button
