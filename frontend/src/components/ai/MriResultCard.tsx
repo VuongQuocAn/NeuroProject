@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { api } from "@/lib/api";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -185,6 +186,24 @@ export default function MriResultCard({
   const [previewImage, setPreviewImage] = useState<PreviewState | null>(null);
   const [activeHeatmap, setActiveHeatmap] = useState<"gradcam" | "gradcam++" | "layercam">("gradcam");
   const [rating, setRating] = useState<number | null>(null);
+  const [submittingRating, setSubmittingRating] = useState(false);
+
+  const handleRating = async (star: number) => {
+    if (!result?.image_id || submittingRating) return;
+    setSubmittingRating(true);
+    try {
+      await api.post(`/records/analysis/image/${result.image_id}/validate`, {
+        rating: star,
+        heatmap_method: activeHeatmap,
+      });
+      setRating(star);
+    } catch (error) {
+      console.error("Failed to submit rating", error);
+      alert("Lỗi khi lưu đánh giá. Vui lòng thử lại.");
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
 
   const isFailed = result?.status === "failed";
   const isDone = result?.status === "done" || result?.status === "completed";
@@ -416,7 +435,8 @@ export default function MriResultCard({
                           {[1, 2, 3, 4, 5].map((star) => (
                             <button
                               key={star}
-                              onClick={() => setRating(star)}
+                              onClick={() => handleRating(star)}
+                              disabled={submittingRating}
                               className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition-all ${
                                 rating && rating >= star 
                                   ? "bg-amber-500 text-amber-950" 

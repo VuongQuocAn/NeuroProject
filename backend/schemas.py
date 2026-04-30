@@ -164,6 +164,22 @@ class SurvivalCurveResponse(BaseModel):
     curve: List[SurvivalPoint]
 
 
+class ExpertValidationCreate(BaseModel):
+    rating: int
+    heatmap_method: str
+    comments: Optional[str] = None
+
+
+class ExpertValidationResponse(ExpertValidationCreate):
+    id: int
+    image_id: int
+    user_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # ============================================================
 # AUTH SCHEMAS
 # ============================================================

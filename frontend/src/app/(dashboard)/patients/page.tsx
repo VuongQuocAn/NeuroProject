@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { apiService } from "@/lib/api";
-import { Search, UserPlus, FileSpreadsheet, AlertTriangle, BadgeCheck, ChevronLeft, ChevronRight, X, Loader2 } from "lucide-react";
+import { apiService, api } from "@/lib/api";
+import { Search, UserPlus, FileSpreadsheet, AlertTriangle, BadgeCheck, ChevronLeft, ChevronRight, X, Loader2, Download } from "lucide-react";
 
 const LABEL_MAP: Record<string, string> = {
   class_0: "Glioma",
@@ -149,6 +149,28 @@ export default function PatientsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportData = async () => {
+    setExporting(true);
+    try {
+      const response = await api.get("/records/export/research-data", {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "research_clinical_validation_data.csv");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Export failed:", error);
+      alert("Xuất dữ liệu thất bại.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -246,13 +268,24 @@ export default function PatientsPage() {
           />
         </div>
         
-        <button 
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 hover:bg-teal-500 transition-all active:scale-95"
-        >
-          <UserPlus className="h-4 w-4" />
-          Thêm bệnh nhân mới
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={handleExportData}
+            disabled={exporting}
+            className="flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Xuất dữ liệu đánh giá (CSV)
+          </button>
+          
+          <button 
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 hover:bg-teal-500 transition-all active:scale-95"
+          >
+            <UserPlus className="h-4 w-4" />
+            Thêm bệnh nhân mới
+          </button>
+        </div>
       </div>
 
       {/* Main Table Area */}

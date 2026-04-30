@@ -130,6 +130,26 @@ class AnalysisResult(Base):
     image = relationship("Image", back_populates="analysis_result")
 
 
+class ExpertValidation(Base):
+    """Lưu trữ điểm đánh giá tính hợp lý lâm sàng (Sanity Check) từ chuyên gia/bác sĩ."""
+    __tablename__ = "expert_validations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    image_id = Column(Integer, ForeignKey("images.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)  # Bác sĩ đánh giá
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    # 1 đến 5 sao
+    rating = Column(Integer, nullable=False)
+    # Phương pháp XAI được đánh giá (gradcam, gradcam++, layercam)
+    heatmap_method = Column(String, nullable=True)
+    # Bình luận thêm nếu có
+    comments = Column(Text, nullable=True)
+
+    image = relationship("Image")
+    user = relationship("User")
+
+
 # --- NHÓM AUTH & ADMIN ---
 
 class User(Base):

@@ -954,3 +954,66 @@ def get_survival_curve(
         risk_group=result.risk_group,
         curve=curve_points,
     )
+
+
+@router.post("/records/analysis/image/{image_id}/validate", response_model=schemas.ExpertValidationResponse)
+def submit_expert_validation(
+    image_id: int,
+    payload: schemas.ExpertValidationCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    # Check if image exists
+    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Không tìm thấy hình ảnh.")
+        
+    validation = models.ExpertValidation(
+        image_id=image_id,
+        user_id=current_user["user_id"],
+        rating=payload.rating,
+        heatmap_method=payload.heatmap_method,
+        comments=payload.comments
+    )
+    db.add(validation)
+    db.commit()
+    db.refresh(validation)
+    return validation
+
+
+@router.get("/records/export/research-data")
+def export_research_data(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    import csv
+    from io import StringIO
+    
+    # Lấy tất cả validations cùng với thông tin analysis result
+    validations = db.query(models.ExpertValidation, models.AnalysisResult).join(
+        models.AnalysisResult, models.ExpertValidation.image_id == models.AnalysisResult.image_id
+    ).all()
+    
+    output = StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow([
+        "Validation ID", "Image ID", "Patient ID", "Expert User ID", 
+        "Rating (1-5)", "Heatmap Method", "Comments", "Created At",
+        "Tumor Label", "Risk Group", "Risk Score"
+    ])
+    
+    for val, analysis in validations:
+        writer.writerow([
+            val.id, val.image_id, analysis.patient_id, val.user_id,
+            val.rating, val.heatmap_method, val.comments, val.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            analysis.tumor_label, analysis.risk_group, analysis.risk_score
+        ])
+        
+    output.seek(0)
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=research_clinical_validation_data.csv"}
+    )
