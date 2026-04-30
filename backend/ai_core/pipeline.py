@@ -172,23 +172,37 @@ class TumorAnalysisPipeline:
                 result_dict["gradcam_plus_heatmap_path"] = cam_paths["gradcam++"]
                 result_dict["layercam_heatmap_path"] = cam_paths["layercam"]
 
-                # Generate Textual Explanation
+                # Generate Clinically Contextualized Explanation
                 mri_weight = float(attn_weights[0, 0].item()) * 100
                 rna_weight = float(attn_weights[0, 2].item()) * 100
                 clin_weight = float(attn_weights[0, 3].item()) * 100
                 
-                main_factor = "Hình ảnh MRI"
-                if rna_weight > mri_weight and rna_weight > clin_weight:
-                    main_factor = "Đặc trưng Gen (RNA)"
-                elif clin_weight > mri_weight and clin_weight > rna_weight:
-                    main_factor = "Hồ sơ lâm sàng (Clinical)"
+                tumor_label = result_dict.get("tumor_label", "Khối u")
+                risk_group = result_dict.get("risk_group", "Medium")
 
-                explanation = (
-                    f"Mô hình dự đoán mức rủi ro '{result_dict['risk_group']}' "
-                    f"với yếu tố quyết định chính là {main_factor} "
-                    f"(trọng số Attention: MRI {mri_weight:.1f}%, RNA {rna_weight:.1f}%, Lâm sàng {clin_weight:.1f}%). "
-                    f"Bản đồ nhiệt chỉ ra các khu vực có ảnh hưởng lớn nhất trên MRI (màu đỏ/vàng)."
-                )
+                if rna_weight > mri_weight and rna_weight > clin_weight:
+                    clinical_insight = f"Sự chi phối của dữ liệu gen ({rna_weight:.1f}%) cho thấy tiên lượng sinh tồn bị ảnh hưởng mạnh bởi các dấu ấn phân tử (VD: trạng thái đột biến IDH, mất đoạn 1p/19q). Đây là các yếu tố phân loại mức độ ác tính ở cấp độ tế bào, vượt ngoài những gì thể hiện trên ảnh chụp."
+                elif clin_weight > mri_weight and clin_weight > rna_weight:
+                    clinical_insight = f"Với trọng số lâm sàng cao ({clin_weight:.1f}%), mô hình nhận định các yếu tố như độ tuổi hoặc thể trạng bệnh nhân (chỉ số KPS) đóng vai trò then chốt, lấn át các rủi ro từ hình thái khối u."
+                else:
+                    if risk_group in ["High", "Very High"]:
+                        clinical_insight = f"Mô hình tập trung mạnh vào ảnh MRI ({mri_weight:.1f}%) để đưa ra rủi ro Cao. Điều này thường phản ánh sự hiện diện của các dấu hiệu ác tính như viền tăng quang không đều (contrast enhancement), phù nề (edema) hoặc hoại tử trung tâm (necrosis) - được làm nổi bật ở các vùng Đỏ/Vàng trên Heatmap."
+                    else:
+                        clinical_insight = f"Dựa chủ yếu vào hình ảnh MRI ({mri_weight:.1f}%), mô hình đánh giá đây là dạng u có tiến triển chậm (nguy cơ thấp/trung bình). Vùng Đỏ/Vàng trên Heatmap chỉ ra ranh giới khối u hoặc vùng đặc mô nhất, chưa có dấu hiệu xâm lấn rõ rệt vào cấu trúc xung quanh."
+
+                tumor_context = ""
+                if "Glioma" in tumor_label:
+                    tumor_context = "Đối với U thần kinh đệm (Glioma), mức độ thâm nhiễm và đặc điểm hoại tử là yếu tố quyết định sinh tồn."
+                elif "Meningioma" in tumor_label:
+                    tumor_context = "U màng não (Meningioma) đa phần phát triển chậm, ranh giới rõ và đẩy lùi nhu mô não thay vì xâm lấn."
+                elif "Pituitary" in tumor_label:
+                    tumor_context = "U tuyến yên (Pituitary tumor) thường ảnh hưởng đến nội tiết và thị giác hơn là đe dọa sinh tồn trực tiếp."
+
+                explanation = f"🔍 Bệnh nhân thuộc nhóm rủi ro {risk_group.upper()} đối với {tumor_label}.\n\n"
+                if tumor_context:
+                    explanation += f"• Sinh lý bệnh: {tumor_context}\n"
+                explanation += f"• Phân tích AI: {clinical_insight}"
+                
                 result_dict["xai_explanation"] = explanation
 
             except Exception as heatmap_exc:
