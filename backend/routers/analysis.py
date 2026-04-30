@@ -970,7 +970,7 @@ def submit_expert_validation(
         
     validation = models.ExpertValidation(
         image_id=image_id,
-        user_id=current_user["user_id"],
+        user_id=int(current_user["sub"]),
         rating=payload.rating,
         heatmap_method=payload.heatmap_method,
         comments=payload.comments

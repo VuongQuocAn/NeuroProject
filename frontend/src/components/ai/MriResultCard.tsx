@@ -197,9 +197,10 @@ export default function MriResultCard({
         heatmap_method: activeHeatmap,
       });
       setRating(star);
-    } catch (error) {
-      console.error("Failed to submit rating", error);
-      alert("Lỗi khi lưu đánh giá. Vui lòng thử lại.");
+    } catch (error: any) {
+      console.error("Failed to submit rating:", error.response?.data || error.message);
+      const detail = error.response?.data?.detail || "Lỗi khi lưu đánh giá. Vui lòng thử lại.";
+      alert(detail);
     } finally {
       setSubmittingRating(false);
     }
@@ -454,9 +455,9 @@ export default function MriResultCard({
 
                   {/* Textual Explanation */}
                   {result.xai_explanation && (
-                    <div className="p-3 bg-teal-500/10 rounded-lg border border-teal-500/20">
-                      <div className="text-[10px] uppercase tracking-widest text-teal-500 font-bold mb-1">Giải thích lâm sàng</div>
-                      <p className="text-xs text-slate-300 leading-relaxed">{result.xai_explanation}</p>
+                    <div className="p-4 bg-teal-500/10 rounded-lg border border-teal-500/20">
+                      <div className="text-[11px] uppercase tracking-widest text-teal-500 font-bold mb-2">Giải thích lâm sàng (XAI)</div>
+                      <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{result.xai_explanation}</p>
                     </div>
                   )}
 
