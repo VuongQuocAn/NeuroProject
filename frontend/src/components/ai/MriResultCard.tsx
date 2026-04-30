@@ -32,6 +32,9 @@ type MriResult = {
   risk_group?: string | null;
   survival_curve_data?: { time: number; survival_probability: number }[] | null;
   gradcam_heatmap_data_url?: string | null;
+  gradcam_plus_heatmap_data_url?: string | null;
+  layercam_heatmap_data_url?: string | null;
+  xai_explanation?: string | null;
   fusion_attention?: number[] | null;
 };
 
@@ -180,6 +183,8 @@ export default function MriResultCard({
   compact = false,
 }: Props) {
   const [previewImage, setPreviewImage] = useState<PreviewState | null>(null);
+  const [activeHeatmap, setActiveHeatmap] = useState<"gradcam" | "gradcam++" | "layercam">("gradcam");
+  const [rating, setRating] = useState<number | null>(null);
 
   const isFailed = result?.status === "failed";
   const isDone = result?.status === "done" || result?.status === "completed";
@@ -359,17 +364,76 @@ export default function MriResultCard({
                   </div>
 
                   {/* Grad-CAM Heatmap */}
-                  {result.gradcam_heatmap_data_url && (
+                  {(result.gradcam_heatmap_data_url || result.gradcam_plus_heatmap_data_url || result.layercam_heatmap_data_url) && (
                     <div>
-                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Grad-CAM Heatmap (ROI)</div>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewImage({ title: "Grad-CAM Heatmap", src: result.gradcam_heatmap_data_url! })}
-                        className="rounded-lg overflow-hidden border border-slate-700 hover:border-teal-500 transition-all cursor-zoom-in"
-                      >
-                        <img src={result.gradcam_heatmap_data_url} alt="Grad-CAM Heatmap" className="w-full max-w-[280px] h-auto" />
-                      </button>
-                      <p className="text-[10px] text-slate-600 mt-1">Vùng đỏ/vàng = khu vực ảnh hưởng mạnh nhất đến dự đoán rủi ro</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] uppercase tracking-widest text-slate-500">Bản đồ nhiệt XAI (Heatmap)</div>
+                        <div className="flex gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+                          {result.gradcam_heatmap_data_url && (
+                            <button 
+                              onClick={() => setActiveHeatmap("gradcam")} 
+                              className={`text-[9px] px-2 py-1 rounded ${activeHeatmap === "gradcam" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                            >Grad-CAM</button>
+                          )}
+                          {result.gradcam_plus_heatmap_data_url && (
+                            <button 
+                              onClick={() => setActiveHeatmap("gradcam++")} 
+                              className={`text-[9px] px-2 py-1 rounded ${activeHeatmap === "gradcam++" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                            >Grad-CAM++</button>
+                          )}
+                          {result.layercam_heatmap_data_url && (
+                            <button 
+                              onClick={() => setActiveHeatmap("layercam")} 
+                              className={`text-[9px] px-2 py-1 rounded ${activeHeatmap === "layercam" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                            >Layer-CAM</button>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {(() => {
+                        let activeUrl = result.gradcam_heatmap_data_url;
+                        if (activeHeatmap === "gradcam++" && result.gradcam_plus_heatmap_data_url) activeUrl = result.gradcam_plus_heatmap_data_url;
+                        if (activeHeatmap === "layercam" && result.layercam_heatmap_data_url) activeUrl = result.layercam_heatmap_data_url;
+                        
+                        return activeUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage({ title: `Bản đồ nhiệt (${activeHeatmap})`, src: activeUrl! })}
+                            className="w-full rounded-lg overflow-hidden border border-slate-700 hover:border-teal-500 transition-all cursor-zoom-in"
+                          >
+                            <img src={activeUrl} alt="XAI Heatmap" className="w-full max-w-[280px] h-auto object-cover" />
+                          </button>
+                        ) : null;
+                      })()}
+                      
+                      {/* Clinical Plausibility Score */}
+                      <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <div className="text-[10px] text-slate-400 mb-1">Đánh giá tính hợp lý lâm sàng (Sanity Check):</div>
+                        <div className="flex gap-1 items-center">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              onClick={() => setRating(star)}
+                              className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition-all ${
+                                rating && rating >= star 
+                                  ? "bg-amber-500 text-amber-950" 
+                                  : "bg-slate-700 text-slate-400 hover:bg-slate-600"
+                              }`}
+                            >
+                              ★
+                            </button>
+                          ))}
+                          <span className="text-xs text-slate-500 ml-2">{rating ? "Đã ghi nhận" : "Chưa đánh giá"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Textual Explanation */}
+                  {result.xai_explanation && (
+                    <div className="p-3 bg-teal-500/10 rounded-lg border border-teal-500/20">
+                      <div className="text-[10px] uppercase tracking-widest text-teal-500 font-bold mb-1">Giải thích lâm sàng</div>
+                      <p className="text-xs text-slate-300 leading-relaxed">{result.xai_explanation}</p>
                     </div>
                   )}
 

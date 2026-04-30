@@ -146,30 +146,57 @@ class TumorAnalysisPipeline:
             result_dict["fusion_attention"] = attn_weights.squeeze(0).detach().cpu().tolist()
             result_dict["survival_curve_data"] = self.build_survival_curve(score_val)
 
-            # ── Grad-CAM Heatmap (trên ảnh gốc ROI) ──
+            # ── Multi-CAM Heatmap & Text Explanation ──
             try:
                 target_layer = self.multimodal_model.mri_encoder.feature_extractor.denseblock4
                 explainer = GradCAMExplainer(self.multimodal_model, target_layer)
 
-                heatmap = explainer.generate_heatmap(
-                    mri_tensor, wsi_dummy, rna_tensor, clinical_tensor, masks,
-                )
-
-                # Dùng ảnh ROI gốc (chưa bị mask) để overlay heatmap cho dễ nhìn context
                 roi_img = result_dict.get("_cropped_img")
                 base_img = roi_img if roi_img is not None else masked_roi
-                
                 roi_resized = cv2.resize(base_img, (224, 224))
-                heatmap_colored = cv2.applyColorMap(
-                    np.uint8(255 * heatmap), cv2.COLORMAP_JET,
+
+                cam_paths = {}
+                for method in ["gradcam", "gradcam++", "layercam"]:
+                    heatmap = explainer.generate_heatmap(
+                        mri_tensor, wsi_dummy, rna_tensor, clinical_tensor, masks, method=method
+                    )
+                    heatmap_colored = cv2.applyColorMap(
+                        np.uint8(255 * heatmap), cv2.COLORMAP_JET,
+                    )
+                    overlay = cv2.addWeighted(roi_resized, 0.6, heatmap_colored, 0.4, 0)
+                    h_path = os.path.join(output_dir, f"step7_{method}_heatmap.png")
+                    cv2.imwrite(h_path, overlay)
+                    cam_paths[method] = h_path
+
+                result_dict["gradcam_heatmap_path"] = cam_paths["gradcam"] # Default
+                result_dict["gradcam_plus_heatmap_path"] = cam_paths["gradcam++"]
+                result_dict["layercam_heatmap_path"] = cam_paths["layercam"]
+
+                # Generate Textual Explanation
+                mri_weight = float(attn_weights[0, 0].item()) * 100
+                rna_weight = float(attn_weights[0, 2].item()) * 100
+                clin_weight = float(attn_weights[0, 3].item()) * 100
+                
+                main_factor = "Hình ảnh MRI"
+                if rna_weight > mri_weight and rna_weight > clin_weight:
+                    main_factor = "Đặc trưng Gen (RNA)"
+                elif clin_weight > mri_weight and clin_weight > rna_weight:
+                    main_factor = "Hồ sơ lâm sàng (Clinical)"
+
+                explanation = (
+                    f"Mô hình dự đoán mức rủi ro '{result_dict['risk_group']}' "
+                    f"với yếu tố quyết định chính là {main_factor} "
+                    f"(trọng số Attention: MRI {mri_weight:.1f}%, RNA {rna_weight:.1f}%, Lâm sàng {clin_weight:.1f}%). "
+                    f"Bản đồ nhiệt chỉ ra các khu vực có ảnh hưởng lớn nhất trên MRI (màu đỏ/vàng)."
                 )
-                overlay = cv2.addWeighted(roi_resized, 0.6, heatmap_colored, 0.4, 0)
-                heatmap_path = os.path.join(output_dir, "step7_gradcam_heatmap.png")
-                cv2.imwrite(heatmap_path, overlay)
-                result_dict["gradcam_heatmap_path"] = heatmap_path
+                result_dict["xai_explanation"] = explanation
+
             except Exception as heatmap_exc:
                 print(f"[PIPELINE] Grad-CAM generation failed (non-fatal): {heatmap_exc}")
                 result_dict["gradcam_heatmap_path"] = None
+                result_dict["gradcam_plus_heatmap_path"] = None
+                result_dict["layercam_heatmap_path"] = None
+                result_dict["xai_explanation"] = None
 
         except Exception as exc:
             result_dict["status"] = "error"

@@ -40,14 +40,16 @@ class GradCAMExplainer:
         """Hook lưu lại đạo hàm (gradients) trong quá trình Backward."""
         self.gradients = grad_output[0]
 
-    def generate_heatmap(self, mri_tensor, wsi_dummy, rna_dummy, clinical_dummy, masks):
+    def generate_heatmap(self, mri_tensor, wsi_dummy, rna_dummy, clinical_dummy, masks, method="gradcam"):
         """
-        Tạo bản đồ nhiệt Grad-CAM cho ảnh MRI đầu vào.
+        Tạo bản đồ nhiệt XAI cho ảnh MRI đầu vào.
 
         Args:
             mri_tensor (Tensor): Tensor ảnh MRI [1, 1, 3, 256, 256].
             wsi_dummy, rna_dummy, clinical_dummy (Tensor): Dữ liệu padding.
             masks (dict): Các cờ báo hiệu modality.
+            method (str): "gradcam", "gradcam++", hoặc "layercam"
+
 
         Returns:
             np.ndarray: Bản đồ nhiệt (heatmap) dạng numpy array [256, 256].
@@ -75,18 +77,35 @@ class GradCAMExplainer:
         # Gradient dương nghĩa là vùng ảnh đó làm TĂNG rủi ro (vùng ác tính).
         risk_score.backward()
 
-        # 3. Tính toán Grad-CAM
-        # Lấy gradients và activations đã được lưu từ hooks
-        gradients = self.gradients.detach().cpu().numpy()[0] # Shape: [1024, 8, 8]
-        activations = self.activations.detach().cpu().numpy()[0] # Shape: [1024, 8, 8]
+        # 3. Tính toán Heatmap tùy theo phương pháp
+        gradients = self.gradients.detach().cpu().numpy()[0] # Shape: [C, H, W]
+        activations = self.activations.detach().cpu().numpy()[0] # Shape: [C, H, W]
 
-        # Tính trọng số Alpha: Trung bình cộng gradient trên mỗi kênh (Global Average Pooling)
-        weights = np.mean(gradients, axis=(1, 2)) # Shape: [1024]
+        cam = np.zeros(activations.shape[1:], dtype=np.float32) # Shape: [H, W]
 
-        # Nhân chập trọng số với activations
-        cam = np.zeros(activations.shape[1:], dtype=np.float32) # Shape: [8, 8]
-        for i, w in enumerate(weights):
-            cam += w * activations[i, :, :]
+        if method == "gradcam":
+            # Tính trọng số Alpha: Trung bình cộng gradient trên mỗi kênh
+            weights = np.mean(gradients, axis=(1, 2)) # Shape: [C]
+            for i, w in enumerate(weights):
+                cam += w * activations[i, :, :]
+        elif method == "gradcam++":
+            # Trọng số ưu tiên các gradient dương (đóng góp dương)
+            gradients_pos = np.maximum(gradients, 0)
+            sum_gradients = np.sum(gradients_pos, axis=(1, 2), keepdims=True)
+            # Tránh chia cho 0
+            sum_gradients = np.where(sum_gradients == 0, 1e-6, sum_gradients)
+            alpha = gradients_pos / sum_gradients
+            weights = np.sum(alpha * activations, axis=(1, 2))
+            for i, w in enumerate(weights):
+                cam += w * activations[i, :, :]
+        elif method == "layercam":
+            # Phối hợp đặc trưng không gian (pixel-wise)
+            pixel_weights = np.maximum(gradients, 0)
+            cam = np.sum(pixel_weights * activations, axis=0)
+        else:
+            weights = np.mean(gradients, axis=(1, 2))
+            for i, w in enumerate(weights):
+                cam += w * activations[i, :, :]
 
         # 4. Xử lý hậu kỳ bản đồ nhiệt (ReLU)
         cam = np.maximum(cam, 0) # ReLU: Chỉ quan tâm các vùng làm TĂNG rủi ro

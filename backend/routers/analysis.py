@@ -408,6 +408,9 @@ def _build_professional_report_pdf(
     risk_group: str | None = None,
     survival_curve_data: list[dict] | None = None,
     heatmap_image: Image.Image | None = None,
+    gradcam_plus_image: Image.Image | None = None,
+    layercam_image: Image.Image | None = None,
+    xai_explanation: str | None = None,
     fusion_attention: list[float] | None = None,
 ) -> bytes:
     page_size = (1240, 1754)
@@ -592,6 +595,15 @@ def _build_professional_report_pdf(
                     pct_text = f"{val * 100:.1f}%"
                     draw3.text((attn_x + 115 + bar_max_w, by + 2), pct_text, font=font_small, fill=TEXT)
                     by += 50
+                
+                if xai_explanation:
+                    by += 10
+                    draw3.text((attn_x + 30, by), "Clinical Interpretation:", font=font_label, fill=TEXT)
+                    by += 25
+                    wrapped_text = textwrap.wrap(xai_explanation, width=55)
+                    for line in wrapped_text:
+                        draw3.text((attn_x + 30, by), line, font=font_small, fill=TEXT_MUTED)
+                        by += 20
 
             current_y3 += 450
         else:
@@ -815,6 +827,9 @@ def get_image_analysis_detail(
         risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
         survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
         gradcam_heatmap_data_url=_local_image_to_data_url(result_payload.get("gradcam_heatmap_path")),
+        gradcam_plus_heatmap_data_url=_local_image_to_data_url(result_payload.get("gradcam_plus_heatmap_path")),
+        layercam_heatmap_data_url=_local_image_to_data_url(result_payload.get("layercam_heatmap_path")),
+        xai_explanation=result_payload.get("xai_explanation"),
         fusion_attention=result_payload.get("fusion_attention"),
         created_at=created_at,
         updated_at=updated_at,
@@ -874,6 +889,9 @@ def download_image_report(
         risk_group=analysis.risk_group if analysis else None,
         survival_curve_data=analysis.survival_curve_data if analysis else None,
         heatmap_image=_bgr_path_to_pil(result_payload.get("gradcam_heatmap_path")),
+        gradcam_plus_image=_bgr_path_to_pil(result_payload.get("gradcam_plus_heatmap_path")),
+        layercam_image=_bgr_path_to_pil(result_payload.get("layercam_heatmap_path")),
+        xai_explanation=result_payload.get("xai_explanation"),
         fusion_attention=result_payload.get("fusion_attention"),
     )
     return Response(
