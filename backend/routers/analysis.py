@@ -247,25 +247,33 @@ def _draw_wrapped_text(
     max_width: int,
     line_spacing: int = 6,
 ) -> int:
-    words = text.split()
-    lines: list[str] = []
-    current = ""
-    for word in words:
-        test = word if not current else f"{current} {word}"
-        if draw.textlength(test, font=font) <= max_width:
-            current = test
-        else:
-            if current:
-                lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
-
     x, y = xy
-    for line in lines:
-        draw.text((x, y), line, font=font, fill=fill)
-        bbox = draw.textbbox((x, y), line, font=font)
-        y = bbox[3] + line_spacing
+    paragraphs = text.split("\n")
+    
+    for paragraph in paragraphs:
+        if not paragraph.strip():
+            y += font.size  # Empty line
+            continue
+            
+        words = paragraph.split()
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            test = word if not current else f"{current} {word}"
+            if draw.textlength(test, font=font) <= max_width:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+
+        for line in lines:
+            draw.text((x, y), line, font=font, fill=fill)
+            bbox = draw.textbbox((x, y), line, font=font)
+            y = bbox[3] + line_spacing
+            
     return y
 
 
@@ -600,10 +608,7 @@ def _build_professional_report_pdf(
                     by += 10
                     draw3.text((attn_x + 30, by), "Clinical Interpretation:", font=font_label, fill=TEXT)
                     by += 25
-                    wrapped_text = textwrap.wrap(xai_explanation, width=55)
-                    for line in wrapped_text:
-                        draw3.text((attn_x + 30, by), line, font=font_small, fill=TEXT_MUTED)
-                        by += 20
+                    by = _draw_wrapped_text(draw3, xai_explanation, (attn_x + 30, by), font_small, TEXT_MUTED, max_width=480, line_spacing=4)
 
             current_y3 += 450
         else:
@@ -980,6 +985,39 @@ def submit_expert_validation(
     db.refresh(validation)
     return validation
 
+
+@router.get("/records/dashboard/stats")
+def get_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    from sqlalchemy import func
+    
+    # 1. Total patients
+    total_patients = db.query(models.Patient).count()
+    
+    # 2. Tumor distribution
+    tumor_counts = db.query(models.AnalysisResult.tumor_label, func.count(models.AnalysisResult.id)).group_by(models.AnalysisResult.tumor_label).all()
+    tumor_distribution = {label or "Unknown": count for label, count in tumor_counts}
+    
+    # 3. Risk group distribution
+    risk_counts = db.query(models.AnalysisResult.risk_group, func.count(models.AnalysisResult.id)).group_by(models.AnalysisResult.risk_group).all()
+    risk_distribution = {group or "N/A": count for group, count in risk_counts}
+    
+    # 4. Average Sanity Check rating
+    avg_rating_result = db.query(func.avg(models.ExpertValidation.rating)).scalar()
+    avg_rating = round(float(avg_rating_result), 1) if avg_rating_result else 0.0
+    
+    # 5. Total validations
+    total_validations = db.query(models.ExpertValidation).count()
+    
+    return {
+        "total_patients": total_patients,
+        "tumor_distribution": tumor_distribution,
+        "risk_distribution": risk_distribution,
+        "average_validation_rating": avg_rating,
+        "total_validations": total_validations
+    }
 
 @router.get("/records/export/research-data")
 def export_research_data(

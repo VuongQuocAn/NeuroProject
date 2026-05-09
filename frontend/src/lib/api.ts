@@ -83,6 +83,9 @@ export const apiService = {
       return api.get(`/records/analysis/image/${imageId}/report`, {
         responseType: "blob",
       });
+    },
+    getDashboardStats: async () => {
+      return api.get("/records/dashboard/stats");
     }
   },
   inference: {

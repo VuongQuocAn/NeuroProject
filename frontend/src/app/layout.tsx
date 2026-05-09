@@ -6,8 +6,13 @@ import { AuthProvider } from "@/contexts/AuthContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "NeuroDiagnosis AI",
-  description: "Advanced Neuro-Imaging AI Suite",
+  title: "NeuroDiagnosis AI - Clinical Support",
+  description: "Hệ thống chẩn đoán và tiên lượng u não đa mô thức tích hợp XAI",
+  openGraph: {
+    title: "NeuroDiagnosis AI",
+    description: "Hệ thống chẩn đoán và tiên lượng u não",
+    type: "website",
+  }
 };
 
 export default function RootLayout({
