@@ -203,7 +203,32 @@ export default function UploadPage() {
 
     try {
       await apiService.upload.rna(patientId.trim(), rnaFile);
-      setStatusMsg({ text: "Tải lên dữ liệu RNA thành công.", type: "success" });
+      setStatusMsg({ text: "Tải lên dữ liệu RNA thành công. Đang cập nhật tiên lượng...", type: "success" });
+
+      try {
+        const taskResponse = await apiService.inference.runPrognosis(patientId.trim());
+        const taskId = taskResponse.data?.task_id;
+        if (taskId) {
+          await apiService.inference.waitForTask(taskId, 2000, 300000);
+        }
+        
+        const resultResponse = await apiService.analysis.getResult(patientId.trim());
+        const analysisList = Array.isArray(resultResponse.data) ? resultResponse.data : [resultResponse.data];
+        const latest = analysisList[0];
+        if (latest) {
+          setUploadResult({
+            kind: "success",
+            imageId: latest.image_id,
+            patientId: patientId.trim(),
+            data: latest,
+          });
+        }
+        setStatusMsg({ text: "Đã tổng hợp dữ liệu RNA vào mô hình.", type: "success" });
+        setActiveTab("dicom");
+      } catch (e) {
+        setStatusMsg({ text: "Tải lên RNA thành công. Vui lòng tải lên ảnh MRI để chạy mô hình AI.", type: "success" });
+      }
+
       setRnaFile(null);
     } catch (err: any) {
       setStatusMsg({
@@ -229,7 +254,32 @@ export default function UploadPage() {
 
     try {
       await apiService.upload.clinical(patientId.trim(), { ki67_index: parseFloat(ki67) });
-      setStatusMsg({ text: "Cập nhật thông tin lâm sàng thành công.", type: "success" });
+      setStatusMsg({ text: "Cập nhật dữ liệu lâm sàng thành công. Đang cập nhật tiên lượng...", type: "success" });
+
+      try {
+        const taskResponse = await apiService.inference.runPrognosis(patientId.trim());
+        const taskId = taskResponse.data?.task_id;
+        if (taskId) {
+          await apiService.inference.waitForTask(taskId, 2000, 300000);
+        }
+        
+        const resultResponse = await apiService.analysis.getResult(patientId.trim());
+        const analysisList = Array.isArray(resultResponse.data) ? resultResponse.data : [resultResponse.data];
+        const latest = analysisList[0];
+        if (latest) {
+          setUploadResult({
+            kind: "success",
+            imageId: latest.image_id,
+            patientId: patientId.trim(),
+            data: latest,
+          });
+        }
+        setStatusMsg({ text: "Đã tổng hợp dữ liệu Lâm sàng vào mô hình.", type: "success" });
+        setActiveTab("dicom");
+      } catch (e) {
+        setStatusMsg({ text: "Cập nhật Lâm sàng thành công. Vui lòng tải lên ảnh MRI để chạy mô hình AI.", type: "success" });
+      }
+
       setKi67("");
     } catch (err: any) {
       setStatusMsg({
