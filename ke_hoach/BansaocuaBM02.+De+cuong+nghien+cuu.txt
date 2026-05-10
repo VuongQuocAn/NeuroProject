@@ -1,0 +1,881 @@
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
+ĐỀ CƯƠNG CÔNG TRÌNH NGHIÊN CỨU KHOA HỌC SINH VIÊN
+NĂM HỌC 2025 – 2026
+1. Tên đề tài:​
+-​ Tiếng Việt: Phát triển mô hình học sâu đa mô thức ứng dụng XAI trong hỗ trợ chẩn
+đoán và tiên lượng bệnh u não.
+-​ Tiếng Anh: Developing a Multimodal Deep Learning Model with XAI for Brain
+Tumor Diagnosis and Prognosis Support.
+2. Lý do chọn đề tài:​
+-​ U não là tình trạng hình thành khối u bất thường trong não hoặc các mô xung quanh,
+có thể lành tính hoặc ác tính, ảnh hưởng đến chức năng não bộ và đe dọa tính mạng
+nếu không được điều trị kịp thời. Có nhiều loại u não nhưng nguy hiểm nhất là ung
+thư não – có khả năng xâm lấn nhanh chóng vào các mô lành xung quanh, di căn đến
+các bộ phận khác của cơ thể, và gây tử vong cao do não không thể tái tạo như các cơ
+quan khác.
+-​ Các phương pháp truyền thống như chụp cộng hưởng từ (MRI), CT scan hoặc PET
+scan thì phụ thuộc nhiều vào kỹ năng chuyên môn của bác sĩ X-quang, dẫn đến khó
+khăn khi thiếu chuyên gia, và các ảnh của cùng một loại u não vẫn có thể trông khác
+nhau (Intraclass Variability) gây ra thách thức trong chuẩn đoán.
+-​ Vì vậy, nghiên cứu này được thực hiện với mục đích triển khai một ứng dụng web trí
+tuệ nhân tạo đa mô thức kết hợp XAI (Explainable AI) để hỗ trợ chuẩn đoán u não
+một cách hiệu quả và minh bạch hơn.
+3. Mục tiêu nghiên cứu:
+-​ Mục tiêu chung:
++​ Triển khai một ứng dụng web tích hợp khung làm việc đa mô thức kết hợp
+XAI để hỗ trợ chẩn đoán u não, bằng cách kết hợp YOLOv5,
+DenseNet169-ViT, FCNN/U-Net, và attention mechanism (fusion dữ liệu đa
+nguồn: MRI, hình ảnh mô bệnh học, RNA, lâm sàng).
++​ Hiện thực hóa trên một ứng dụng web để hỗ trợ bác sĩ trong quy trình: tải lên
+MRI/WSI, phát hiện–phân đoạn–phân loại khối u, xếp hạng nguy cơ, tiên
+lượng thời gian sống còn, và diễn giải XAI ngay trên giao diện.
+-​ Mục tiêu cụ thể:
+-​ Phát hiện và Phân đoạn khối u (trên ảnh MRI):
++​ Phát hiện: Áp dụng mô hình YOLOv5 để đạt các chỉ số hiệu suất: chỉ
+số F1 ≥ 0,85 và Precision/Recall ≥ 0,90.
++​ Phân đoạn: Áp dụng các mạng tích chập đầy đủ (FCNN) để đạt các chỉ
+số Dice ≥ 0,85 và IoU (Intersection over Union) ≥ 0,75 trên tập dữ liệu
+đã được gán nhãn.
+-​ Phân loại loại u (trên ảnh MRI):
+
+​
+
+Trang 1/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
++​ Sử dụng mô hình lai DenseNet169-ViT để đạt độ chính xác (Accuracy)
+≥ 92% - 95% và chỉ số F1 ≥ 0,85 cho từng lớp u. Đồng thời, các chỉ số
+đánh giá chuyên sâu như AUC (Area Under the Curve) và mAP (mean
+Average Precision) cũng sẽ được báo cáo.
+-​ Phân tầng Nguy cơ và Tiên lượng sống còn (hợp nhất WSI + RNA-seq + lâm
+sàng):
++​ Xây dựng mô hình hợp nhất dữ liệu đa phương thức để đạt chỉ số
+C-index ≥ 0,7.
++​ Phân tầng bệnh nhân thành các nhóm nguy cơ có sự khác biệt thống kê
+đáng kể, với p-value của kiểm định log-rank < 0,05.
+-​ Đánh giá Khả năng Giải thích (XAI):
++​ Sử dụng các kỹ thuật như Grad-CAM, Grad-CAM++, Score-CAM,
+Layer-CAM để tạo bản đồ nhiệt, trực quan hóa các vùng mà mô hình
+AI đã chú ý trên ảnh MRI và WSI.
++​ Tiến hành kiểm tra tính hợp lý (sanity check): các bác sĩ chuyên khoa
+sẽ đánh giá bản đồ nhiệt này để xác nhận rằng AI đang ra quyết định
+dựa trên các đặc trưng lâm sàng hợp lý.
++​ Đánh giá tính hợp lý lâm sàng (clinical plausibility): ≥ 70% các trường
+hợp được bác sĩ chấm điểm ≥ 4/5, chứng minh mức độ tin cậy của lời
+giải thích.
+-​ Hiệu quả triển khai:
++​ Đảm bảo thời gian suy luận của mô hình trên các GPU phổ biến phải
+tương đối nhanh, đáp ứng yêu cầu của môi trường lâm sàng.
++​ Giao diện demo của ứng dụng web phải đạt tỷ lệ sẵn sàng ≥ 95% trong
+suốt giai đoạn nghiệm thu nội bộ, đảm bảo tính ổn định cao.
++​ Tỷ lệ lỗi của các API dịch vụ không được vượt quá 1%, thể hiện độ tin
+cậy của các luồng xử lý dữ liệu.
++​ Toàn bộ dữ liệu được truyền tải qua giao thức HTTPS để mã hóa và
+bảo vệ khỏi các cuộc tấn công.
++​ Hệ thống phải tự động ẩn danh tên tệp và các siêu dữ liệu khác để đảm
+bảo tính riêng tư của bệnh nhân. Hệ thống sẽ phân quyền người dùng rõ
+ràng, giới hạn truy cập chỉ cho những vai trò được cấp phép như nghiên
+cứu viên hoặc bác sĩ.
++​ Toàn bộ ứng dụng web được đóng gói bằng Docker Compose, giúp dễ
+dàng triển khai trên các môi trường khác nhau.
++​ Cung cấp tài liệu hướng dẫn chi tiết, cho phép hệ thống có thể được cài
+đặt trên các máy chủ ảo (VPS) hoặc máy trạm GPU cục bộ.
++​ Thực hiện đánh giá và so sánh hiệu quả của mô hình đề xuất với các
+phương pháp tiếp cận khác đã được công bố, nhằm khẳng định giá trị
+và tính ưu việt của nghiên cứu.
+4. Đối tượng nghiên cứu:
+-​ Kiến thức về các loại u não: như u ác tính (glioblastoma (GBM)), u lành tính, u tuyến,
+u màng não, vv…
+
+​
+
+Trang 2/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
+-​ Dữ liệu hình ảnh y khoa: MRI và CT scan từ bệnh nhân chẩn đoán u não, thu thập từ
+các bộ dữ liệu thực tế như Bangladesh Brain Cancer MRI Dataset, UCSF-PDGM,
+TCGA-GBM và CPTAC-GBM, với dữ liệu đa phương thức bổ sung (histo whole-slide
+images và RNA sequencing profiles).
+-​ Các phương pháp học máy và học sâu: Convolutional Neural Networks (CNN) như
+DenseNet169, Vision Transformer (ViT), YOLOv5 cho phát hiện, định vị,
+FCNN/U-Net cho phân đoạn, attention-based deep learning cho fusion multimodal và
+XAI (Explainable AI) với các kỹ thuật như GradCAM để minh bạch hóa quyết định.
+-​ Công cụ và thư viện xử lý ảnh: OpenCV cho tiền xử lý cơ bản, TensorFlow/PyTorch
+làm framework, pytorch-grad-cam cho XAI (GradCAM series).
+-​ Công cụ web & viewer: FastAPI (backend phục vụ mô hình), React/Next.js
+(frontend), Cornerstone/OHIF (xem DICOM MRI), OpenSeadragon (xem WSI),
+MinIO/S3 (lưu trữ ảnh), PostgreSQL (metadata), Redis/Celery (hàng đợi tác vụ lớn).
+Các công cụ này gắn với mô hình YOLOv5–FCNN, DenseNet169‑ViT, và fusion
+attention đã nêu.
+5. Ý nghĩa đề tài:
+●​ Vai trò: Nghiên cứu cung cấp một khung trí tuệ nhân tạo đa mô thức có khả năng giải
+thích (XAI), kết hợp đồng thời ảnh MRI, ảnh mô bệnh học toàn phiến (WSI), dữ liệu
+RNA-seq và thông tin lâm sàng. Điểm đặc biệt là mô hình không chỉ dừng lại ở mức
+thuật toán mà còn được chuyển giao thành ứng dụng web minh chứng, giúp kết quả
+nghiên cứu có tính khả dụng thực tế, gắn kết trực tiếp với hoạt động chẩn đoán hình
+ảnh và hội chẩn đa chuyên khoa.
+●​ Tính ứng dụng: Ứng dụng web có thể được ứng dụng trực tiếp tại các khoa chẩn đoán
+hình ảnh ở các bệnh viện và cơ sở y tế, giúp hỗ trợ sàng lọc nhanh các ca bệnh, Theo
+dõi minh bạch bằng XAI và hỗ trợ phân tầng nguy cơ và tiên lượng sống còn.
+●​ Hiệu quả kinh tế:
+○​ Giảm thời gian chẩn đoán, tăng hiệu suất làm việc cho các bác sĩ.
+○​ Phát hiện bệnh sớm giúp giảm chi phí điều trị lâu dài cho bệnh nhân và hệ
+thống y tế.
+○​ Tối ưu nguồn lực bằng việc triển khai trên nền tảng web gọn nhẹ, không đòi
+hỏi hạ tầng siêu máy tính, có thể vận hành trên máy chủ GPU phổ thông.
+●​ Hiệu quả xã hội:
+○​ Nâng cao chất lượng dịch vụ y tế, mang công nghệ AI tiên tiến đến gần hơn
+với thực hành lâm sàng.
+○​ Mở rộng khả năng tiếp cận công cụ chẩn đoán hiện đại cho nhiều bệnh viện, kể
+cả ở tuyến dưới, nhờ mô hình ứng dụng web dễ triển khai.
+○​ Giảm thiểu các sai sót y khoa do yếu tố chủ quan, tăng cường sự chính xác
+trong chẩn đoán.
+○​ Mở ra cơ hội điều trị sớm và tăng tỷ lệ sống sót cho bệnh nhân mắc bệnh u
+não.
+6. Câu hỏi nghiên cứu:
+
+​
+
+Trang 3/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
+●​ Mô hình AI kết hợp YOLOv5, DenseNet169-ViT và FCNN/U-Net có đạt được độ
+chính xác (Accuracy) ≥ 98.5% và điểm F1 từng lớp ≥ 0.90 trong việc phân loại các
+loại u não chính (GBM, u màng não, u tuyến yên, u thần kinh đệm lành tính) từ ảnh
+MRI hay không?
+●​ Việc tích hợp dữ liệu đa phương thức (hình ảnh mô bệnh học WSI và dữ liệu RNA
+sequencing) với hình ảnh MRI thông qua cơ chế attention-based fusion có cải thiện
+đáng kể khả năng dự báo tiên lượng sống của bệnh nhân, thể hiện qua chỉ số C-index
+≥ 0.75, so với việc chỉ sử dụng dữ liệu MRI đơn thuần hay không?
+●​ Các kỹ thuật XAI (như Grad-CAM, Grad-CAM++) có thể tạo ra các bản đồ nhiệt
+trùng khớp với các đặc điểm lâm sàng quan trọng (ví trí khối u, vùng xâm lấn) trên
+ảnh MRI và WSI, từ đó giúp các chuyên gia y tế tin tưởng và hiểu được cơ sở cho
+quyết định của mô hình với tỷ lệ ≥ 80% trường hợp được đánh giá có tính hợp lý cao
+hay không?
+●​ Mô hình phát hiện khối u (YOLOv5) và mô hình phân đoạn (FCNN/U-Net) có đạt
+được các chỉ số kỹ thuật mục tiêu (F1 ≥ 0.90 cho YOLOv5 và Dice ≥ 0.88 cho FCNN)
+trên các bộ dữ liệu thử nghiệm độc lập, chứng tỏ tính ổn định và khả năng tổng quát
+hóa của chúng hay không?
+●​ Hệ thống đề xuất có khả năng hoạt động như một công cụ hỗ trợ ra quyết định hiệu
+quả, giúp rút ngắn thời gian sàng lọc và cung cấp dự đoán tiên lượng có ý nghĩa thống
+kê (p-value < 0.001 trong kiểm định log-rank) cho các bác sĩ lâm sàng trong quy trình
+chẩn đoán và điều trị u não hay không?
+7. Tổng quan tài liệu - Nghiên cứu liên quan:
+Trong những năm gần đây, ứng dụng Trí tuệ nhân tạo (AI), đặc biệt là Học sâu (Deep
+Learning), trong chẩn đoán hình ảnh y tế đã có những bước tiến vượt bậc. Nghiên cứu về chẩn
+đoán u não cũng phát triển theo ba hướng tiếp cận chính:
+●​ Các mô hình dựa trên ảnh MRI đơn phương thức: Đây là hướng tiếp cận phổ biến
+nhất. Các nghiên cứu như của Ahsan et al. (2020) và Nahiduzzaman et al. (2025) tập
+trung vào việc sử dụng các kiến trúc CNN (VGG, ResNet) và Hybrid ML-DL để phân
+loại khối u từ ảnh MRI với độ chính xác cao (trên 95%). Các nghiên cứu gần đây như
+"Accurate and real-time brain tumour detection and classification using optimized
+YOLOv5 architecture" (2025) đã chứng minh hiệu quả của YOLOv5 trong việc phát
+hiện và phân loại khối u theo thời gian thực. Tuy nhiên, hạn chế của các phương pháp
+này là chỉ khai thác thông tin từ một nguồn dữ liệu duy nhất (MRI), chưa tận dụng
+được các đặc trưng sinh học ở cấp độ mô và phân tử, vốn rất quan trọng để tiên lượng
+bệnh.
+●​ Các mô hình đa phương thức (Multimodal) cho tiên lượng: Để khắc phục hạn chế trên,
+hướng nghiên cứu tích hợp dữ liệu đa phương thức đã xuất hiện. Công trình
+"Multimodal deep learning to predict prognosis in adult and pediatric brain tumors"
+(2023) trên Communications Medicine là một ví dụ điển hình, kết hợp hình ảnh MRI
+với dữ liệu mô bệnh học (WSI) để dự đoán tiên lượng cho bệnh nhân u não. Nghiên
+cứu này chỉ ra rằng việc kết hợp đa phương thức giúp cải thiện đáng kể độ chính xác
+trong dự báo so với chỉ dùng MRI. Tuy vậy, các mô hình này thường phức tạp, đòi hỏi
+lượng dữ liệu lớn và chưa chú trọng nhiều đến tính giải thích được.
+
+​
+
+Trang 4/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
+●​ Xu hướng tích hợp Explainable AI (XAI): Với yêu cầu ngày càng cao về tính minh
+bạch trong y tế, XAI đã trở thành một thành phần không thể thiếu. Các nghiên cứu
+như Alam Khandaker et al. (2023), Aiya et al. (2025), và Lamba et al. (2025) đều
+nhấn mạnh tầm quan trọng của việc tích hợp các kỹ thuật như Grad-CAM, LIME,
+hoặc SHAP để tạo ra các bản đồ nhiệt, giúp bác sĩ hiểu được lý do đằng sau chẩn đoán
+của AI. Điều này xây dựng niềm tin và tạo điều kiện cho sự chấp nhận của các chuyên
+gia lâm sàng.
+Mặc dù đã có nhiều tiến bộ, vẫn tồn tại một khoảng trống rõ rệt: Chưa có một khung làm việc
+hoàn chỉnh nào kết hợp một cách có hệ thống cả ba yếu tố: (1) pipeline xử lý từ phát hiện,
+phân đoạn đến phân loại trên MRI; (2) tích hợp sâu dữ liệu đa phương thức (MRI, WSI,
+RNA-seq) cho tiên lượng; và (3) nhấn mạnh tính giải thích (XAI) xuyên suốt toàn bộ pipeline.
+8. Phạm vi/ giới hạn nghiên cứu:​
+-​ Phạm vi nghiên cứu
++​ Dữ liệu: Hình ảnh MRI/FLAIR và CT scan từ các bộ dữ liệu thực tế
+(Bangladesh Brain Cancer MRI Dataset với 6.056 hình ảnh, UCSF-PDGM,
+TCGA-GBM và CPTAC-GBM subsets với ~500-1.000 bệnh nhân, bao gồm dữ
+liệu đa phương thức như whole-slide histopathological images và RNA
+sequencing profiles). Phạm vi giới hạn ở bệnh nhân trưởng thành (trên 18 tuổi)
+với các loại u não chính: glioblastoma (GBM), u glial lành tính, adenomas,
+meningeal, và u di căn.
++​ Nhiệm vụ:
+○​ Chuẩn đoán trên ảnh MRI: Phát hiện, phân đoạn và phân loại, định độ
+u não.
+○​ Phân tầng nguy cơ: Hợp nhất WSI (ảnh mô bệnh học H&E) và
+RNA‑seq và dữ liệu lâm sàng bằng mạng attention‑based để dự báo
+sống còn thông qua risk score, C‑index, Kaplan–Meier, …
+○​ Giải thích mô hình (XAI): Grad‑CAM, Grad‑CAM++, Score‑CAM.
+○​ Đánh giá mô hình phân loại thông qua các thông số (Accuracy/
+precision/ recall/ F1-Score, AUC). Đánh giá độ chính của dự đoán, tiên
+lượng sống của bệnh nhân.
++​ Kỹ thuật:
+○​ Mô hình: YOLOv5, FCNN kiểu U-Net/DeepLab, DenseNet169 + Vit,
+attention- based multimodal fusion.
+○​ Các thuật toán huấn luyện và tối ưu: RMSProp, NRMSProp,...
+○​ XAI: Grad‑CAM, Grad‑CAM++, Score‑CAM, Layer‑CAM,...
++​ Ứng dung:
+○​ Ứng dụng web dùng cho mục đích nghiên cứu, giảng dạy và hỗ trợ
+chuyên gia; không thay thế quyết định lâm sàng, không tuyên bố đạt
+chuẩn thiết bị y tế (FDA/CE).
+-​ Giới hạn:
++​ Chỉ sử dụng dữ liệu từ các nguồn công khai (Mỹ/Bangladesh-centric), có thể
+gây bias về dân số (thiếu đa dạng châu Á/Phi), không bao gồm dữ liệu trẻ em
+hoặc u lành tính hiếm gặp.
+​
+
+Trang 5/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
++​ Nghiên cứu hiện tại tập trung vào việc kết hợp các dữ liệu đa phương thức dựa
+trên hình ảnh bao gồm chụp cộng hưởng từ (MRI), mô bệnh học (histology) và
+dữ liệu RNA. Mặc dù đây là một bước tiến quan trọng, nghiên cứu vẫn chưa
+tích hợp các loại dữ liệu phức tạp hơn như video theo thời gian thực hay dữ
+liệu hệ gen đầy đủ (ví dụ: các đột biến DNA).
++​ Thời gian xử lý có thể chậm trên hardware thông thường.
++​ Không đánh giá tác động dài hạn: Nghiên cứu chỉ tập trung vào việc chẩn đoán
+và tiên lượng tại một thời điểm nhất định, mà không theo dõi diễn biến của
+bệnh nhân trong 5 năm hoặc lâu hơn. Điều này có nghĩa là mô hình không thể
+dự đoán được các kết quả lâm sàng dài hạn như tỷ lệ tái phát bệnh hoặc thời
+gian sống còn của bệnh nhân.
++​ Phụ thuộc vào chất lượng dữ liệu gốc: Hiệu suất của mô hình AI phụ thuộc
+hoàn toàn vào chất lượng của dữ liệu đầu vào. Nếu hình ảnh mô bệnh học bị
+nhiễu, mờ, hoặc không được chuẩn bị đúng cách, mô hình sẽ không thể trích
+xuất các đặc trưng chính xác, dẫn đến kết quả chẩn đoán sai lệch.
+9. Nội dung/ phương pháp nghiên cứu:​
+Nghiên cứu sẽ được thực hiện theo các bước sau:
+1.​ Thu thập và tiền xử lý dữ liệu:
+-​ Sưu tầm các bộ dữ liệu ảnh MRI/CT não từ các nguồn uy tín: như tập dữ liệu
+Bangladesh Brain Cancer MRI Dataset gồm 6.056 ảnh MRI não bệnh nhân,
+ảnh MRI trước phẫu thuật của bệnh nhân glioma từ Đại học California San
+Francisco (UCSF- PDGM), một phần ảnh MRI từ dự án The Cancer Genome
+Atlas về GBM (TCGA-GBM),…
+-​ Tập các ảnh mô bệnh học (WSI) Từ các cơ sở dữ liệu TCGA-GBM và
+CPTAC, khai thác dữ liệu RNA sequencing (RNA-seq) của bệnh nhân GBM từ
+TCGA và CPTAC,...
+-​ Thực hiện các bước tiền xử lý như chuẩn hóa, thay đổi kích thước ảnh, tăng
+cường dữ liệu, giảm chiều dữ liệu để cải thiện chất lượng và sự đa dạng của dữ
+liệu đầu vào.
+2.​ Thực hiện phát hiện, phân đoạn và phân loại trên ảnh MRI giúp phân loại sớm :
+-​ Trên mỗi ảnh MRI sử dụng mô hình YOLOv5 để phát hiện liệu có khối u hay
+không và xác định vị trí của khối u.
+-​ Sau khi biết vùng tổng quát của khối u từ YOLOv5 thì tiến hành sử dụng
+FCNN (U-Net hoặc DeepLab tùy chỉnh) tiến hành phân đoạn từng pixel ảnh để
+tạo ảnh mặt nạ (mask) chi tiết của khối u.
+-​ Sau khi có mặt nạ của khối u từ quá trình phân đoạn, chúng tôi sử dụng một
+mạng nơ-ron tích chập sâu như DenseNet169 với các kết nối dày đặc. Kiến
+trúc này giúp lan truyền thông tin hiệu quả, từ đó trích xuất các đặc trưng chi
+tiết của khối u như mức độ xâm lấn, tính chất viền khối u và phù não.
+-​ Tiếp theo, chúng tôi tích hợp thêm Vision Transformer (ViT). Module này hoạt
+động bằng cách chia các đặc trưng ảnh thành các mảng nhỏ, sau đó tạo các
+biểu diễn số hóa. Nó sử dụng cơ chế tự-chú ý đa đầu (multi-head
+self-attention) để nắm bắt các mối liên hệ tổng thể giữa các vùng khác nhau
+​
+
+Trang 6/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
+của ảnh. Ví dụ, nó có thể nhận biết mối liên kết giữa vùng trung tâm khối u với
+vùng phù não bao quanh, hoặc sự dịch chuyển của đường giữa não do khối u
+gây ra.
+-​ Cuối cùng, chúng tôi kết hợp kết quả từ cả DenseNet (đặc trưng cục bộ) và
+ViT (đặc trưng toàn cục) bằng cách nối chúng lại với nhau. Vectơ kết hợp này
+được đưa qua các lớp kết nối đầy đủ để mô hình đưa ra dự đoán phân loại cuối
+cùng.
+-​ Các nhãn phân loại ở đây bao gồm: U thần kinh đệm lành tính (như u sao bào
+mức độ thấp, u tế bào hình sao độ I/II), U màng não (meningioma, thường lành
+tính), U tuyến yên (pituitary adenoma, lành tính), và U ác tính GBM
+(glioblastoma và các phân nhóm ác tính tương tự). Chúng tôi chọn 4 nhóm này
+vì chúng bao hàm các dạng u não thường gặp.
+-​ Trong quá trình huấn luyện mô hình, một trong những thách thức lớn nhất là
+sự mất cân bằng dữ liệu giữa các lớp (class imbalance). Ví dụ cụ thể, số lượng
+ảnh về u não nguyên bào thần kinh đệm (GBM) có thể thấp hơn đáng kể so với
+u màng não (meningioma). Tình trạng này có thể khiến mô hình thiên vị các
+lớp chiếm đa số, làm giảm hiệu suất phân loại đối với các lớp thiểu số.hóa mô
+hình phân loại. Bộ tối ưu này đã được chứng minh giúp hội tụ tốt trên dữ liệu y
+khoa mất cân bằng, cải thiện độ ổn định khi huấn luyện.
+-​ Để giải quyết vấn đề này, chúng tôi đã sử dụng bộ tối ưu RMSProp (Root
+Mean Square Propagation) với một cải tiến quan trọng là tích hợp Nesterov
+momentum. Sự kết hợp này tạo nên một biến thể được gọi là NRMSProp, được
+thiết kế để tối ưu hóa mô hình phân loại.
+3.​ Huấn luyện mô hình dự báo tiên lượng đa modal (MRI, WSI(Whole Slide Image) và
+chuỗi RNA ):
+-​ Để dự đoán thời gian sống thêm (overall survival) và phân tầng nguy cơ cho
+bệnh nhân, chúng tôi phát triển một mô hình deep learning chú ý đặc biệt để
+tích hợp dữ liệu hình ảnh mô bệnh học, dữ liệu gene và dữ liệu lâm sàng:
++​ Trích xuất đặc trên dữ liệu WSI: Đối với mỗi bệnh nhân mắc u nguyên
+bào thần kinh đệm (GBM), chúng tôi sử dụng một ảnh mô bệnh học
+(WSI) để trích xuất các đặc trưng của khối u. Do kích thước khổng lồ
+của ảnh WSI, chúng tôi áp dụng một mạng nơ-ron tích chập (CNN) để
+xử lý từng mảng nhỏ của ảnh. Sau đó, các đặc trưng từ những mảng
+này được tổng hợp để tạo thành một biểu diễn duy nhất cho toàn bộ
+khối u. Ngoài ra, chúng tôi còn phát triển một cơ chế cross-attention để
+kết nối thông tin giữa ảnh MRI và ảnh mô bệnh học đối với những
+bệnh nhân có cả hai loại dữ liệu này. Cách tiếp cận này tương tự như
+phương pháp iGISM, sử dụng cơ chế đồng chú ý (co-attention) được
+hướng dẫn bởi ảnh MRI. Điều này giúp đồng bộ và tận dụng các thông
+tin liên quan giữa ảnh MRI trước phẫu thuật và lát mô của khối u.
+Phương pháp này đặc biệt hiệu quả vì ảnh MRI cung cấp cái nhìn tổng
+quan về khối u khi còn trong cơ thể sống, trong khi ảnh mô bệnh học
+lại cung cấp các chi tiết ở cấp độ tế bào của cùng một khối u đã được
+lấy ra ngoài (ex vivo).
+
+​
+
+Trang 7/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
++​ Trích xuất đặc trưng trên dữ liệu RNA-seq: Đối với dữ liệu giải trình tự
+RNA-seq, chúng tôi xử lý thông qua một mạng nơ-ron chuyên biệt để
+rút gọn thành một vectơ đặc trưng súc tích, chỉ giữ lại những thông tin
+sinh học quan trọng nhất. Để tối ưu hóa quá trình này, chúng tôi cũng
+áp dụng một cơ chế tự chú ý (self-attention) trên các gen. Cơ chế này
+cho phép mô hình tự động tập trung vào những gen hoặc chuỗi gen
+(pathway) có vai trò quyết định đến tiên lượng của bệnh nhân. Cụ thể,
+mô hình có thể tự nhận biết và ưu tiên các gen liên quan đến quá trình
+phân bào hoặc gen có ảnh hưởng đến vi môi trường miễn dịch của khối
+u, những yếu tố đã được chứng minh có mối liên hệ mật thiết với kết
+quả điều trị và thời gian sống của bệnh nhân.
++​ Tích hợp và dự đoán sống còn: Sau khi trích xuất đặc trưng từ dữ liệu
+hình ảnh (MRI, WSI) và dữ liệu hệ gen, chúng tôi hợp nhất các đặc
+trưng này trong một kiến trúc mạng nơ-ron chuyên biệt, được thiết kế
+để xử lý đa phương thức. Kiến trúc này được xây dựng như một mạng
+có nhiều nhánh: hai nhánh mạng nơ-ron tích chập (CNN) cho ảnh WSI
+và MRI, cùng một nhánh riêng cho dữ liệu gen. Tất cả các nhánh này
+sẽ hội tụ tại một tầng hợp nhất cuối cùng.Tại tầng hợp nhất, chúng tôi
+sử dụng các lớp multi-head attention để học cách pha trộn thông tin
+một cách thông minh. Cơ chế này cho phép các vectơ đặc trưng từ hình
+ảnh và gen tương tác với nhau để phát hiện các mối liên kết ẩn. Ví dụ,
+mô hình có thể nhận ra mối quan hệ giữa việc bệnh nhân có biểu hiện
+gen phân bào cao với việc hình ảnh mô bệnh học cho thấy mật độ tế
+bào u cao.
+-​ Đánh giá tiên lượng:
++​ Chúng tôi đánh giá mô hình trên các tập bệnh nhân độc lập (ví dụ lấy
+một phần TCGA-GBM làm tập kiểm thử). C-index được dùng làm
+thước đo chính, phản ánh khả năng mô hình xếp hạng đúng giữa các
+thời gian sống của bệnh nhân.
++​ Ngoài C-index, chúng tôi cũng tính Brier score tích hợp (IBS) để đo
+lường độ chuẩn xác theo thời gian.
+-​ Để trực quan hóa khả năng phân tầng nguy cơ, chúng tôi chia bệnh nhân thành
+2 nhóm dựa trên điểm nguy cơ dự đoán (nhóm nguy cơ cao và nguy cơ thấp,
+thường lấy median risk hoặc một threshold tối ưu). Sau đó vẽ đường cong
+Kaplan–Meier cho hai nhóm và thực hiện phép kiểm định log-rank.
+-​ Sử dụng kĩ thuật XAI và trực quan hóa để xác thực quyết định:
++​ Sử dụng Grad-CAM/Grad-CAM++: Đây là một kỹ thuật tạo ra bản đồ
+nhiệt (heatmap) ngay trên ảnh. Vùng nào càng sáng, mô hình càng chú
+ý vào đó để đưa ra quyết định.
++​ Mục đích: Để xác nhận rằng mô hình thực sự dựa vào vùng khối u, rìa
+khối u, hoặc phù não để chẩn đoán.
++​ Ý nghĩa: Khi bản đồ nhiệt trùng khớp với những gì bác sĩ X-quang
+cũng quan sát, nó cho thấy mô hình đang đưa ra quyết định dựa trên
+các đặc trưng y học hợp lý, không phải dựa vào các yếu tố ngẫu nhiên
+khác.
+​
+
+Trang 8/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
++​ Sau khi có kết quả phân tích, mô hình XAI sẽ chuyển đổi các con số và
+tọa độ pixel thành ngôn ngữ thông thường. Điều này biến mô hình
+thành một hệ hỗ trợ quyết định thân thiện, cung cấp cả kết quả lẫn lý do
+cho bác sĩ, khác biệt hẳn với nhiều mô hình đen trước đây.
+4.​ Module Triển khai và Giao diện người dùng:
+-​ Tải lên và tiền xử lý: Người dùng tải lên dữ liệu hình ảnh (MRI/WSI) hoặc dữ
+liệu gen. Hệ thống sẽ thực hiện các bước kiểm tra ban đầu để đảm bảo tính
+toàn vẹn của tệp và ẩn danh thông tin bệnh nhân. Dữ liệu sau đó được lưu trữ
+an toàn trên dịch vụ lưu trữ đám mây.
+-​ Gọi API và Suy luận: Sau khi dữ liệu được lưu trữ, một yêu cầu API chuẩn hóa
+(REST/JSON) sẽ được gửi đến máy chủ xử lý.
+-​ Tạo giải thích và Điểm nguy cơ: Kết quả từ các mô hình sẽ được xử lý để sinh
+ra các bản đồ mặt nạ (mask), bản đồ nhiệt CAM (Class Activation Map) và
+tính toán điểm nguy cơ (risk score) thông qua cơ chế hợp nhất.
+-​ Giao diện trực quan hóa XAI:
++​ Trình Xem Ảnh Chuyên dụng: Trình xem cho phép người dùng tương
+tác trực tiếp với hình ảnh và các lớp phủ phân tích. Các lớp phủ
+(overlay) như bản đồ mặt nạ và bản đồ nhiệt giải thích sẽ được hiển thị
+trực tiếp lên ảnh gốc, giúp bác sĩ so sánh trực quan giữa vị trí khối u và
+lý do mà AI đưa ra quyết định.
++​ Bảng điều khiển và Biểu đồ Phân tích: Giao diện còn có một bảng điều
+khiển động, cung cấp các thông số quan trọng dưới dạng biểu đồ và
+danh sách dễ hiểu. Bao gồm biểu đồ hiển thị điểm nguy cơ (risk score)
+của bệnh nhân, bảng xếp hạng các yếu tố có ảnh hưởng lớn nhất (ví dụ:
+gen KI-67) và một đoạn văn bản tóm tắt, giải thích ngắn gọn bằng ngôn
+ngữ phù hợp với từng đối tượng (bác sĩ hoặc bệnh nhân).
+-​ Quản lý dữ liệu và nhật ký: Tất cả siêu dữ liệu và kết quả suy luận sẽ được lưu
+trữ trong cơ sở dữ liệu để truy xuất và phân tích sau này. Hệ thống cũng ghi lại
+nhật ký truy cập và hoạt động để đảm bảo tính minh bạch và có thể truy vết.
+5.​ Phân tích kết quả và kết luận:
+-​ Phân tích các trường hợp mô hình dự đoán đúng/sai để hiểu rõ hơn về khả
+năng và hạn chế của nó.
+-​ Viết báo cáo tổng kết quá trình thực hiện, kết quả đạt được và đề xuất hướng
+phát triển trong tương lai.
+10. Dự kiến kết quả/ Đề suất giải pháp:
+●​ Kết quả:
+-​ Một module ứng dụng web được triển khai dưới dạng demo. Ứng dụng này sẽ
+minh họa cách hệ thống hoạt động, cho phép người dùng tải lên dữ liệu để
+nhận kết quả suy luận. Giao diện người dùng sẽ trực quan hóa các giải thích từ
+XAI, giúp người dùng dễ dàng hiểu được lý do đằng sau các chẩn đoán của AI.
+-​ Một mô hình AI đa phương thức hoàn chỉnh, được huấn luyện và tinh chỉnh,
+có khả năng thực hiện các nhiệm vụ: phát hiện, phân đoạn và phân loại u não
+trên ảnh MRI, cũng như phân tầng nguy cơ dựa trên dữ liệu WSI, RNA và lâm
+​
+
+Trang 9/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
+sàng. Mô hình này sẽ được cung cấp dưới dạng mã nguồn và trọng số đã huấn
+luyện để các nhà nghiên cứu khác có thể tái hiện và phát triển.
+-​ Báo cáo chi tiết về hiệu suất của mô hình, bao gồm các chỉ số như độ chính
+xác, chỉ số F1, AUC, và C-index. Các kết quả này sẽ được so sánh một cách
+toàn diện với các mô hình tương đương hoặc các phương pháp tiếp cận đã có
+trước đây để khẳng định tính mới và giá trị của đề tài.
+-​ Bài báo khoa học (dự kiến) để đăng tại hội nghị sinh viên nghiên cứu khoa
+học.
+●​ Đề xuất giải pháp:
+-​ Giải pháp dữ liệu:
++​ Chuẩn hóa liên cơ sở: Dữ liệu hình ảnh từ các cơ sở khác nhau thường
+có sự khác biệt về đặc điểm kỹ thuật. Chúng tôi sẽ áp dụng các phương
+pháp chuẩn hóa tiên tiến như chuẩn hóa Z-score và cLAHE cho dữ liệu
+MRI, cùng với chuẩn hóa màu nhuộm (stain normalization) sử dụng
+các thuật toán như Macenko hoặc Vahadane cho ảnh WSI. Dữ liệu gen
+sẽ được chuẩn hóa liên cơ sở bằng phương pháp
+ComBat-harmonization để giảm thiểu sai lệch.
++​ Xử lý Mất cân bằng Dữ liệu: Để khắc phục tình trạng mất cân bằng
+giữa các lớp, chúng tôi sẽ sử dụng các kỹ thuật như lấy mẫu cân bằng
+lớp (class-balanced sampling), tăng trọng số (re-weighting), hoặc tạo
+dữ liệu giả lập cho lớp thiểu số (minority oversampling) có kiểm soát.
++​ Ghép cặp Dữ liệu đa phương thức: Quá trình ghép cặp dữ liệu từ các
+nguồn khác nhau (MRI, WSI, gene) sẽ được thực hiện một cách chặt
+chẽ, kiểm tra tính nhất quán của ID bệnh nhân và thời điểm lấy mẫu để
+loại trừ các bản ghi không đáng tin cậy.
++​ Tách Tập Dữ liệu Nghiêm ngặt: Các tập dữ liệu huấn luyện, thẩm định
+và kiểm thử sẽ được tách theo bệnh nhân hoặc cơ sở y tế để tránh hiện
+tượng rò rỉ dữ liệu, đảm bảo kết quả đánh giá phản ánh chính xác hiệu
+suất của mô hình.
+-​ Giải pháp thẩm định:
++​ Mô hình sẽ được đánh giá trên các bộ dữ liệu độc lập từ nhiều cơ sở
+khác nhau. Điều này giúp đo lường mức độ suy giảm hiệu suất và xác
+định nguyên nhân (nếu có), từ đó đảm bảo tính tổng quát của mô hình.
+-​ Calibration & Uncertainty: Chúng tôi sẽ sử dụng các phương pháp như
+hiệu chỉnh nhiệt độ (temperature scaling) và ECE/Brier score để đánh
+giá tính hợp lý của các dự đoán. Các phương pháp như Monte Carlo
+Dropout (MC-Dropout) hoặc Ensemble cũng sẽ được áp dụng để ước
+lượng độ bất định của mô hình, giúp hiển thị độ tin cậy kèm theo mỗi
+dự đoán.
+-​ Một nghiên cứu nhỏ sẽ được tiến hành với sự tham gia của một nhóm
+bác sĩ X-quang và giải phẫu bệnh để đánh giá tốc độ và mức độ đáng
+tin cậy của hệ thống.
+​
+​
+
+Trang 10/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
+11. Kế hoạch thực hiện tiến độ dự kiến:
+Tháng
+
+Kết quả dự kiến
+
+Tiến độ
+
+09/2025
+
+-​ Bắt đầu triển khai nghiên
+cứu.
+-​ Tổng quan tài liệu, xác định
+hướng tiếp cận chi tiết.
+-​ Tìm kiếm và đánh giá các
+bộ dữ liệu hình ảnh y tế
+(MRI, WSI, RNA-seq) phù
+hợp.
+-​ Khảo sát và lựa chọn công
+nghệ web phù hợp.
+
+-​ Nắm vững kiến thức nền
+tảng về AI và công nghệ
+web.
+-​ Xác định rõ phương pháp
+học máy (CNN, Transfer
+Learning) và các công cụ
+(TensorFlow, PyTorch) sẽ
+sử dụng.
+-​ Lựa chọn được bộ dữ liệu
+chính cho đề tài.
+-​ Xác định được stack công
+nghệ cho việc triển khai.
+
+10%
+
+10/2025
+
+-​ Viết và hoàn thiện đề
+cương chi tiết.
+-​ Ngày 15/10: Đăng ký đề tài
+và nộp đề xuất kinh phí.
+-​ Tham gia triển lãm nghiên
+cứu khoa học (nếu có).
+
+-​ Đề cương chi tiết được
+hoàn thiện và nộp đúng
+hạn.
+
+20%
+
+11/2025
+
+-​ Ngày 01/11: Chờ Khoa
+Công nghệ Thông tin duyệt
+đề tài.
+-​ Ngày 20/11: Chờ được
+duyệt đề tài cấp trường.
+-​ Chỉnh sửa đề cương (nếu có
+yêu cầu từ hội đồng)
+
+-​ Đề tài được phê duyệt cấp
+Khoa và cấp Trường đề bắt
+đầu thực hiện.
+
+25%
+
+-​ Nhận kinh phí (sau khi
+được duyệt).
+-​ Thu thập và tiền xử lý dữ
+liệu (MRI, WSI, RNA-seq).
+-​ Xây dựng và huấn luyện
+mô hình chẩn đoán trên
+MRI phiên bản đầu tiên
+(YOLOv5, FCNN,
+DenseNet-ViT).
+-​ Song song: Bắt đầu phát
+triển backend.
+-​ Thiết kế kiến trúc
+hệ thống web.
+
+-​ Hoàn thành giai đoạn chuẩn
+bị dữ liệu.
+-​ Xây dựng thành công mô
+hình cơ bản.
+-​ Backend có thể nhận và lưu
+trữ file ảnh.
+-​ Đề tài được thông qua
+nghiệm thu sơ bộ và nhận
+khen thưởng (nếu có).
+
+50%
+
+12/2025
+02/2026
+
+Công việc thực hiện
+
+​
+
+Trang 11/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
+-​ Xây dựng các API
+cơ bản (upload,
+quản lý file).
+-​ Báo cáo tiến độ hằng tháng.
+-​ Ngày 15/01: Chuẩn bị và
+báo cáo nghiệm thu sơ bộ
+cấp khoa.
+-​ Tối ưu hóa mô hình MRI,
+tích hợp XAI (Grad-CAM).
+-​ Đánh giá hiệu suất mô hình
+với các số liệu chi tiết.
+-​ Bắt đầu viết báo cáo tổng
+kết đề tài.
+-​ Song song: Phát triển
+frontend và tích hợp.
+-​ Xây dựng giao diện
+người dùng.
+-​ Tích hợp mô hình
+chẩn đoán MRI đã
+ổn định vào
+backend API.
+-​ Kết nối frontend với
+backend.
+-​ Báo cáo tiến độ hàng tháng.
+
+-​ Mô hình được tinh chỉnh và
+đạt độ chính xác mục tiêu.
+-​ Ứng dụng web có thể demo
+luồng chẩn đoán trên MRI:
+upload ảnh, nhận kết quả
+phân loại và heatmap XAI.
+
+70%
+
+05/2026
+
+-​ Hoàn thiện báo cáo.
+-​ Hoàn tất công trình theo kế
+hoạch nghiệm thu cấp khoa.
+-​ Song song: Hoàn thiện và
+đóng gói ứng dụng web.
+-​ Tích hợp mô hình
+tiên
+lượng vào
+backend (nếu kịp
+tiến độ).
+-​ Tinh chỉnh giao
+diện, sửa lỗi.
+-​ Viết tài liệu hướng
+dẫn và đóng gói
+bằng Docker.
+
+-​ Mô hình MRI và mô hình
+tiên lượng đạt độ chính xác
+mục tiêu.
+-​ Ứng dụng web có thể demo
+luồng chẩn đoán trên MRI:
+upload ảnh, nhận kết quả
+phân loại và heatmap XAI
+-​ Hoàn thành bản thảo của
+báo cáo tổng kết.
+
+90%
+
+06/2026
+
+-​ Báo cáo nghiệm thu, chỉnh
+sửa và nộp công trình theo
+yêu cầu Hội đồng nghiệm
+thu cấp khoa.
+-​ Triển khai ứng dụng web
+lên máy chủ công cộng để
+
+-​ Ứng dụng web hoạt động
+ổn định, sẵn sàng để demo.
+-​ Hoàn tất công trình theo kế
+hoạch.
+-​ Báo cáo nghiệm thu, chỉnh
+sửa và nộp công trình theo
+
+100%
+
+03/2026
+05/2026
+
+​
+
+Trang 12/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+hội đồng truy cập và dùng
+thử.
+
+07/2026
+
+-​ Ngày 15/07: Nghiệm thu đề
+tài cấp Trường.
+-​ Báo cáo cấp Trường;
+Chuẩn bị hồ sơ dự giải các
+cấp (nếu đề tài đạt kết quả
+tốt).
+
+Ban hành lần: 06
+Ngày hiệu lực:
+
+yêu cầu Hội đồng nghiệm
+thu cấp Khoa.
+-​ Có đường link web demo
+hoạt động.
+
+-​ Báo cáo cấp Trường
+-​ Chuẩn bị hồ sơ dự giải các
+cấp (nếu có).
+
+X
+
+12. Tài liệu tham khảo:
+Alam Khandaker, M.A. et al. (2023). From Images to Insights: Transforming Brain Cancer
+Diagnosis with Explainable AI. arXiv preprint arXiv:2501.05426
+Nahiduzzaman, M. et al. (2025). A hybrid explainable model based on advanced ML and DL
+for classifying brain tumors using MRI. Scientific Reports, 15, 1649
+Aiya, A.J. et al. (2025). Optimized deep learning for brain tumor detection: a hybrid
+approach with attention mechanisms and clinical explainability. Scientific Reports, 15, 31386
+Lamba, K. et al. (2025). Synergizing XAI with hybrid model for enhanced brain tumor
+detection in healthcare. Scientific Reports, 15, 20489
+Multimodal deep learning to predict prognosis in adult and pediatric brain tumors.
+Communications Medicine (Nature), 3, 57 (2023)
+Accurate and real-time brain tumour detection and classification using optimized YOLOv5
+architecture. Scientific Reports, 15, Article no. 20277 (2025)
+Ahsan, M. et al. (2020). Brain Tumor Classification and Segmentation on MRIs. International
+Journal of Computer Applications, 175(25), 19-27.
+13. Dự trù kinh phí thực hiện:
+Diễn giải
+
+Số tiền
+
+1.​
+
+Chi phí sử dụng tài nguyên tính toán (ví dụ: thuê máy chủ
+GPU Colab,... để huấn luyện mô hình).
+
+1.300.000
+
+2.​
+
+Chi phí in ấn tài liệu, báo cáo (báo cáo hàng tháng, báo cáo
+nghiệm thu các cấp).
+
+300.000
+
+3.
+
+Chi phí thu thập và xử lý dữ liệu, hosting website.
+
+500.000
+
+4
+
+Chi phí khác (ví dụ: chi phí phát sinh trong quá trình thu thập
+dữ liệu, tham khảo tài liệu,...).
+
+500.000
+
+Tổng cộng
+
+2.600.000
+
+​
+
+Trang 13/14
+
+Mã số: TT/P.QLPTKHCN/13/BM02
+
+Thủ tục:
+
+Ban hành lần: 06
+
+NGHIÊN CỨU KHOA HỌC SINH VIÊN
+
+Ngày hiệu lực:
+
+Bằng chữ: hai triệu sáu trăm nghìn đồng.
+Trong đó, đề nghị phía nhà trường hỗ trợ: 2.600.000 đồng.
+
+TP.Hồ Chí Minh, ngày …… tháng …… năm 20…
+TÁC GIẢ
+(Tất cả Tác giả ký, ghi rõ họ tên)
+………………………………….
+………………………………….
+………………………………….
+GIẢNG VIÊN HƯỚNG DẪN
+(Ký, ghi rõ họ tên)
+
+TL. NCKHSV
+(Ký, ghi rõ họ tên)
+
+………………………………….
+
+………………………………….
+
+LÃNH ĐẠO KHOA
+(Ký, ghi rõ họ tên)
+………………………………….
+
+​
+
+Trang 14/14
+
+
