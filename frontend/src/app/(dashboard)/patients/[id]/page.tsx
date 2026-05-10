@@ -74,6 +74,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
     loading: false,
     data: null,
   });
+  const [reportLoadingId, setReportLoadingId] = useState<string | number | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; imageId: string | number | null }>({
     open: false,
     imageId: null,
@@ -163,6 +164,8 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
   };
 
   const handleDownloadReport = async (imageId: string | number) => {
+    setReportLoadingId(imageId);
+    setActionError("");
     try {
       const response = await apiService.analysis.downloadReport(imageId);
       const blob = new Blob([response.data], { type: "application/pdf" });
@@ -173,7 +176,10 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      setActionError(err.message || "Không thể tải báo cáo PDF.");
+      console.error("PDF Download Error:", err);
+      setActionError(err.response?.data?.detail || err.message || "Không thể tải báo cáo PDF.");
+    } finally {
+      setReportLoadingId(null);
     }
   };
 
@@ -347,10 +353,9 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                                 <Download className="h-4 w-4" />
                               </button>
 
-                              <button
-                                onClick={() => setDeleteDialog({ open: true, imageId: img.image_id })}
-                                disabled={isBusy}
-                                className="p-2 rounded-lg border border-red-500/20 text-red-300 hover:bg-red-500/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                <button
+                                  onClick={() => setDeleteDialog({ open: true, imageId: img.image_id })}
+                                  className="p-2 rounded-lg border border-red-500/20 text-red-300 hover:bg-red-500/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                                 title="Xóa dòng kết quả"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -436,7 +441,9 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
             </h3>
             <div className="p-5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 text-center">
               <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-                {rna_uploaded ? "RNA đã được upload và sẵn sàng cho multimodal prognosis." : "Chưa có RNA cho bệnh nhân này."}
+                {rna_uploaded 
+                  ? `RNA đã được upload: ${data.rna_info?.filename || "Sẵn sàng"} và sẵn sàng cho multimodal prognosis.` 
+                  : "Chưa có RNA cho bệnh nhân này."}
               </p>
               <button
                 onClick={() => router.push("/upload")}
@@ -456,6 +463,24 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                 <span className="text-slate-500">Chỉ số KI-67</span>
                 <span className="text-slate-200 font-bold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
                   {clinical_data?.ki67_index ?? "--"} %
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-500">Bậc u (Grade)</span>
+                <span className="text-slate-200 font-bold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                  WHO {clinical_data?.grade ?? "--"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-500">Đột biến IDH</span>
+                <span className={`font-bold px-2 py-0.5 rounded border ${clinical_data?.idh_mutation === "1" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : clinical_data?.idh_mutation === "0" ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-slate-800 text-slate-400 border-slate-700"}`}>
+                  {clinical_data?.idh_mutation === "1" ? "CÓ" : clinical_data?.idh_mutation === "0" ? "KHÔNG" : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-500">MGMT Methylation</span>
+                <span className={`font-bold px-2 py-0.5 rounded border ${clinical_data?.mgmt_methylation === "1" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : clinical_data?.mgmt_methylation === "0" ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-slate-800 text-slate-400 border-slate-700"}`}>
+                  {clinical_data?.mgmt_methylation === "1" ? "CÓ" : clinical_data?.mgmt_methylation === "0" ? "KHÔNG" : "—"}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm">
@@ -558,6 +583,24 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
               >
                 Xóa thật
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* PDF Generation Loading Overlay */}
+      {reportLoadingId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center text-white p-6">
+          <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm w-full border border-slate-700 animate-in fade-in zoom-in duration-300">
+            <div className="relative mb-6">
+              <div className="absolute inset-0 bg-teal-500/20 blur-xl rounded-full animate-pulse" />
+              <Loader2 className="h-16 w-16 text-teal-400 animate-spin relative z-10" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Đang khởi tạo báo cáo...</h3>
+            {/* <p className="text-slate-400 text-center text-sm leading-relaxed">
+              NeuroDiagnosis AI đang tổng hợp dữ liệu đa mô thức và kết xuất bản báo cáo độ phân giải cao. Quá trình này có thể mất vài giây.
+            </p> */}
+            <div className="mt-8 w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+              <div className="bg-teal-500 h-full w-full animate-progress-indefinite origin-left" />
             </div>
           </div>
         </div>

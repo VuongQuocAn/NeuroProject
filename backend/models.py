@@ -76,6 +76,12 @@ class ClinicalData(Base):
 
     # Trạng thái lâm sàng ban đầu: newly_diagnosed, recurrent, progressive
     initial_status = Column(String, nullable=True)
+    
+    # Thông tin tiên lượng bổ sung
+    grade = Column(String, nullable=True)             # WHO Grade (2, 3, 4)
+    prior_treatment = Column(String, nullable=True)    # 0 | 1
+    idh_mutation = Column(String, nullable=True)       # 0 | 1
+    mgmt_methylation = Column(String, nullable=True)   # 0 | 1
 
     patient = relationship("Patient", back_populates="clinical_data")
 

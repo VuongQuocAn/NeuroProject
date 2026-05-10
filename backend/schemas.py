@@ -28,6 +28,10 @@ class ClinicalDataUpdate(BaseModel):
     ki67_index: Optional[float] = None
     biochemistry_markers: Optional[dict] = None
     initial_status: Optional[str] = None  # newly_diagnosed | recurrent | progressive
+    grade: Optional[str] = None
+    prior_treatment: Optional[str] = None
+    idh_mutation: Optional[str] = None
+    mgmt_methylation: Optional[str] = None
 
 
 class ClinicalDataResponse(BaseModel):
@@ -35,6 +39,10 @@ class ClinicalDataResponse(BaseModel):
     ki67_index: Optional[float]
     biochemistry_markers: Optional[dict]
     initial_status: Optional[str]
+    grade: Optional[str]
+    prior_treatment: Optional[str]
+    idh_mutation: Optional[str]
+    mgmt_methylation: Optional[str]
     updated_at: Optional[datetime]
 
     class Config:

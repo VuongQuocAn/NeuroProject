@@ -129,6 +129,8 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
             }
         )
 
+    rna_record = db.query(models.RnaData).filter(models.RnaData.patient_id == patient.id).order_by(models.RnaData.upload_date.desc()).first()
+    
     return {
         "patient": {
             "id": patient.id,
@@ -138,11 +140,19 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
             "gender": patient.gender,
         },
         "images": image_list,
-        "rna_uploaded": db.query(models.RnaData).filter(models.RnaData.patient_id == patient.id).first() is not None,
+        "rna_uploaded": rna_record is not None,
+        "rna_info": {
+            "filename": rna_record.file_path.split("/")[-1].split("_", 1)[-1] if rna_record else None,
+            "uploaded_at": rna_record.upload_date.isoformat() if rna_record else None,
+        } if rna_record else None,
         "clinical_data": {
             "ki67_index": patient.clinical_data.ki67_index,
             "biochemistry_markers": patient.clinical_data.biochemistry_markers,
             "initial_status": patient.clinical_data.initial_status,
+            "grade": patient.clinical_data.grade,
+            "prior_treatment": patient.clinical_data.prior_treatment,
+            "idh_mutation": patient.clinical_data.idh_mutation,
+            "mgmt_methylation": patient.clinical_data.mgmt_methylation,
             "updated_at": patient.clinical_data.updated_at.isoformat() if patient.clinical_data and patient.clinical_data.updated_at else None,
         } if patient.clinical_data else None,
     }

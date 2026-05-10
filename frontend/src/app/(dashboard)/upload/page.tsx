@@ -42,6 +42,9 @@ export default function UploadPage() {
   const [mriFile, setMriFile] = useState<File | null>(null);
   const [rnaFile, setRnaFile] = useState<File | null>(null);
   const [ki67, setKi67] = useState("");
+  const [grade, setGrade] = useState("");
+  const [idhMutation, setIdhMutation] = useState("");
+  const [mgmtMethylation, setMgmtMethylation] = useState("");
   const [statusMsg, setStatusMsg] = useState({ text: "", type: "" });
   const [uploadResult, setUploadResult] = useState<UploadResultState>({ kind: "idle" });
 
@@ -253,7 +256,12 @@ export default function UploadPage() {
     setStatusMsg({ text: "", type: "" });
 
     try {
-      await apiService.upload.clinical(patientId.trim(), { ki67_index: parseFloat(ki67) });
+      await apiService.upload.clinical(patientId.trim(), { 
+        ki67_index: ki67 ? parseFloat(ki67) : null,
+        grade: grade || null,
+        idh_mutation: idhMutation || null,
+        mgmt_methylation: mgmtMethylation || null
+      });
       setStatusMsg({ text: "Cập nhật dữ liệu lâm sàng thành công. Đang cập nhật tiên lượng...", type: "success" });
 
       try {
@@ -480,23 +488,62 @@ export default function UploadPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">Chỉ số KI-67 (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  required
-                  value={ki67}
-                  onChange={(event) => setKi67(event.target.value)}
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-emerald-500 outline-none"
-                  placeholder="Ví dụ: 25.5"
-                />
-              </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-1.5">Chỉ số KI-67 (%)</label>
+                    <input
+                      type="number"
+                      value={ki67}
+                      onChange={(e) => setKi67(e.target.value)}
+                      placeholder="VD: 15"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-400 mb-1.5">Bậc u (WHO Grade)</label>
+                      <select
+                        value={grade}
+                        onChange={(e) => setGrade(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                      >
+                        <option value="">Chọn bậc u</option>
+                        <option value="2">WHO Grade II</option>
+                        <option value="3">WHO Grade III</option>
+                        <option value="4">WHO Grade IV (GBM)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-400 mb-1.5">Đột biến IDH</label>
+                      <select
+                        value={idhMutation}
+                        onChange={(e) => setIdhMutation(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                      >
+                        <option value="">Chưa xác định</option>
+                        <option value="1">Có đột biến (Mutant)</option>
+                        <option value="0">Không đột biến (Wildtype)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-400 mb-1.5">MGMT Methylation</label>
+                      <select
+                        value={mgmtMethylation}
+                        onChange={(e) => setMgmtMethylation(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                      >
+                        <option value="">Chưa xác định</option>
+                        <option value="1">Có Methylation (Positive)</option>
+                        <option value="0">Không Methylation (Negative)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
 
               <div className="pt-4">
                 <button
                   onClick={handleUpdateClinical}
-                  disabled={uploading || !patientId.trim() || !ki67}
+                  disabled={uploading || !patientId.trim() || (!ki67 && !grade && !idhMutation && !mgmtMethylation)}
                   className="w-full px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 transition-all flex justify-center items-center shadow-lg shadow-emerald-500/20"
                 >
                   {uploading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}

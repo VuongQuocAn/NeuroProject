@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from celery import shared_task
 import numpy as np
 import pandas as pd
+import torch
 
 import models
 from database import SessionLocal
@@ -52,7 +53,10 @@ def get_ai_pipeline() -> "TumorAnalysisPipeline":
     global ai_pipeline
     if ai_pipeline is None:
         TumorAnalysisPipeline = _load_pipeline_class()
-        ai_pipeline = TumorAnalysisPipeline(weights_dir=WEIGHTS_DIR, device="cpu")
+        # Detect device: use cuda if available
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"[CELERY WORKER] Khoi tao pipeline tren thiet bi: {device}")
+        ai_pipeline = TumorAnalysisPipeline(weights_dir=WEIGHTS_DIR, device=device)
     return ai_pipeline
 
 
@@ -99,11 +103,36 @@ def run_mri_pipeline(task_id: int, image_id: int):
                     rna_response.release_conn()
 
                 separator = "\t" if rna_record.file_format == "tsv" else ","
-                df = pd.read_csv(io.BytesIO(rna_bytes), sep=separator)
-                numeric_df = df.select_dtypes(include=["number"])
-                if "patient_id" in numeric_df.columns:
-                    numeric_df = numeric_df.drop(columns=["patient_id"])
-                rna_vector = numeric_df.to_numpy(dtype=np.float32).flatten()
+                
+                # OPTIMIZATION: pandas is extremely slow for 60,000+ columns with just 1 row.
+                # Using simple string split + numpy is much faster.
+                lines = rna_bytes.decode("utf-8").strip().splitlines()
+                if not lines:
+                    raise Exception("RNA file is empty.")
+                
+                # Parse headers to find gene column start
+                headers = [h.strip() for h in lines[0].split(separator)]
+                gene_start_idx = -1
+                for i, h in enumerate(headers):
+                    if h.startswith("ENSG"):
+                        gene_start_idx = i
+                        break
+                
+                # If no ENSG column found, fall back to default
+                if gene_start_idx == -1:
+                    gene_start_idx = 1
+                    
+                # Determine data line
+                data_line = lines[1] if len(lines) > 1 else lines[0]
+                parts = data_line.split(separator)
+                if not parts:
+                    raise Exception("Could not parse RNA data row.")
+                
+                # Skip first column (patient_id) and convert rest to float
+                # We use a list comprehension or np.fromstring for speed
+                # Note: some values might be empty or invalid, handle them
+                rna_vector = np.array([float(x) if x.strip() else 0.0 for x in parts[gene_start_idx:]], dtype=np.float32)
+                
             except Exception as e:
                 print(f"[CELERY WORKER] Loi khi doc RNA: {e}")
 

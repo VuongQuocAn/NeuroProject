@@ -35,6 +35,15 @@ export function SurvivalCurve({ data, color = "#14b8a6", title = "Dự đoán x�
     return <div className="h-64 w-full animate-pulse bg-slate-800/50 rounded-lg"></div>;
   }
 
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    return (
+      <div className="w-full h-64 bg-slate-900/40 rounded-xl border border-slate-800 p-4 flex flex-col items-center justify-center">
+        <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">{title}</h4>
+        <p className="text-sm text-slate-500">Chưa có dữ liệu sinh tồn (Survival Curve)</p>
+      </div>
+    );
+  }
+
   // Formatting for Recharts
   const formattedData = data.map(d => ({
     ...d,

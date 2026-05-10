@@ -1,4 +1,5 @@
 import base64
+import datetime
 import os
 import textwrap
 from io import BytesIO
@@ -34,6 +35,14 @@ LIGHT_GRAY = (242, 245, 247)
 BORDER = (220, 226, 230)
 TEXT = (33, 37, 41)
 TEXT_MUTED = (108, 117, 125)
+
+# ── Brand/UI Colors ──
+WHITE = (255, 255, 255)
+SLATE_100 = (241, 245, 249)
+SLATE_500 = (100, 116, 139)
+SLATE_800 = (30, 41, 59)
+SLATE_900 = (15, 23, 42)
+RED_500 = (239, 68, 68)
 
 
 def _get_presigned_url(file_path: str | None) -> str | None:
@@ -88,15 +97,19 @@ def _load_image_from_minio(file_path: str | None) -> np.ndarray | None:
     if not file_path:
         return None
 
-    bucket_name, object_name = _parse_minio_path(file_path)
-    response = minio_client.get_object(bucket_name, object_name)
     try:
-        file_bytes = response.read()
-    finally:
-        response.close()
-        response.release_conn()
+        bucket_name, object_name = _parse_minio_path(file_path)
+        response = minio_client.get_object(bucket_name, object_name)
+        try:
+            file_bytes = response.read()
+        finally:
+            response.close()
+            response.release_conn()
 
-    return _decode_image_bytes(file_bytes)
+        return _decode_image_bytes(file_bytes)
+    except Exception as e:
+        print(f"Error loading image from MinIO ({file_path}): {e}")
+        return None
 
 
 def _decode_image_bytes(file_bytes: bytes) -> np.ndarray | None:
@@ -201,31 +214,29 @@ def _format_percent(value: float | None) -> str:
     return f"{value * 100:.2f}%"
 
 
+import urllib.request
+
 def _load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    candidates = []
-    if os.name == "nt":
-        if bold:
-            candidates.extend(
-                [
-                    r"C:\Windows\Fonts\arialbd.ttf",
-                    r"C:\Windows\Fonts\segoeuib.ttf",
-                ]
-            )
-        else:
-            candidates.extend(
-                [
-                    r"C:\Windows\Fonts\arial.ttf",
-                    r"C:\Windows\Fonts\segoeui.ttf",
-                ]
-            )
-    candidates.extend(
-        [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        ]
-    )
-    for path in candidates:
-        if os.path.exists(path):
-            return ImageFont.truetype(path, size=size)
+    assets_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "fonts")
+    os.makedirs(assets_dir, exist_ok=True)
+    
+    font_name = "Roboto-Bold.ttf" if bold else "Roboto-Regular.ttf"
+    font_url = f"https://github.com/googlefonts/roboto/raw/main/src/hinted/{font_name}"
+    font_path = os.path.join(assets_dir, font_name)
+    
+    if not os.path.exists(font_path):
+        try:
+            urllib.request.urlretrieve(font_url, font_path)
+        except Exception:
+            pass # Fall back to default
+            
+    if os.path.exists(font_path):
+        try:
+            return ImageFont.truetype(font_path, size=size)
+        except Exception:
+            pass
+            
+    # Absolute fallback (no Vietnamese support, but prevents crashing)
     return ImageFont.load_default()
 
 
@@ -284,19 +295,20 @@ def _draw_image_card(
     box: tuple[int, int, int, int],
     title_font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     small_font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    scale: int = 1,
 ):
     draw = ImageDraw.Draw(page)
     x1, y1, x2, y2 = box
-    draw.rounded_rectangle(box, radius=18, fill=(255, 255, 255), outline=BORDER, width=2)
-    draw.text((x1 + 18, y1 + 14), title, font=title_font, fill=TEXT)
+    draw.rounded_rectangle(box, radius=18 * scale, fill=(255, 255, 255), outline=BORDER, width=2 * scale)
+    draw.text((x1 + 18 * scale, y1 + 14 * scale), title, font=title_font, fill=TEXT)
 
-    image_area = (x1 + 18, y1 + 52, x2 - 18, y2 - 56)
-    draw.rounded_rectangle(image_area, radius=12, fill=LIGHT_GRAY, outline=BORDER, width=1)
+    image_area = (x1 + 18 * scale, y1 + 52 * scale, x2 - 18 * scale, y2 - 56 * scale)
+    draw.rounded_rectangle(image_area, radius=12 * scale, fill=LIGHT_GRAY, outline=BORDER, width=1 * scale)
     if image is not None:
         fitted = _fit_report_image(image, (image_area[2] - image_area[0], image_area[3] - image_area[1]))
         page.paste(fitted, (image_area[0], image_area[1]))
     else:
-        placeholder = "Image not available"
+        placeholder = "Hình ảnh không khả dụng"
         bbox = draw.textbbox((0, 0), placeholder, font=small_font)
         text_x = image_area[0] + ((image_area[2] - image_area[0]) - (bbox[2] - bbox[0])) // 2
         text_y = image_area[1] + ((image_area[3] - image_area[1]) - (bbox[3] - bbox[1])) // 2
@@ -314,33 +326,30 @@ def _bgr_path_to_pil(path: str | None) -> Image.Image | None:
 
 
 def _load_image_for_report(minio_file_path: str | None = None, local_path: str | None = None) -> Image.Image | None:
-    if local_path:
-        local_image = _bgr_path_to_pil(local_path)
-        if local_image is not None:
-            return local_image
-
+    if local_path and os.path.exists(local_path):
+        return _bgr_path_to_pil(local_path)
+    
     if minio_file_path:
-        image_bgr = _load_image_from_minio(minio_file_path)
-        if image_bgr is not None:
-            rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        bgr = _load_image_from_minio(minio_file_path)
+        if bgr is not None:
+            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
             return Image.fromarray(rgb)
-
     return None
 
 
 def _build_summary_text(no_tumor_detected: bool, tumor_label: str | None, bbox_confidence: float | None) -> str:
     if no_tumor_detected:
         return (
-            "AI did not detect a convincing intracranial lesion on this MRI study. "
-            "No tumor type was assigned by the classification stage."
+            "Hệ thống AI không phát hiện tổn thương nội sọ đáng kể trên phim MRI này. "
+            "Không có phân loại khối u nào được chỉ định."
         )
     confidence_text = _format_percent(bbox_confidence)
     if tumor_label:
         return (
-            f"AI detected an intracranial lesion with detection confidence {confidence_text}. "
-            f"Predicted class is {tumor_label}."
+            f"AI đã phát hiện một tổn thương nội sọ với độ tin cậy {confidence_text}. "
+            f"Loại u dự đoán là {tumor_label}."
         )
-    return "AI detected a suspicious intracranial region. Final interpretation should be made by a physician."
+    return "AI đã phát hiện một vùng nghi ngờ nội sọ. Kết luận cuối cùng nên được đưa ra bởi bác sĩ chuyên khoa."
 
 
 def _escape_pdf_text(text: str) -> str:
@@ -421,238 +430,252 @@ def _build_professional_report_pdf(
     xai_explanation: str | None = None,
     fusion_attention: list[float] | None = None,
 ) -> bytes:
-    page_size = (1240, 1754)
-    page1 = Image.new("RGB", page_size, "white")
-    page2 = Image.new("RGB", page_size, "white")
+    # High Resolution (300 DPI)
+    scale = 2
+    page_size = (1240 * scale, 1754 * scale)
+    page1 = Image.new("RGB", page_size, WHITE)
+    page2 = Image.new("RGB", page_size, WHITE)
     draw1 = ImageDraw.Draw(page1)
     draw2 = ImageDraw.Draw(page2)
 
-    font_title = _load_font(40, bold=True)
-    font_h1 = _load_font(28, bold=True)
-    font_h2 = _load_font(22, bold=True)
-    font_body = _load_font(20)
-    font_small = _load_font(16)
-    font_label = _load_font(18, bold=True)
+    font_title = _load_font(40 * scale, bold=True)
+    font_h1 = _load_font(28 * scale, bold=True)
+    font_h2 = _load_font(22 * scale, bold=True)
+    font_body = _load_font(20 * scale)
+    font_small = _load_font(16 * scale)
+    font_label = _load_font(18 * scale, bold=True)
+    font_big_number = _load_font(52 * scale, bold=True)
 
-    draw1.rectangle((0, 0, page_size[0], 140), fill=NAVY)
-    draw1.text((60, 38), "NeuroDiagnosis AI", font=font_h1, fill="white")
-    draw1.text((60, 78), "MRI Brain Analysis Report", font=font_title, fill="white")
-    draw1.text((page_size[0] - 340, 42), f"Report ID: {report_id}", font=font_small, fill=(220, 232, 240))
-    draw1.text((page_size[0] - 340, 72), f"Generated: {processing_date}", font=font_small, fill=(220, 232, 240))
+    # ── Page 1 Header ──
+    draw1.rectangle((0, 0, page_size[0], 20 * scale), fill=TEAL)
+    draw1.text((60 * scale, 50 * scale), "NeuroDiagnosis AI", font=font_title, fill=TEAL)
+    draw1.text((60 * scale, 100 * scale), "BÁO CÁO CHẨN ĐOÁN UNG BƯỚU HỖ TRỢ BỞI AI", font=font_small, fill=SLATE_500)
+    
+    draw1.text((page_size[0] - 340 * scale, 55 * scale), f"Mã Báo Cáo: {report_id}", font=font_small, fill=SLATE_800)
+    draw1.text((page_size[0] - 340 * scale, 85 * scale), f"Ngày tạo: {processing_date}", font=font_small, fill=SLATE_500)
+    
+    draw1.line((60 * scale, 130 * scale, page_size[0] - 60 * scale, 130 * scale), fill=SLATE_100, width=2 * scale)
 
-    draw1.text((60, 175), "Patient and Study Information", font=font_h2, fill=TEXT)
-    info_box = (60, 215, page_size[0] - 60, 425)
-    draw1.rounded_rectangle(info_box, radius=18, fill=LIGHT_GRAY, outline=BORDER, width=2)
+    # ── Patient Info Block ──
+    info_box = (60 * scale, 160 * scale, page_size[0] - 60 * scale, 280 * scale)
+    draw1.rounded_rectangle(info_box, radius=12 * scale, fill=WHITE, outline=SLATE_100, width=2 * scale)
 
-    info_rows = [
-        ("Patient ID", patient_code),
-        ("Image ID / Study ID", str(image_id)),
-        ("Modality", "MRI Brain"),
-        ("Status", status.upper()),
-        ("Processing date", processing_date),
-        ("Referring physician", "Not provided"),
-        ("Institution / Department", "NeuroDiagnosis AI Lab"),
-    ]
+    draw1.text((90 * scale, 180 * scale), "Mã BN (Patient ID)", font=font_small, fill=SLATE_500)
+    draw1.text((90 * scale, 205 * scale), patient_code, font=font_label, fill=SLATE_800)
+    
+    draw1.text((360 * scale, 180 * scale), "Mã Ảnh (Image ID)", font=font_small, fill=SLATE_500)
+    draw1.text((360 * scale, 205 * scale), str(image_id), font=font_label, fill=SLATE_800)
+    
+    draw1.text((630 * scale, 180 * scale), "Mô Thức (Modality)", font=font_small, fill=SLATE_500)
+    draw1.text((630 * scale, 205 * scale), "MRI Sọ Não", font=font_label, fill=SLATE_800)
+    
+    draw1.text((900 * scale, 180 * scale), "Trạng Thái", font=font_small, fill=SLATE_500)
+    draw1.text((900 * scale, 205 * scale), status.upper(), font=font_label, fill=TEAL if status == "done" else RED_500)
 
-    left_x = 90
-    right_x = 650
-    row_y = 250
-    for idx, (label, value) in enumerate(info_rows):
-        column_x = left_x if idx < 4 else right_x
-        offset_y = row_y + (idx % 4) * 40
-        draw1.text((column_x, offset_y), label, font=font_small, fill=TEXT_MUTED)
-        draw1.text((column_x, offset_y + 18), value, font=font_label, fill=TEXT)
+    # ── AI Result Summary ──
+    draw1.text((60 * scale, 320 * scale), "1. Phân Loại Khối U bằng AI", font=font_h2, fill=TEAL)
+    
+    summary_box = (60 * scale, 360 * scale, page_size[0] - 60 * scale, 520 * scale)
+    draw1.rounded_rectangle(summary_box, radius=12 * scale, fill=WHITE, outline=SLATE_100, width=2 * scale)
 
-    draw1.text((60, 465), "AI Result Summary", font=font_h2, fill=TEXT)
-    summary_box = (60, 505, page_size[0] - 60, 705)
-    draw1.rounded_rectangle(summary_box, radius=18, fill=(247, 250, 251), outline=BORDER, width=2)
-
-    predicted_display = tumor_label or "No lesion detected"
-    detection_display = _format_percent(bbox_confidence)
+    predicted_display = tumor_label or "Không phát hiện khối u"
     classification_display = _format_percent(classification_confidence)
-    summary_text = _build_summary_text(no_tumor_detected, tumor_label, bbox_confidence)
+    summary_text = _build_summary_text(no_tumor_detected, tumor_label, bbox_confidence).replace("Predicted tumor type", "Loại u dự đoán").replace("No lesion detected", "Không phát hiện u").replace("Confidence", "Độ tin cậy")
 
-    draw1.text((90, 540), "Predicted tumor type", font=font_small, fill=TEXT_MUTED)
-    draw1.text((90, 565), predicted_display, font=font_h1, fill=RED if not no_tumor_detected else TEXT)
-    draw1.text((520, 540), "Classification confidence", font=font_small, fill=TEXT_MUTED)
-    draw1.text((520, 565), classification_display, font=font_h1, fill=TEXT)
-    draw1.text((860, 540), "Detection confidence", font=font_small, fill=TEXT_MUTED)
-    draw1.text((860, 565), detection_display, font=font_h1, fill=TEXT)
-    _draw_wrapped_text(draw1, summary_text, (90, 625), font_body, TEXT, max_width=1040)
+    draw1.text((90 * scale, 390 * scale), predicted_display, font=font_title, fill=RED_500 if not no_tumor_detected else SLATE_800)
+    
+    draw1.text((550 * scale, 390 * scale), "Độ tin cậy phân loại:", font=font_small, fill=SLATE_500)
+    draw1.text((550 * scale, 415 * scale), classification_display, font=font_h1, fill=TEAL)
+    
+    draw1.text((850 * scale, 390 * scale), "Độ tin cậy phát hiện:", font=font_small, fill=SLATE_500)
+    draw1.text((850 * scale, 415 * scale), _format_percent(bbox_confidence), font=font_h1, fill=TEAL)
+    
+    _draw_wrapped_text(draw1, summary_text, (90 * scale, 460 * scale), font_body, SLATE_800, max_width=1040 * scale)
 
-    draw1.text((60, 745), "Imaging Review", font=font_h2, fill=TEXT)
-    _draw_image_card(page1, "Original MRI", original_image, (60, 785, 585, 1225), font_label, font_small)
-    _draw_image_card(page1, "Detected Bounding Box", bbox_image, (655, 785, 1180, 1225), font_label, font_small)
-    _draw_image_card(page1, "Cropped ROI", cropped_roi_image, (60, 1265, 585, 1705), font_label, font_small)
-    _draw_image_card(page1, "Segmentation Mask", mask_image, (655, 1265, 1180, 1705), font_label, font_small)
+    # ── Imaging Review ──
+    draw1.text((60 * scale, 560 * scale), "2. Bằng Chứng Hình Ảnh", font=font_h2, fill=TEAL)
+    _draw_image_card(page1, "MRI Gốc (Original)", original_image, (60 * scale, 600 * scale, 585 * scale, 1040 * scale), font_label, font_small, scale=scale)
+    _draw_image_card(page1, "Vùng Khối U Phát Hiện (Bbox)", bbox_image, (655 * scale, 600 * scale, 1180 * scale, 1040 * scale), font_label, font_small, scale=scale)
+    _draw_image_card(page1, "Vùng ROI Cắt Ngắn", cropped_roi_image, (60 * scale, 1080 * scale, 585 * scale, 1520 * scale), font_label, font_small, scale=scale)
+    _draw_image_card(page1, "Mặt Nạ Phân Đoạn (Mask)", mask_image, (655 * scale, 1080 * scale, 1180 * scale, 1520 * scale), font_label, font_small, scale=scale)
 
-    draw2.rectangle((0, 0, page_size[0], 110), fill=NAVY)
-    draw2.text((60, 38), "NeuroDiagnosis AI - Continued Report", font=font_h1, fill="white")
-    draw2.text((page_size[0] - 260, 44), f"Report ID: {report_id}", font=font_small, fill=(220, 232, 240))
+    # ── Page 2 Header ──
+    draw2.rectangle((0, 0, page_size[0], 20 * scale), fill=TEAL)
+    draw2.text((60 * scale, 50 * scale), "NeuroDiagnosis AI - Tiếp theo", font=font_title, fill=TEAL)
+    draw2.text((page_size[0] - 340 * scale, 55 * scale), f"Mã Báo Cáo: {report_id}", font=font_small, fill=SLATE_800)
+    draw2.line((60 * scale, 100 * scale, page_size[0] - 60 * scale, 100 * scale), fill=SLATE_100, width=2 * scale)
 
-    draw2.text((60, 150), "Overlay Review", font=font_h2, fill=TEXT)
-    _draw_image_card(page2, "Overlay / Masked ROI", overlay_image, (60, 190, 1180, 760), font_label, font_small)
+    draw2.text((60 * scale, 130 * scale), "Ảnh Lồng Ghép Phân Đoạn", font=font_h2, fill=TEAL)
+    _draw_image_card(page2, "Overlay / Masked ROI", overlay_image, (60 * scale, 170 * scale, 1180 * scale, 740 * scale), font_label, font_small, scale=scale)
 
-    draw2.text((60, 810), "Technical Model Details", font=font_h2, fill=TEXT)
-    tech_box = (60, 850, 1180, 1260)
-    draw2.rounded_rectangle(tech_box, radius=18, fill=LIGHT_GRAY, outline=BORDER, width=2)
+    draw2.text((60 * scale, 780 * scale), "Thông Số Kỹ Thuật (Model Details)", font=font_h2, fill=TEAL)
+    tech_box = (60 * scale, 820 * scale, 1180 * scale, 1150 * scale)
+    draw2.rounded_rectangle(tech_box, radius=12 * scale, fill=WHITE, outline=SLATE_100, width=2 * scale)
     tech_rows = [
-        ("Bounding box coordinates", str(bbox) if bbox else "N/A"),
-        ("Bounding box confidence", detection_display),
-        ("Class probabilities", ", ".join(f"{value * 100:.2f}%" for value in (class_probabilities or [])) or "N/A"),
-        ("Predicted label", predicted_display),
-        ("Segmentation available", "Yes" if not no_tumor_detected and mask_image is not None else "No"),
-        ("Multimodal fusion status", "Available" if multimodal_available else "Not available"),
+        ("Tọa độ Bounding Box", str(bbox) if bbox else "N/A"),
+        ("Độ tin cậy Bbox", _format_percent(bbox_confidence)),
+        ("Xác suất các nhóm", ", ".join(f"{value * 100:.2f}%" for value in (class_probabilities or [])) or "N/A"),
+        ("Nhãn dự đoán", predicted_display),
+        ("Ảnh phân đoạn (Mask)", "Có" if not no_tumor_detected and mask_image is not None else "Không"),
+        ("Tích hợp đa mô thức", "Sẵn sàng" if multimodal_available else "Chưa có"),
     ]
-    y = 885
+    y = 850 * scale
     for label, value in tech_rows:
-        draw2.text((90, y), label, font=font_small, fill=TEXT_MUTED)
-        _draw_wrapped_text(draw2, value, (440, y), font_small, TEXT, max_width=680, line_spacing=4)
-        draw2.line((90, y + 42, 1150, y + 42), fill=BORDER, width=1)
-        y += 60
+        draw2.text((90 * scale, y), label, font=font_small, fill=SLATE_500)
+        _draw_wrapped_text(draw2, value, (440 * scale, y), font_small, SLATE_800, max_width=680 * scale, line_spacing=4 * scale)
+        draw2.line((90 * scale, y + 35 * scale, 1150 * scale, y + 35 * scale), fill=SLATE_100, width=1 * scale)
+        y += 50 * scale
 
-    draw2.text((60, 1320), "Disclaimer", font=font_h2, fill=TEXT)
-    disclaimer_box = (60, 1360, 1180, 1630)
-    draw2.rounded_rectangle(disclaimer_box, radius=18, fill=(252, 248, 247), outline=(230, 214, 210), width=2)
+    draw2.text((60 * scale, 1200 * scale), "Khuyến Cáo Y Tế", font=font_h2, fill=RED_500)
+    disclaimer_box = (60 * scale, 1240 * scale, 1180 * scale, 1400 * scale)
+    draw2.rounded_rectangle(disclaimer_box, radius=12 * scale, fill=(254, 242, 242), outline=(252, 165, 165), width=2 * scale)
     disclaimer_lines = [
-        "This AI-generated report is intended for decision support only and must not replace clinical judgment or radiologist interpretation.",
-        "Final diagnosis should be made by a qualified physician.",
+        "Báo cáo này được tự động tạo ra bởi trí tuệ nhân tạo (AI) nhằm mục đích hỗ trợ quyết định lâm sàng.",
+        "Kết quả dự đoán KHÔNG thay thế cho chẩn đoán y khoa của bác sĩ chuyên khoa. Mọi quyết định",
+        "điều trị phải dựa trên đánh giá toàn diện của bác sĩ điều trị và kết quả xét nghiệm liên quan.",
     ]
-    current_y = 1405
+    current_y = 1270 * scale
     for line in disclaimer_lines:
-        current_y = _draw_wrapped_text(draw2, line, (90, current_y), font_body, TEXT, max_width=1040, line_spacing=8)
-        current_y += 10
+        current_y = _draw_wrapped_text(draw2, line, (90 * scale, current_y), font_body, SLATE_900, max_width=1040 * scale, line_spacing=8 * scale)
+        current_y += 10 * scale
 
     # ── Page 3: Multimodal Prognosis ──────────────────────────
     all_pages = [page2]
 
     if multimodal_available and risk_score is not None:
-        page3 = Image.new("RGB", page_size, "white")
+        page3 = Image.new("RGB", page_size, WHITE)
         draw3 = ImageDraw.Draw(page3)
-        font_big_number = _load_font(52, bold=True)
+        font_big_number = _load_font(52 * scale, bold=True)
 
-        draw3.rectangle((0, 0, page_size[0], 110), fill=NAVY)
-        draw3.text((60, 38), "Multimodal Prognosis Analysis", font=font_h1, fill="white")
-        draw3.text((page_size[0] - 260, 44), f"Report ID: {report_id}", font=font_small, fill=(220, 232, 240))
+        # ── Page 3 Header ──
+        draw3.rectangle((0, 0, page_size[0], 20 * scale), fill=TEAL)
+        draw3.text((60 * scale, 50 * scale), "Phân Tích Tiên Lượng Đa Mô Thức", font=font_title, fill=TEAL)
+        draw3.text((page_size[0] - 340 * scale, 55 * scale), f"Mã Báo Cáo: {report_id}", font=font_small, fill=SLATE_800)
+        draw3.line((60 * scale, 100 * scale, page_size[0] - 60 * scale, 100 * scale), fill=SLATE_100, width=2 * scale)
 
         # ── Risk Score + Risk Group cards ──
-        draw3.text((60, 150), "Prognosis Summary", font=font_h2, fill=TEXT)
+        draw3.text((60 * scale, 130 * scale), "3. Chỉ Số Rủi Ro Tiên Lượng", font=font_h2, fill=TEAL)
 
         # Risk Score card
-        rs_box = (60, 195, 600, 420)
-        draw3.rounded_rectangle(rs_box, radius=18, fill=LIGHT_GRAY, outline=BORDER, width=2)
-        draw3.text((90, 215), "Risk Score", font=font_small, fill=TEXT_MUTED)
+        rs_box = (60 * scale, 170 * scale, 600 * scale, 395 * scale)
+        draw3.rounded_rectangle(rs_box, radius=12 * scale, fill=WHITE, outline=SLATE_100, width=2 * scale)
+        draw3.text((90 * scale, 190 * scale), "Chỉ số rủi ro (Risk Score)", font=font_small, fill=SLATE_500)
         rs_display = f"{risk_score:.4f}"
-        draw3.text((90, 250), rs_display, font=font_big_number, fill=TEXT)
+        draw3.text((90 * scale, 225 * scale), rs_display, font=font_big_number, fill=SLATE_800)
 
         # Risk level bar
-        bar_x, bar_y, bar_w, bar_h = 90, 330, 480, 22
-        draw3.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=8, fill=(220, 226, 230))
+        bar_x, bar_y, bar_w, bar_h = 90 * scale, 305 * scale, 480 * scale, 22 * scale
+        draw3.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=8 * scale, fill=SLATE_100)
         normalized_risk = max(0.0, min(1.0, (risk_score + 2) / 4))  # map [-2, 2] -> [0, 1]
         fill_w = int(bar_w * normalized_risk)
         if fill_w > 0:
-            bar_color = (177, 58, 58) if normalized_risk > 0.6 else (185, 117, 45) if normalized_risk > 0.3 else (38, 120, 133)
-            draw3.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=8, fill=bar_color)
-        draw3.text((90, 362), "Low", font=font_small, fill=(38, 120, 133))
-        draw3.text((bar_x + bar_w // 2 - 25, 362), "Medium", font=font_small, fill=(185, 117, 45))
-        draw3.text((bar_x + bar_w - 30, 362), "High", font=font_small, fill=(177, 58, 58))
+            bar_color = RED_500 if normalized_risk > 0.6 else (245, 158, 11) if normalized_risk > 0.3 else TEAL
+            draw3.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=8 * scale, fill=bar_color)
+        draw3.text((90 * scale, 337 * scale), "Thấp", font=font_small, fill=TEAL)
+        draw3.text((bar_x + bar_w // 2 - 25 * scale, 337 * scale), "Trung bình", font=font_small, fill=(245, 158, 11))
+        draw3.text((bar_x + bar_w - 40 * scale, 337 * scale), "Cao", font=font_small, fill=RED_500)
 
         # Risk Group card
-        rg_box = (640, 195, 1180, 420)
-        draw3.rounded_rectangle(rg_box, radius=18, fill=LIGHT_GRAY, outline=BORDER, width=2)
-        draw3.text((670, 215), "Risk Group", font=font_small, fill=TEXT_MUTED)
+        rg_box = (640 * scale, 170 * scale, 1180 * scale, 395 * scale)
+        draw3.rounded_rectangle(rg_box, radius=12 * scale, fill=WHITE, outline=SLATE_100, width=2 * scale)
+        draw3.text((670 * scale, 190 * scale), "Nhóm rủi ro (Risk Group)", font=font_small, fill=SLATE_500)
         rg_display = risk_group or "N/A"
-        rg_color = (177, 58, 58) if rg_display == "High" else (185, 117, 45) if rg_display == "Medium" else (38, 120, 133)
-        draw3.text((670, 250), rg_display, font=font_big_number, fill=rg_color)
+        rg_color = RED_500 if rg_display == "High" else (245, 158, 11) if rg_display == "Medium" else TEAL
+        draw3.text((670 * scale, 225 * scale), rg_display, font=font_big_number, fill=rg_color)
 
         # Data source indicators
-        draw3.text((670, 330), "Data sources used:", font=font_small, fill=TEXT_MUTED)
-        draw3.text((670, 355), "MRI imaging  [provided]", font=font_label, fill=(38, 120, 133))
-        draw3.text((670, 380), "RNA-seq / Clinical  [if available]", font=font_small, fill=TEXT_MUTED)
+        draw3.text((670 * scale, 305 * scale), "Dữ liệu được sử dụng:", font=font_small, fill=SLATE_500)
+        draw3.text((670 * scale, 330 * scale), "Hình ảnh MRI", font=font_label, fill=TEAL)
+        draw3.text((670 * scale, 355 * scale), "Dữ liệu RNA-seq / Lâm sàng", font=font_small, fill=SLATE_500)
 
-        # ── Grad-CAM Heatmap + Attention Weights ──
-        current_y3 = 440
-        if heatmap_image is not None or (fusion_attention and len(fusion_attention) > 0):
-            draw3.text((60, current_y3), "Explainability (XAI)", font=font_h2, fill=TEXT)
-            current_y3 += 40
+        # ── Grad-CAM Heatmaps Grid ──
+        current_y3 = 430 * scale
+        draw3.text((60 * scale, current_y3), "4. Giải thích Hình ảnh XAI (Heatmaps)", font=font_h2, fill=TEAL)
+        current_y3 += 50 * scale
+        
+        hm_h = 420 * scale
+        hm_w = 340 * scale
+        # Better spacing: 60 margin, 50 gap -> 60, 450, 840
+        _draw_image_card(page3, "Grad-CAM", heatmap_image, (60 * scale, current_y3, 400 * scale, current_y3 + hm_h), font_label, font_small, scale=scale)
+        _draw_image_card(page3, "Grad-CAM++", gradcam_plus_image, (450 * scale, current_y3, 790 * scale, current_y3 + hm_h), font_label, font_small, scale=scale)
+        _draw_image_card(page3, "Layer-CAM", layercam_image, (840 * scale, current_y3, 1180 * scale, current_y3 + hm_h), font_label, font_small, scale=scale)
+        
+        current_y3 += hm_h + 40 * scale
 
-            if heatmap_image is not None:
-                hm_box = (60, current_y3, 580, current_y3 + 420)
-                _draw_image_card(page3, "Grad-CAM Heatmap (ROI)", heatmap_image, hm_box, font_label, font_small)
+        # ── Attention Weights & Explanation ──
+        if fusion_attention and len(fusion_attention) >= 4:
+            attn_x = 60 * scale # Default left
+            attn_box = (attn_x, current_y3, 1180 * scale, current_y3 + 750 * scale)
+            draw3.rounded_rectangle(attn_box, radius=12 * scale, fill=WHITE, outline=SLATE_100, width=2 * scale)
+            draw3.text((attn_box[0] + 30 * scale, current_y3 + 25 * scale), "Trọng số Attention Đa mô thức", font=font_label, fill=SLATE_900)
+            draw3.text((attn_box[0] + 30 * scale, current_y3 + 55 * scale), "Mức độ đóng góp của từng loại dữ liệu vào dự đoán", font=font_small, fill=SLATE_500)
 
-            if fusion_attention and len(fusion_attention) >= 4:
-                attn_x = 620 if heatmap_image is not None else 60
-                attn_box = (attn_x, current_y3, 1180, current_y3 + 420)
-                draw3.rounded_rectangle(attn_box, radius=18, fill=LIGHT_GRAY, outline=BORDER, width=2)
-                draw3.text((attn_x + 30, current_y3 + 15), "Fusion Attention Weights", font=font_label, fill=TEXT)
-                draw3.text((attn_x + 30, current_y3 + 40), "How much each modality contributes to the prediction", font=font_small, fill=TEXT_MUTED)
+            labels = ["MRI", "WSI (Giải phẫu bệnh)", "RNA-seq", "Lâm sàng"]
+            colors = [TEAL, SLATE_500, (245, 158, 11), (139, 92, 246)]
+            bar_max_w = (attn_box[2] - attn_box[0]) - 320 * scale
+            by = current_y3 + 100 * scale
+            max_attn = max(fusion_attention[:4]) if max(fusion_attention[:4]) > 0 else 1.0
+            
+            for i, (lbl, clr) in enumerate(zip(labels, colors)):
+                val = fusion_attention[i] if i < len(fusion_attention) else 0.0
+                draw3.text((attn_box[0] + 30 * scale, by), lbl, font=font_label, fill=SLATE_800)
+                bar_bg = (attn_box[0] + 250 * scale, by + 2 * scale, attn_box[0] + 250 * scale + bar_max_w, by + 22 * scale)
+                draw3.rounded_rectangle(bar_bg, radius=6 * scale, fill=SLATE_100)
+                fill_bar_w = int(bar_max_w * (val / max_attn))
+                if fill_bar_w > 0:
+                    draw3.rounded_rectangle((attn_box[0] + 250 * scale, by + 2 * scale, attn_box[0] + 250 * scale + fill_bar_w, by + 22 * scale), radius=6 * scale, fill=clr)
+                pct_text = f"{val * 100:.1f}%"
+                draw3.text((attn_box[0] + 260 * scale + bar_max_w, by + 2 * scale), pct_text, font=font_small, fill=SLATE_800)
+                by += 60 * scale  # Increased gap to prevent overlap
+            
+            if xai_explanation:
+                by += 20 * scale
+                draw3.text((attn_box[0] + 30 * scale, by), "Giải thích lâm sàng:", font=font_label, fill=SLATE_900)
+                by += 35 * scale
+                by = _draw_wrapped_text(draw3, xai_explanation, (attn_box[0] + 30 * scale, by), font_small, SLATE_500, max_width=1040 * scale, line_spacing=6 * scale)
 
-                labels = ["MRI", "WSI", "RNA", "Clinical"]
-                colors = [(38, 120, 133), (100, 116, 139), (185, 117, 45), (120, 80, 160)]
-                bar_max_w = attn_box[2] - attn_box[0] - 140
-                by = current_y3 + 80
-                max_attn = max(fusion_attention[:4]) if max(fusion_attention[:4]) > 0 else 1.0
-                for i, (lbl, clr) in enumerate(zip(labels, colors)):
-                    val = fusion_attention[i] if i < len(fusion_attention) else 0.0
-                    draw3.text((attn_x + 30, by), lbl, font=font_label, fill=TEXT)
-                    bar_bg = (attn_x + 110, by + 2, attn_x + 110 + bar_max_w, by + 22)
-                    draw3.rounded_rectangle(bar_bg, radius=6, fill=(220, 226, 230))
-                    fill_bar_w = int(bar_max_w * (val / max_attn))
-                    if fill_bar_w > 0:
-                        draw3.rounded_rectangle((attn_x + 110, by + 2, attn_x + 110 + fill_bar_w, by + 22), radius=6, fill=clr)
-                    pct_text = f"{val * 100:.1f}%"
-                    draw3.text((attn_x + 115 + bar_max_w, by + 2), pct_text, font=font_small, fill=TEXT)
-                    by += 50
-                
-                if xai_explanation:
-                    by += 10
-                    draw3.text((attn_x + 30, by), "Clinical Interpretation:", font=font_label, fill=TEXT)
-                    by += 25
-                    by = _draw_wrapped_text(draw3, xai_explanation, (attn_x + 30, by), font_small, TEXT_MUTED, max_width=480, line_spacing=4)
-
-            current_y3 += 450
-        else:
-            current_y3 = 440
-
+            current_y3 = by + 60 * scale
+        
         # ── Survival Curve chart ──
-        # If XAI section pushed us too far down, create a new page
-        if current_y3 > 600:
+        # Check if enough space for chart (~600 units). If not, move to page 4
+        if current_y3 > 1100 * scale:
             all_pages.append(page3)
-            page3 = Image.new("RGB", page_size, "white")
+            page3 = Image.new("RGB", page_size, WHITE)
             draw3 = ImageDraw.Draw(page3)
-            draw3.rectangle((0, 0, page_size[0], 110), fill=NAVY)
-            draw3.text((60, 38), "Multimodal Prognosis - Survival Analysis", font=font_h1, fill="white")
-            draw3.text((page_size[0] - 260, 44), f"Report ID: {report_id}", font=font_small, fill=(220, 232, 240))
-            current_y3 = 140
+            draw3.rectangle((0, 0, page_size[0], 20 * scale), fill=TEAL)
+            draw3.text((60 * scale, 50 * scale), "Phân Tích Tiên Lượng (Tiếp)", font=font_title, fill=TEAL)
+            draw3.text((page_size[0] - 340 * scale, 55 * scale), f"Mã Báo Cáo: {report_id}", font=font_small, fill=SLATE_800)
+            draw3.line((60 * scale, 100 * scale, page_size[0] - 60 * scale, 100 * scale), fill=SLATE_100, width=2 * scale)
+            current_y3 = 130 * scale
 
-        sc_y = current_y3 + 10
-        draw3.text((60, sc_y), "Predicted Survival Curve (Kaplan-Meier)", font=font_h2, fill=TEXT)
-        sc_y += 40
-        chart_height = 500
-        chart_box = (60, sc_y, 1180, sc_y + chart_height)
-        draw3.rounded_rectangle(chart_box, radius=18, fill=(250, 251, 252), outline=BORDER, width=2)
+        sc_y = current_y3 + 10 * scale
+        draw3.text((60 * scale, sc_y), "Biểu đồ sinh tồn dự đoán (Kaplan-Meier)", font=font_h2, fill=TEAL)
+        sc_y += 40 * scale
+        chart_height = 500 * scale
+        chart_box = (60 * scale, sc_y, 1180 * scale, sc_y + chart_height)
+        draw3.rounded_rectangle(chart_box, radius=12 * scale, fill=WHITE, outline=SLATE_100, width=2 * scale)
 
         if survival_curve_data and len(survival_curve_data) > 1:
-            chart_left = 130
-            chart_top = sc_y + 50
-            chart_right = 1140
-            chart_bottom = sc_y + chart_height - 40
+            chart_left = 130 * scale
+            chart_top = sc_y + 50 * scale
+            chart_right = 1140 * scale
+            chart_bottom = sc_y + chart_height - 40 * scale
             chart_w = chart_right - chart_left
             chart_h = chart_bottom - chart_top
 
             # Axes
-            draw3.line((chart_left, chart_bottom, chart_right, chart_bottom), fill=BORDER, width=2)
-            draw3.line((chart_left, chart_top, chart_left, chart_bottom), fill=BORDER, width=2)
+            draw3.line((chart_left, chart_bottom, chart_right, chart_bottom), fill=SLATE_800, width=2 * scale)
+            draw3.line((chart_left, chart_top, chart_left, chart_bottom), fill=SLATE_800, width=2 * scale)
 
             # Grid lines
             for i in range(1, 5):
                 gy = chart_bottom - int(chart_h * i / 4)
-                draw3.line((chart_left, gy, chart_right, gy), fill=(235, 238, 240), width=1)
-                draw3.text((chart_left - 50, gy - 8), f"{i * 25}%", font=font_small, fill=TEXT_MUTED)
-            draw3.text((chart_left - 35, chart_bottom - 8), "0%", font=font_small, fill=TEXT_MUTED)
+                draw3.line((chart_left, gy, chart_right, gy), fill=SLATE_100, width=1 * scale)
+                draw3.text((chart_left - 50 * scale, gy - 8 * scale), f"{i * 25}%", font=font_small, fill=SLATE_500)
+            draw3.text((chart_left - 35 * scale, chart_bottom - 8 * scale), "0%", font=font_small, fill=SLATE_500)
 
             # Axis labels
-            draw3.text((chart_left + chart_w // 2 - 30, chart_bottom + 20), "Time (months)", font=font_small, fill=TEXT_MUTED)
+            draw3.text((chart_left + chart_w // 2 - 30 * scale, chart_bottom + 20 * scale), "Thời gian (Tháng)", font=font_small, fill=SLATE_500)
 
             # Plot data
             times = [pt.get("time", 0) for pt in survival_curve_data]
@@ -663,7 +686,7 @@ def _build_professional_report_pdf(
             for i in range(tick_count + 1):
                 t_val = max_time * i / tick_count
                 tx = chart_left + int(chart_w * i / tick_count)
-                draw3.text((tx - 10, chart_bottom + 4), f"{t_val:.0f}", font=font_small, fill=TEXT_MUTED)
+                draw3.text((tx - 10 * scale, chart_bottom + 4 * scale), f"{t_val:.0f}", font=font_small, fill=SLATE_500)
 
             # Step line + fill
             points_for_fill = []
@@ -672,8 +695,8 @@ def _build_professional_report_pdf(
                 x = chart_left + int(chart_w * t / max_time) if max_time > 0 else chart_left
                 y = chart_bottom - int(chart_h * p)
                 if prev_x is not None and prev_y is not None:
-                    draw3.line((prev_x, prev_y, x, prev_y), fill=TEAL, width=3)
-                    draw3.line((x, prev_y, x, y), fill=TEAL, width=3)
+                    draw3.line((prev_x, prev_y, x, prev_y), fill=TEAL, width=3 * scale)
+                    draw3.line((x, prev_y, x, y), fill=TEAL, width=3 * scale)
                     points_for_fill.append((x, prev_y))
                 else:
                     points_for_fill.append((x, y))
@@ -685,7 +708,7 @@ def _build_professional_report_pdf(
                 try:
                     fill_overlay = Image.new("RGBA", page_size, (0, 0, 0, 0))
                     fill_draw = ImageDraw.Draw(fill_overlay)
-                    fill_draw.polygon(fill_polygon, fill=(38, 120, 133, 40))
+                    fill_draw.polygon(fill_polygon, fill=(13, 148, 136, 40))
                     page3 = Image.alpha_composite(page3.convert("RGBA"), fill_overlay).convert("RGB")
                     draw3 = ImageDraw.Draw(page3)
                 except Exception:
@@ -694,41 +717,20 @@ def _build_professional_report_pdf(
             for t, p in zip(times, probs):
                 x = chart_left + int(chart_w * t / max_time) if max_time > 0 else chart_left
                 y = chart_bottom - int(chart_h * p)
-                draw3.ellipse((x - 4, y - 4, x + 4, y + 4), fill=TEAL, outline="white", width=1)
+                draw3.ellipse((x - 4 * scale, y - 4 * scale, x + 4 * scale, y + 4 * scale), fill=TEAL, outline="white", width=2 * scale)
         else:
-            draw3.text((400, sc_y + chart_height // 2), "No survival curve data available", font=font_body, fill=TEXT_MUTED)
+            draw3.text((400 * scale, sc_y + chart_height // 2), "Chưa có dữ liệu sinh tồn", font=font_small, fill=SLATE_500)
 
-        sc_end = sc_y + chart_height + 30
-
-        # ── Methodology note ──
-        draw3.text((60, sc_end), "Methodology", font=font_h2, fill=TEXT)
-        method_box = (60, sc_end + 40, 1180, sc_end + 260)
-        draw3.rounded_rectangle(method_box, radius=18, fill=LIGHT_GRAY, outline=BORDER, width=2)
-        method_lines = [
-            "Risk prediction uses SurvivalNet, an Attention-based Multi-Modal Fusion model",
-            "combining MRI imaging features, RNA-seq gene expression, and clinical biomarkers.",
-            "Missing modalities are handled via learned attention masking.",
-            "Survival probabilities are estimated using the Cox proportional hazards framework.",
-        ]
-        my = sc_end + 70
-        for ml in method_lines:
-            my = _draw_wrapped_text(draw3, ml, (90, my), font_small, TEXT, max_width=1060, line_spacing=6)
-            my += 4
-
-        # Disclaimer
-        disc_start = sc_end + 290
-        draw3.text((60, disc_start), "Disclaimer", font=font_h2, fill=TEXT)
-        disc3_box = (60, disc_start + 40, 1180, disc_start + 220)
-        draw3.rounded_rectangle(disc3_box, radius=18, fill=(252, 248, 247), outline=(230, 214, 210), width=2)
-        disc3_y = disc_start + 70
-        for line in disclaimer_lines:
-            disc3_y = _draw_wrapped_text(draw3, line, (90, disc3_y), font_body, TEXT, max_width=1040, line_spacing=8)
-            disc3_y += 10
-
+        # ── Medical Disclaimer at the absolute bottom ──
+        # This will be drawn on the current page (either Page 3 or Page 4)
+        disc3_y = page_size[1] - 250 * scale
+        draw3.text((60 * scale, disc3_y), "Khuyến Cáo Y Tế & Tiên Lượng", font=font_h2, fill=RED_500)
+        draw3.rounded_rectangle((60 * scale, disc3_y + 40 * scale, 1180 * scale, disc3_y + 220 * scale), radius=12 * scale, fill=(254, 242, 242), outline=(252, 165, 165), width=2 * scale)
+        _draw_wrapped_text(draw3, "Dự báo tiên lượng và biểu đồ sinh tồn dựa trên các yếu tố sinh học và dữ liệu thống kê. Kết quả mang tính chất tham khảo cho việc lập kế hoạch điều trị và không phải là cam kết chắc chắn về thời gian sống còn của bệnh nhân. Báo cáo này được tự động tạo ra bởi trí tuệ nhân tạo (AI) nhằm mục đích hỗ trợ quyết định lâm sàng. Kết quả dự đoán KHÔNG thay thế cho chẩn đoán y khoa của bác sĩ chuyên khoa. Mọi quyết định điều trị phải dựa trên đánh giá toàn diện của bác sĩ điều trị và kết quả xét nghiệm liên quan.", (90 * scale, disc3_y + 65 * scale), font_body, SLATE_900, max_width=1040 * scale, line_spacing=6 * scale)
         all_pages.append(page3)
 
     buffer = BytesIO()
-    page1.save(buffer, format="PDF", save_all=True, append_images=all_pages, resolution=150)
+    page1.save(buffer, format="PDF", save_all=True, append_images=all_pages, resolution=300)
     return buffer.getvalue()
 
 
@@ -871,40 +873,57 @@ def download_image_report(
     processing_date = (
         latest_task.updated_at.strftime("%Y-%m-%d %H:%M") if latest_task and latest_task.updated_at else "N/A"
     )
-    pdf_bytes = _build_professional_report_pdf(
-        report_id=report_id,
-        patient_code=patient_code,
-        image_id=image_id,
-        status=(latest_task.status if latest_task else "done"),
-        processing_date=processing_date,
-        tumor_label=tumor_label,
-        classification_confidence=classification_confidence,
-        bbox_confidence=result_payload.get("bbox_confidence"),
-        bbox=result_payload.get("bbox"),
-        class_probabilities=result_payload.get("class_probabilities"),
-        no_tumor_detected=no_tumor_detected,
-        multimodal_available=bool(analysis and analysis.risk_score is not None),
-        original_image=_load_image_for_report(minio_file_path=image.file_path, local_path=result_payload.get("original_image_path")),
-        bbox_image=_bgr_path_to_pil(result_payload.get("bbox_image_path")),
-        cropped_roi_image=_bgr_path_to_pil(result_payload.get("cropped_roi_path")),
-        mask_image=_bgr_path_to_pil(result_payload.get("seg_mask_path")),
-        overlay_image=_bgr_path_to_pil(result_payload.get("mask_overlay_path"))
-        or _bgr_path_to_pil(result_payload.get("masked_roi_path")),
-        risk_score=analysis.risk_score if analysis else None,
-        risk_group=analysis.risk_group if analysis else None,
-        survival_curve_data=analysis.survival_curve_data if analysis else None,
-        heatmap_image=_bgr_path_to_pil(result_payload.get("gradcam_heatmap_path")),
-        gradcam_plus_image=_bgr_path_to_pil(result_payload.get("gradcam_plus_heatmap_path")),
-        layercam_image=_bgr_path_to_pil(result_payload.get("layercam_heatmap_path")),
-        xai_explanation=result_payload.get("xai_explanation"),
-        fusion_attention=result_payload.get("fusion_attention"),
-    )
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="mri_report_{image_id}.pdf"'},
-    )
+    
+    try:
+        pdf_bytes = _build_professional_report_pdf(
+            report_id=report_id,
+            patient_code=patient_code,
+            image_id=image_id,
+            status=(latest_task.status if latest_task else "done"),
+            processing_date=processing_date,
+            tumor_label=tumor_label,
+            classification_confidence=classification_confidence,
+            bbox_confidence=result_payload.get("bbox_confidence"),
+            bbox=result_payload.get("bbox"),
+            class_probabilities=result_payload.get("class_probabilities"),
+            no_tumor_detected=no_tumor_detected,
+            multimodal_available=bool(analysis and analysis.risk_score is not None),
+            original_image=_load_image_for_report(minio_file_path=image.file_path, local_path=result_payload.get("original_image_path")),
+            bbox_image=_load_image_for_report(local_path=result_payload.get("bbox_image_path")),
+            cropped_roi_image=_load_image_for_report(local_path=result_payload.get("cropped_roi_path")),
+            mask_image=_load_image_for_report(local_path=result_payload.get("seg_mask_path")),
+            overlay_image=_load_image_for_report(local_path=result_payload.get("mask_overlay_path"))
+            or _load_image_for_report(local_path=result_payload.get("masked_roi_path")),
+            risk_score=analysis.risk_score if analysis else None,
+            risk_group=analysis.risk_group if analysis else None,
+            survival_curve_data=analysis.survival_curve_data if analysis else None,
+            heatmap_image=_bgr_path_to_pil(result_payload.get("gradcam_heatmap_path")),
+            gradcam_plus_image=_bgr_path_to_pil(result_payload.get("gradcam_plus_heatmap_path")),
+            layercam_image=_bgr_path_to_pil(result_payload.get("layercam_heatmap_path")),
+            xai_explanation=result_payload.get("xai_explanation"),
+            fusion_attention=result_payload.get("fusion_attention"),
+        )
+        import urllib.parse
+        p_name = patient.name or "BenhNhan"
+        p_id = patient_code
+        current_date = datetime.datetime.now().strftime("%d-%m-%Y")
+        filename = f"{p_id}_{p_name}_{current_date}.pdf"
+        encoded_filename = urllib.parse.quote(filename)
 
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
+        )
+    except Exception as e:
+        import traceback
+        error_msg = traceback.format_exc()
+        try:
+            with open("pdf_error.log", "w") as f:
+                f.write(error_msg)
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Lỗi tạo báo cáo PDF: {str(e)}")
 
 @router.get("/records/analysis/{image_id}/xai-overlay", response_model=schemas.XAIOverlayResponse)
 def get_xai_overlay(

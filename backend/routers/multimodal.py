@@ -45,28 +45,41 @@ async def upload_rna(
         separator = "\t" if extension == "tsv" else ","
         # Chỉ đọc header để tránh tốn RAM khi file lớn
         header_df = pd.read_csv(io.BytesIO(file_bytes), sep=separator, nrows=0)
+        
+        has_header = REQUIRED_RNA_COLUMN in header_df.columns
+        
+        if not has_header:
+            # Nếu không thấy cột patient_id trong header, thử kiểm tra dòng đầu tiên (không header)
+            test_df = pd.read_csv(io.BytesIO(file_bytes), sep=separator, nrows=1, header=None)
+            if not test_df.empty and str(test_df.iloc[0, 0]) == patient_id:
+                # File không có header nhưng dòng 1, cột 1 khớp với patient_id
+                file_patient_ids = [str(test_df.iloc[0, 0])]
+                num_genes = test_df.shape[1] - 1
+            else:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"File thiếu cột bắt buộc '{REQUIRED_RNA_COLUMN}'. "
+                           f"Các cột hiện có: {list(header_df.columns[:10])}. "
+                           f"Nếu file không có header, cột đầu tiên phải chứa patient_id={patient_id}.",
+                )
+        else:
+            # --- BƯỚC 3: Xác minh patient_id khớp với DB (trường hợp có header) ---
+            data_df = pd.read_csv(io.BytesIO(file_bytes), sep=separator, usecols=[REQUIRED_RNA_COLUMN])
+            file_patient_ids = data_df[REQUIRED_RNA_COLUMN].astype(str).unique().tolist()
+            num_genes = header_df.shape[1] - 1
+
+    except HTTPException:
+        raise
     except Exception as parse_err:
         raise HTTPException(
             status_code=422,
             detail=f"Không thể đọc file. Đảm bảo file đúng định dạng {extension.upper()}. Chi tiết: {parse_err}",
         )
 
-    if REQUIRED_RNA_COLUMN not in header_df.columns:
-        raise HTTPException(
-            status_code=422,
-            detail=f"File thiếu cột bắt buộc '{REQUIRED_RNA_COLUMN}'. "
-                   f"Các cột hiện có: {list(header_df.columns[:10])}",
-        )
-
-    # --- BƯỚC 3: Xác minh patient_id khớp với DB ---
-    # Đọc giá trị patient_id từ dòng đầu tiên dữ liệu
-    data_df = pd.read_csv(io.BytesIO(file_bytes), sep=separator, usecols=[REQUIRED_RNA_COLUMN])
-    file_patient_ids = data_df[REQUIRED_RNA_COLUMN].unique().tolist()
-
     if patient_id not in file_patient_ids:
         raise HTTPException(
             status_code=422,
-            detail=f"patient_id={patient_id} không tồn tại trong cột '{REQUIRED_RNA_COLUMN}' của file. "
+            detail=f"patient_id={patient_id} không tồn tại trong file. "
                    f"Các ID tìm thấy trong file: {file_patient_ids[:5]}",
         )
 
@@ -137,6 +150,14 @@ def update_clinical_data(
         clinical.biochemistry_markers = payload.biochemistry_markers
     if payload.initial_status is not None:
         clinical.initial_status = payload.initial_status
+    if payload.grade is not None:
+        clinical.grade = payload.grade
+    if payload.prior_treatment is not None:
+        clinical.prior_treatment = payload.prior_treatment
+    if payload.idh_mutation is not None:
+        clinical.idh_mutation = payload.idh_mutation
+    if payload.mgmt_methylation is not None:
+        clinical.mgmt_methylation = payload.mgmt_methylation
 
     db.commit()
     db.refresh(clinical)

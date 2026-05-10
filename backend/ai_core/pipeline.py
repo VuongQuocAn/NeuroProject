@@ -156,17 +156,20 @@ class TumorAnalysisPipeline:
                 roi_resized = cv2.resize(base_img, (224, 224))
 
                 cam_paths = {}
-                for method in ["gradcam", "gradcam++", "layercam"]:
-                    heatmap = explainer.generate_heatmap(
-                        mri_tensor, wsi_dummy, rna_tensor, clinical_tensor, masks, method=method
-                    )
-                    heatmap_colored = cv2.applyColorMap(
-                        np.uint8(255 * heatmap), cv2.COLORMAP_JET,
-                    )
-                    overlay = cv2.addWeighted(roi_resized, 0.6, heatmap_colored, 0.4, 0)
-                    h_path = os.path.join(output_dir, f"step7_{method}_heatmap.png")
-                    cv2.imwrite(h_path, overlay)
-                    cam_paths[method] = h_path
+                try:
+                    for method in ["gradcam", "gradcam++", "layercam"]:
+                        heatmap = explainer.generate_heatmap(
+                            mri_tensor, wsi_dummy, rna_tensor, clinical_tensor, masks, method=method
+                        )
+                        heatmap_colored = cv2.applyColorMap(
+                            np.uint8(255 * heatmap), cv2.COLORMAP_JET,
+                        )
+                        overlay = cv2.addWeighted(roi_resized, 0.6, heatmap_colored, 0.4, 0)
+                        h_path = os.path.join(output_dir, f"step7_{method}_heatmap.png")
+                        cv2.imwrite(h_path, overlay)
+                        cam_paths[method] = h_path
+                finally:
+                    explainer.remove_hooks()
 
                 result_dict["gradcam_heatmap_path"] = cam_paths["gradcam"] # Default
                 result_dict["gradcam_plus_heatmap_path"] = cam_paths["gradcam++"]
@@ -528,6 +531,37 @@ class TumorAnalysisPipeline:
             clinical_vec[0, idx] = float(value)
 
         if class_probs:
+            has_clinical = 1.0
+
+        # --- Mapping real clinical fields from user data ---
+        # Age
+        age = clinical_data.get("age")
+        if age is not None:
+            clinical_vec[0, 12] = float(age) / 100.0 # Normalize 0-1
+            has_clinical = 1.0
+            
+        # Gender (1 for male, 0 for female/other)
+        gender = clinical_data.get("gender")
+        if gender is not None:
+            clinical_vec[0, 13] = 1.0 if str(gender).lower() in ["1", "1.0", "male"] else 0.0
+            has_clinical = 1.0
+            
+        # Grade (e.g., 2, 3, 4)
+        grade = clinical_data.get("grade")
+        if grade and str(grade).isdigit():
+            clinical_vec[0, 14] = float(grade) / 4.0
+            has_clinical = 1.0
+
+        # Prior Treatment (0/1)
+        prior = clinical_data.get("prior_treatment")
+        if prior is not None:
+            clinical_vec[0, 15] = 1.0 if str(prior) in ["1", "1.0", "yes"] else 0.0
+            has_clinical = 1.0
+            
+        # Pharmaceutical Therapy (0/1)
+        pharma = clinical_data.get("pharmaceutical_therapy")
+        if pharma is not None:
+            clinical_vec[0, 16] = 1.0 if str(pharma) in ["1", "1.0", "yes"] else 0.0
             has_clinical = 1.0
 
         return clinical_vec, has_clinical

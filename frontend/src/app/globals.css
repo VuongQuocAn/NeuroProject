@@ -12,3 +12,19 @@ body {
   background-color: var(--color-slate-900);
   color: #f1f5f9;
 }
+
+@keyframes progress-indefinite {
+  0% {
+    transform: translateX(-100%) scaleX(0.2);
+  }
+  50% {
+    transform: translateX(0%) scaleX(0.5);
+  }
+  100% {
+    transform: translateX(100%) scaleX(0.2);
+  }
+}
+
+.animate-progress-indefinite {
+  animation: progress-indefinite 2s infinite linear;
+}
