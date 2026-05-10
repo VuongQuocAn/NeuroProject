@@ -15,50 +15,35 @@ class GradCAMExplainer:
     Can thiệp vào lớp Convolution cuối cùng của nhánh ImageEncoder (DenseNet121) để trích xuất Activation và Gradient.
     """
     def __init__(self, model, target_layer):
-        """
-        Khởi tạo bộ giải thích Grad-CAM.
-
-        Args:
-            model (nn.Module): Mô hình đa phương thức đã được huấn luyện.
-            target_layer (nn.Module): Lớp mạng cần trích xuất đặc trưng (thường là lớp Conv cuối).
-        """
         self.model = model
         self.target_layer = target_layer
-
         self.activations = None
         self.gradients = None
+        self.handles = []
+        self._register_hooks()
 
-        # Đăng ký Hooks để "bắt" dữ liệu khi mô hình chạy Forward và Backward
-        self.target_layer.register_forward_hook(self._save_activations)
-        self.target_layer.register_full_backward_hook(self._save_gradients)
+    def _register_hooks(self):
+        self.handles.append(self.target_layer.register_forward_hook(self._save_activations))
+        self.handles.append(self.target_layer.register_full_backward_hook(self._save_gradients))
+
+    def remove_hooks(self):
+        for handle in self.handles:
+            handle.remove()
+        self.handles = []
 
     def _save_activations(self, module, input, output):
-        """Hook lưu lại feature maps (activations) trong quá trình Forward."""
         self.activations = output
 
     def _save_gradients(self, module, grad_input, grad_output):
-        """Hook lưu lại đạo hàm (gradients) trong quá trình Backward."""
         self.gradients = grad_output[0]
 
     def generate_heatmap(self, mri_tensor, wsi_dummy, rna_dummy, clinical_dummy, masks, method="gradcam"):
-        """
-        Tạo bản đồ nhiệt XAI cho ảnh MRI đầu vào.
-
-        Args:
-            mri_tensor (Tensor): Tensor ảnh MRI [1, 1, 3, 256, 256].
-            wsi_dummy, rna_dummy, clinical_dummy (Tensor): Dữ liệu padding.
-            masks (dict): Các cờ báo hiệu modality.
-            method (str): "gradcam", "gradcam++", hoặc "layercam"
-
-
-        Returns:
-            np.ndarray: Bản đồ nhiệt (heatmap) dạng numpy array [256, 256].
-        """
         self.model.eval()
 
-        # Mở khóa toàn bộ đạo hàm (Quan trọng: Vì ở Phase 2 ta đã Freeze Backbone,
-        # nếu không Unfreeze, Gradient sẽ không truyền về được nhánh ảnh)
+        # Optimize: Only set requires_grad if necessary
+        original_grad_states = []
         for param in self.model.parameters():
+            original_grad_states.append(param.requires_grad)
             param.requires_grad = True
 
         self.model.zero_grad()
@@ -70,12 +55,12 @@ class GradCAMExplainer:
             mri_mask=masks['mri_mask'], wsi_mask=masks['wsi_mask']
         )
 
-        print(f"[XAI] Predicted Risk Score: {risk_score.item():.4f}")
-
-        # 2. Backward Pass (Truyền ngược rủi ro để tìm nguyên nhân)
-        # Chúng ta backpropagate trực tiếp Risk Score.
-        # Gradient dương nghĩa là vùng ảnh đó làm TĂNG rủi ro (vùng ác tính).
+        # 2. Backward Pass
         risk_score.backward()
+
+        # Restore original grad states
+        for i, param in enumerate(self.model.parameters()):
+            param.requires_grad = original_grad_states[i]
 
         # 3. Tính toán Heatmap tùy theo phương pháp
         gradients = self.gradients.detach().cpu().numpy()[0] # Shape: [C, H, W]

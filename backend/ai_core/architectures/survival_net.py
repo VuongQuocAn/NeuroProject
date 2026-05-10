@@ -289,10 +289,10 @@ class AttentionFusion(nn.Module):
             # Fill giá trị -1e9 vào những chỗ bị thiếu
             attn_scores = attn_scores.masked_fill(extended_mask, -1e4)
 
-        # 3. Tính trọng số (Softmax)
-        # Biến đổi điểm thành xác suất (tổng = 1)
-        # dim=1 là chiều Modalities
-        attn_weights = F.softmax(attn_scores, dim = 1)
+        # 3. Tính trọng số (Softmax) với Temperature để tránh quá lệch (peaky)
+        # T = 2.0 giúp phân phối trọng số cân bằng hơn giữa các phương thức
+        temperature = 1.5
+        attn_weights = F.softmax(attn_scores / temperature, dim = 1)
 
         # [Batch, 3] -> [Batch, 3, 1] để nhân broadcasting
         attn_weights_expanded = attn_weights.unsqueeze(-1)
@@ -379,6 +379,14 @@ class MultimodalBrainTumorModel(nn.Module):
 
         # Chạy Clinical Encoder
         feat_clinical = self.clinical_encoder(clinical)
+
+        # --- BƯỚC 1.5: NORMALIZE MAGNITUDE ---
+        # Đưa các đặc trưng về cùng một thang đo để tránh hiện tượng một modality 
+        # (như RNA) áp đảo các cái khác do độ lớn của vector (L2 Norm).
+        feat_mri = F.layer_norm(feat_mri, (feat_mri.size(-1),))
+        feat_wsi = F.layer_norm(feat_wsi, (feat_wsi.size(-1),))
+        feat_rna = F.layer_norm(feat_rna, (feat_rna.size(-1),))
+        feat_clinical = F.layer_norm(feat_clinical, (feat_clinical.size(-1),))
 
         # --- BƯỚC 2: STACK & MASK ---
         # Xếp chồng 3 vector lại: [Batch, 4, 512]
