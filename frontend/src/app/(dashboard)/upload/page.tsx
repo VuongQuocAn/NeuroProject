@@ -39,7 +39,8 @@ export default function UploadPage() {
   const [activeTab, setActiveTab] = useState<UploadTab>("dicom");
   const [uploading, setUploading] = useState(false);
   const [patientId, setPatientId] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [mriFile, setMriFile] = useState<File | null>(null);
+  const [rnaFile, setRnaFile] = useState<File | null>(null);
   const [ki67, setKi67] = useState("");
   const [statusMsg, setStatusMsg] = useState({ text: "", type: "" });
   const [uploadResult, setUploadResult] = useState<UploadResultState>({ kind: "idle" });
@@ -87,9 +88,15 @@ export default function UploadPage() {
     window.sessionStorage.setItem(MRI_RESULT_STORAGE_KEY, JSON.stringify(uploadResult));
   }, [uploadResult]);
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleMriFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
-      setFile(event.target.files[0]);
+      setMriFile(event.target.files[0]);
+    }
+  };
+
+  const handleRnaFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      setRnaFile(event.target.files[0]);
     }
   };
 
@@ -105,7 +112,7 @@ export default function UploadPage() {
 
   const resetMriCard = () => {
     setUploadResult({ kind: "idle" });
-    setFile(null);
+    setMriFile(null);
     setStatusMsg({ text: "", type: "" });
     if (typeof window !== "undefined") {
       window.sessionStorage.removeItem(MRI_RESULT_STORAGE_KEY);
@@ -124,7 +131,7 @@ export default function UploadPage() {
   };
 
   const handleUploadDicom = async () => {
-    if (!file || !patientId.trim()) {
+    if (!mriFile || !patientId.trim()) {
       setStatusMsg({
         text: "Vui lòng nhập mã bệnh nhân và chọn file ảnh/MRI.",
         type: "error",
@@ -137,7 +144,7 @@ export default function UploadPage() {
     setUploadResult({ kind: "idle" });
 
     try {
-      const uploadResponse = await apiService.upload.mri(patientId.trim(), file);
+      const uploadResponse = await apiService.upload.mri(patientId.trim(), mriFile);
       const imageId = uploadResponse.data?.image_id;
 
       if (!imageId) {
@@ -162,7 +169,7 @@ export default function UploadPage() {
         text: "Ảnh MRI đã được tải lên và chạy xong pipeline AI.",
         type: "success",
       });
-      setFile(null);
+      setMriFile(null);
       setActiveTab("dicom");
     } catch (err: any) {
       const errorText = `Lỗi upload/chạy AI: ${getErrorMessage(err, "Không thể xử lý file MRI.")}`;
@@ -183,7 +190,7 @@ export default function UploadPage() {
   };
 
   const handleUploadRna = async () => {
-    if (!file || !patientId.trim()) {
+    if (!rnaFile || !patientId.trim()) {
       setStatusMsg({
         text: "Vui lòng nhập mã bệnh nhân và chọn file RNA (.csv/.tsv).",
         type: "error",
@@ -195,9 +202,9 @@ export default function UploadPage() {
     setStatusMsg({ text: "", type: "" });
 
     try {
-      await apiService.upload.rna(patientId.trim(), file);
+      await apiService.upload.rna(patientId.trim(), rnaFile);
       setStatusMsg({ text: "Tải lên dữ liệu RNA thành công.", type: "success" });
-      setFile(null);
+      setRnaFile(null);
     } catch (err: any) {
       setStatusMsg({
         text: `Lỗi upload RNA: ${getErrorMessage(err, "Hãy bảo đảm file có cột patient_id hợp lệ.")}`,
@@ -275,13 +282,13 @@ export default function UploadPage() {
             className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mb-2 focus:border-teal-500 outline-none"
           />
           <label className="w-full relative">
-            <input type="file" className="hidden" onChange={handleFileChange} />
+            <input type="file" className="hidden" onChange={handleMriFileChange} />
             <div className="w-full px-6 py-3 cursor-pointer bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-teal-500/20 flex justify-center">
               + Chọn file MRI
             </div>
           </label>
-          {file && <div className="text-teal-400 text-sm">{file.name}</div>}
-          {file && (
+          {mriFile && <div className="text-teal-400 text-sm">{mriFile.name}</div>}
+          {mriFile && (
             <button
               onClick={handleUploadDicom}
               disabled={uploading || !patientId.trim()}
@@ -383,13 +390,13 @@ export default function UploadPage() {
                 className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mb-2 focus:border-indigo-500 outline-none"
               />
               <label className="w-full relative">
-                <input type="file" accept=".csv,.tsv" className="hidden" onChange={handleFileChange} />
+                <input type="file" accept=".csv,.tsv" className="hidden" onChange={handleRnaFileChange} />
                 <div className="w-full px-6 py-3 cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex justify-center">
                   Chọn file RNA
                 </div>
               </label>
-              {file && <div className="text-indigo-400 text-sm">{file.name}</div>}
-              {file && (
+              {rnaFile && <div className="text-indigo-400 text-sm">{rnaFile.name}</div>}
+              {rnaFile && (
                 <button
                   onClick={handleUploadRna}
                   disabled={uploading || !patientId.trim()}
