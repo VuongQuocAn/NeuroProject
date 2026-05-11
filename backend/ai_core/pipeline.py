@@ -98,13 +98,13 @@ class TumorAnalysisPipeline:
         seg_mask = result_dict.get("_seg_mask")
 
         if masked_roi is None or seg_mask is None:
-            # Secondary safety check - if tumor was supposedly detected but ROI is missing
+            # Secondary safety check
             result_dict.pop("_cropped_img", None)
             result_dict.pop("_seg_mask", None)
             result_dict.pop("_masked_roi", None)
             if not result_dict.get("no_tumor_detected"):
                 result_dict["status"] = "error"
-                result_dict["error_msg"] = "Phan tich MRI thanh cong nhung khong the trich xuat vung benh (ROI) cho prognosis."
+                result_dict["error_msg"] = "Phân tích MRI thành công nhưng không thể trích xuất vùng bệnh (ROI) cho prognosis."
             return result_dict
 
         try:
@@ -171,7 +171,7 @@ class TumorAnalysisPipeline:
                 finally:
                     explainer.remove_hooks()
 
-                result_dict["gradcam_heatmap_path"] = cam_paths["gradcam"] # Default
+                result_dict["gradcam_heatmap_path"] = cam_paths["gradcam"]
                 result_dict["gradcam_plus_heatmap_path"] = cam_paths["gradcam++"]
                 result_dict["layercam_heatmap_path"] = cam_paths["layercam"]
 
@@ -185,98 +185,40 @@ class TumorAnalysisPipeline:
                 risk_group = result_dict.get("risk_group", "Medium")
                 risk_score = result_dict.get("risk_score", 0.0)
 
-                # 1. Biological/Clinical Context based on modality weights
                 if rna_weight > mri_weight and rna_weight > clin_weight:
                     modality_reasoning = [
-                        f"Mô hình xác định hồ sơ sinh học phân tử (RNA-seq) đóng vai trò tiên lượng then chốt (chiếm {rna_weight:.1f}% trọng số). Điều này cho thấy rủi ro sinh tồn bị chi phối bởi các con đường tín hiệu di truyền (như đột biến IDH, methyl hóa promoter MGMT hoặc khuếch đại EGFR) - những yếu tố mà hình ảnh học MRI đôi khi chưa phản ánh hết được ở giai đoạn sớm.",
-                        f"Phân tích tập trung vào các đặc trưng biểu hiện gen (chiếm {rna_weight:.1f}%). Mức độ rủi ro {risk_group} được đưa ra dựa trên sự tương quan giữa các dấu ấn phân tử độc lập, vốn là 'tiêu chuẩn vàng' trong phân loại Glioma theo WHO 2021, giúp dự đoán thời gian sống thêm chính xác hơn chỉ dựa vào hình thái u."
+                        f"Mô hình xác định hồ sơ sinh học phân tử (RNA-seq) đóng vai trò tiên lượng then chốt (chiếm {rna_weight:.1f}% trọng số).",
+                        f"Phân tích tập trung vào các đặc trưng biểu hiện gen (chiếm {rna_weight:.1f}%)."
                     ]
                 elif clin_weight > mri_weight and clin_weight > rna_weight:
                     modality_reasoning = [
-                        f"Yếu tố lâm sàng và nhân khẩu học ({clin_weight:.1f}%) được mô hình ưu tiên cao hơn các đặc điểm hình ảnh. Điều này ngụ ý rằng thể trạng nền (chỉ số KPS) và độ tuổi của bệnh nhân là những biến số có tác động mạnh nhất đến khả năng đáp ứng điều trị và tiên lượng sinh tồn tổng thể trong trường hợp cụ thể này.",
-                        f"Mô hình nhận diện rủi ro dựa trên sự kết hợp giữa bệnh sử và các chỉ số sinh hóa (chiếm {clin_weight:.1f}%). Dù khối u có hình thái quan sát được trên MRI, nhưng các yếu tố tiên lượng lâm sàng độc lập lại mang sức nặng lớn hơn trong việc xếp hạng bệnh nhân vào nhóm nguy cơ {risk_group}."
+                        f"Yếu tố lâm sàng và nhân khẩu học ({clin_weight:.1f}%) được mô hình ưu tiên cao hơn.",
+                        f"Mô hình nhận diện rủi ro dựa trên sự kết hợp giữa bệnh sử và các chỉ số sinh hóa (chiếm {clin_weight:.1f}%)."
                     ]
                 else:
-                    if risk_group in ["High", "Very High"]:
-                        modality_reasoning = [
-                            f"Dựa trên phân tích MRI ({mri_weight:.1f}%), mô hình phát hiện các dấu hiệu thị giác của sự xâm lấn mạnh. Vùng 'nóng' trên bản đồ nhiệt (Heatmap) tập trung vào các khu vực có mật độ tế bào cao hoặc tăng sinh mạch máu (angiogenesis), thường tương ứng với các vùng tăng quang không đồng nhất và phù nề lan tỏa, là chỉ điểm của một khối u có độ ác tính cao.",
-                            f"Trọng số Attention tập trung vào đặc điểm hình thái MRI ({mri_weight:.1f}%). Sự hiện diện của các vùng hoại tử trung tâm hoặc viền xâm lấn không rõ ranh giới được mô hình nhận diện là yếu tố thúc đẩy rủi ro. Bản đồ nhiệt Grad-CAM xác nhận AI đang 'nhìn' vào đúng các cấu trúc bệnh lý ác tính để đưa ra kết luận rủi ro {risk_group}."
-                        ]
-                    else:
-                        modality_reasoning = [
-                            f"Phân tích hình ảnh MRI ({mri_weight:.1f}%) cho thấy khối u có ranh giới tương đối rõ ràng và ít thâm nhiễm. Các vùng nóng trên Heatmap chỉ tập trung vào lõi u mà không lan rộng ra nhu mô xung quanh, phù hợp với đặc điểm của các khối u có tiến triển chậm hoặc độ ác tính thấp, dẫn đến dự đoán nguy cơ {risk_group}.",
-                            f"Mô hình đánh giá rủi ro dựa trên sự ổn định của cấu trúc hình thái (chiếm {mri_weight:.1f}%). Sự vắng mặt của các dấu hiệu như phù não diện rộng hay tăng sinh mạch bất thường trên Heatmap hỗ trợ cho tiên lượng sinh tồn khả quan hơn so với nhóm trung bình."
-                        ]
+                    modality_reasoning = [
+                        f"Dựa trên phân tích MRI ({mri_weight:.1f}%), mô hình phát hiện các dấu hiệu thị giác của sự xâm lấn.",
+                        f"Trọng số Attention tập trung vào đặc điểm hình thái MRI ({mri_weight:.1f}%)."
+                    ]
 
-                # 2. Pathological Context
                 pathology_insights = {
-                    "Glioma": [
-                        "Đối với U thần kinh đệm (Glioma), sự chuyển đổi từ ranh giới rõ sang xâm lấn (infiltrative growth) là chìa khóa. AI đang đánh giá mức độ thâm nhiễm vào chất trắng để phân tầng rủi ro.",
-                        "Glioma là loại u thâm nhiễm mạnh; mô hình chú ý vào các vùng phù não và phá vỡ hàng rào máu não để đánh giá khả năng lan rộng của các tế bào ác tính.",
-                        "Trong bệnh lý Glioma, sự xuất hiện của các viền tăng quang không đều thường đi kèm với tốc độ phân bào cao, điều này ảnh hưởng trực tiếp đến điểm số nguy cơ."
-                    ],
-                    "Meningioma": [
-                        "U màng não thường lành tính; rủi ro ở đây chủ yếu liên quan đến vị trí chèn ép và tốc độ tăng trưởng kích thước khối u ảnh hưởng đến các cấu trúc thần kinh lân cận.",
-                        "Dựa trên bản chất u ngoài trục, mô hình tập trung vào sự dịch chuyển của cấu trúc não (mass effect) và mức độ gắn kết với xoang tĩnh mạch dọc trên.",
-                        "Meningioma được đánh giá dựa trên sự đồng nhất của khối u; các vùng vôi hóa hoặc ranh giới rõ ràng thường là chỉ điểm cho tiên lượng khả quan."
-                    ],
-                    "Pituitary": [
-                        "U tuyến yên thường được theo dõi qua sự thay đổi nội tiết; mô hình đánh giá rủi ro sinh tồn ở mức thấp dựa trên bản chất ít xâm lấn của loại u này.",
-                        "Hố yên là khu vực nhạy cảm; AI phân tích mức độ xâm lấn vào xoang hang để xác định rủi ro biến chứng thay vì rủi ro tử vong trực tiếp.",
-                        "Dự đoán tập trung vào sự ổn định về kích thước khối u; đa phần các u tuyến yên có tiên lượng sống còn rất dài hạn."
-                    ],
-                    "Khối u": [
-                        "Đặc điểm bệnh lý chung cho thấy sự tương quan chặt chẽ giữa kích thước khối u và khả năng can thiệp ngoại khoa.",
-                        "Mô hình đang tìm kiếm các đặc trưng không điển hình của khối u để phân biệt giữa các tổn thương tiến triển nhanh và chậm.",
-                        "Phân tích tập trung vào sự tương quan giữa thể tích khối u và mức độ chèn ép nhu mô xung quanh."
-                    ]
+                    "Glioma": ["Glioma là loại u thâm nhiễm mạnh; mô hình chú ý vào các vùng phù não."],
+                    "Meningioma": ["U màng não thường lành tính; rủi ro liên quan đến vị trí chèn ép."],
+                    "Pituitary": ["U tuyến yên thường được theo dõi qua sự thay đổi nội tiết."],
+                    "Khối u": ["Đặc điểm bệnh lý chung cho thấy sự tương quan giữa kích thước và rủi ro."]
                 }
-                path_list = pathology_insights.get(tumor_label, pathology_insights["Khối u"])
-                path_context = random.choice(path_list) if isinstance(path_list, list) else path_list
+                path_context = random.choice(pathology_insights.get(tumor_label, pathology_insights["Khối u"]))
 
-                # 3. Actionable Suggestion (Gợi ý lâm sàng)
                 if risk_group in ["High", "Very High"]:
-                    suggestion = random.choice([
-                        "Khuyến nghị: Cần xem xét hội chẩn đa chuyên khoa (Tumor Board) để cân nhắc phác đồ điều trị tích cực (phẫu thuật kết hợp xạ trị/hóa trị) và theo dõi sát sao các dấu hiệu tiến triển trên MRI sau 3-6 tháng.",
-                        "Khuyến nghị: Xem xét đánh giá thêm mức độ thâm nhiễm qua cộng hưởng từ phổ (MRS) hoặc PET-CT để xác định chính xác ranh giới u trước khi lập kế hoạch xạ trị gia tăng liều.",
-                        "Khuyến nghị: Do rủi ro tiên lượng cao, cần thảo luận với bệnh nhân về các thử nghiệm lâm sàng mới hoặc các phương pháp điều trị đích dựa trên hồ sơ gen cụ thể."
-                    ])
-                elif risk_group == "Medium":
-                    suggestion = random.choice([
-                        "Khuyến nghị: Tiếp tục theo dõi định kỳ và xem xét kiểm tra thêm các marker phân tử chuyên sâu (như tình trạng IDH/1p19q) nếu kết quả chẩn đoán hình ảnh chưa rõ ràng.",
-                        "Khuyến nghị: Theo dõi sát các triệu chứng lâm sàng và chụp MRI kiểm soát sau mỗi 6 tháng để phát hiện sớm bất kỳ dấu hiệu chuyển độ (transformation) nào của khối u.",
-                        "Khuyến nghị: Duy trì phác đồ hiện tại nhưng cần đánh giá lại chất lượng sống (QoL) và các chức năng thần kinh cao cấp định kỳ."
-                    ])
+                    suggestion = "Khuyến nghị: Cần xem xét hội chẩn đa chuyên khoa (Tumor Board)."
                 else:
-                    suggestion = random.choice([
-                        "Khuyến nghị: Duy trì theo dõi định kỳ. Kết quả AI cho thấy khả năng kiểm soát bệnh tốt ở giai đoạn hiện tại.",
-                        "Khuyến nghị: Chụp MRI định kỳ hàng năm để giám sát sự ổn định của thương tổn. Hiện tại chưa cần can thiệp xâm lấn thêm.",
-                        "Khuyến nghị: Tiếp tục chế độ sinh hoạt bình thường; kết quả AI hỗ trợ tiên lượng sống còn dài hạn với độ tin cậy cao."
-                    ])
+                    suggestion = "Khuyến nghị: Duy trì theo dõi định kỳ theo phác đồ."
 
-                # 4. Final Assembly
-                intro = random.choice([
-                    f"Hệ thống phân tích đa phương thức xác định bệnh nhân thuộc nhóm rủi ro {risk_group.upper()}.",
-                    f"Kết quả tiên lượng AI: Phân tầng nguy cơ {risk_group.upper()} ({tumor_label}).",
-                    f"Dựa trên các đặc trưng hợp nhất, mô hình xếp hạng rủi ro sinh tồn ở mức {risk_group.upper()}.",
-                    f"Phân tích tổng hợp AI: Nhóm nguy cơ {risk_group.upper()} đối với trường hợp {tumor_label} này.",
-                    f"Đánh giá rủi ro sinh tồn: Cấp độ {risk_group.upper()} dựa trên các tham số đa mô thức."
-                ])
-
-                explanation = f"{intro}\n\n"
-                explanation += f"1. CƠ SỞ BỆNH LÝ: {path_context}\n\n"
-                explanation += f"2. LÝ GIẢI CỦA MÔ HÌNH: {random.choice(modality_reasoning)}\n\n"
-                explanation += f"3. ĐỘ TIN CẬY & XÁC THỰC: Bản đồ nhiệt XAI cho thấy sự trùng khớp giữa vùng chú ý của AI và các đặc trưng hình thái bệnh lý trên MRI. Chỉ số Risk Score ({risk_score:.2f}) được tính toán từ sự hội tụ của dữ liệu Hình ảnh, Gen và Lâm sàng, đảm bảo tính khách quan cao.\n\n"
-                explanation += f"4. {suggestion}"
-                
-                result_dict["xai_explanation"] = explanation
+                result_dict["xai_explanation"] = f"Nhóm nguy cơ: {risk_group}. {path_context} {suggestion}"
 
             except Exception as heatmap_exc:
-                print(f"[PIPELINE] Grad-CAM generation failed (non-fatal): {heatmap_exc}")
-                result_dict["gradcam_heatmap_path"] = None
-                result_dict["gradcam_plus_heatmap_path"] = None
-                result_dict["layercam_heatmap_path"] = None
-                result_dict["xai_explanation"] = None
+                print(f"[PIPELINE] Grad-CAM generation failed: {heatmap_exc}")
+                result_dict["xai_explanation"] = "Phân tích tiên lượng hoàn thành nhưng không thể tạo bản đồ nhiệt XAI."
 
         except Exception as exc:
             result_dict["status"] = "error"
@@ -287,6 +229,59 @@ class TumorAnalysisPipeline:
             result_dict.pop("_masked_roi", None)
 
         return result_dict
+
+    def run_series_inference(
+        self,
+        image_bytes_list: list[bytes],
+        rna_data: np.ndarray | None = None,
+        clinical_data: dict[str, Any] | None = None,
+        output_dir: str = "results",
+    ) -> dict[str, Any]:
+        """Chạy inference trên toàn bộ chuỗi ảnh (Series) với cơ chế đồng thuận."""
+        os.makedirs(output_dir, exist_ok=True)
+        from collections import Counter
+
+        all_slice_results = []
+        for i, img_bytes in enumerate(image_bytes_list):
+            try:
+                img_bgr = self.load_image(img_bytes)
+                bbox, _, bbox_conf = self.detector.predict(img_bgr)
+                if bbox is not None:
+                    cropped = self.crop_image(img_bgr, bbox)
+                    label, conf, _ = self.classifier.predict(cropped)
+                    all_slice_results.append({
+                        "index": i, "label": label, "class_conf": conf,
+                        "area": (bbox[2]-bbox[0])*(bbox[3]-bbox[1])
+                    })
+            except: continue
+
+        if not all_slice_results:
+            return {"status": "success", "no_tumor_detected": True, "num_slices": len(image_bytes_list)}
+
+        labels = [r["label"] for r in all_slice_results]
+        majority_label = Counter(labels).most_common(1)[0][0]
+        candidates = [r for r in all_slice_results if r["label"] == majority_label]
+        key_slice_data = max(candidates, key=lambda x: x["class_conf"] * x["area"])
+        key_index = key_slice_data["index"]
+
+        final_result = self.run_multimodal_inference(
+            image_source=image_bytes_list[key_index],
+            rna_data=rna_data,
+            clinical_data=clinical_data,
+            output_dir=output_dir
+        )
+        
+        final_result.update({
+            "is_series": True,
+            "num_slices": len(image_bytes_list),
+            "key_slice_index": key_index,
+            "majority_label": majority_label,
+            "all_detected_slices": [
+                {"index": r["index"], "label": r["label"], "conf": round(float(r["class_conf"]), 4)} 
+                for r in all_slice_results
+            ]
+        })
+        return final_result
 
     def _run_mri_core(self, image_source: str | bytes, output_dir: str) -> dict[str, Any]:
         result_dict: dict[str, Any] = {

@@ -37,6 +37,10 @@ type MriResult = {
   layercam_heatmap_data_url?: string | null;
   xai_explanation?: string | null;
   fusion_attention?: number[] | null;
+  // Series metadata
+  is_series?: boolean;
+  num_slices?: number;
+  key_slice_index?: number;
 };
 
 type Props = {
@@ -187,6 +191,12 @@ export default function MriResultCard({
   const [activeHeatmap, setActiveHeatmap] = useState<"gradcam" | "gradcam++" | "layercam">("gradcam");
   const [rating, setRating] = useState<number | null>(null);
   const [submittingRating, setSubmittingRating] = useState(false);
+  const [currentSlice, setCurrentSlice] = useState<number>(result?.key_slice_index ?? 0);
+
+  const getSliceUrl = (index: number) => {
+    if (!result?.image_id) return "";
+    return `${api.defaults.baseURL}/records/analysis/image/${result.image_id}/slice/${index}`;
+  };
 
   const handleRating = async (star: number) => {
     if (!result?.image_id || submittingRating) return;
@@ -280,9 +290,61 @@ export default function MriResultCard({
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 flex items-center gap-3 text-amber-200">
                   <Search className="h-5 w-5" />
                   <span className="text-sm font-medium">
-                    Không phát hiện khối u rõ ràng trên ảnh MRI này. Các trường phân loại và
-                    phân đoạn được giữ ở trạng thái rỗng.
+                    Không phát hiện khối u rõ ràng trên chuỗi MRI này. Kết luận dựa trên phân tích đa số.
                   </span>
+                </div>
+              )}
+
+              {result?.is_series && (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[11px] uppercase tracking-widest text-slate-500">
+                      Chuỗi ảnh MRI (Series Viewer) - {result.num_slices} lát cắt
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400">Lát cắt: {currentSlice + 1} / {result.num_slices}</span>
+                      {currentSlice === result.key_slice_index && (
+                        <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-400 text-[10px] font-bold border border-teal-500/30 uppercase">Key Slice</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div 
+                    className="relative aspect-square max-w-[400px] mx-auto bg-black rounded-lg overflow-hidden group border border-slate-800"
+                    onWheel={(e) => {
+                      if (e.deltaY > 0 && currentSlice < (result.num_slices || 0) - 1) {
+                        setCurrentSlice(s => s + 1);
+                      } else if (e.deltaY < 0 && currentSlice > 0) {
+                        setCurrentSlice(s => s - 1);
+                      }
+                    }}
+                  >
+                    <img 
+                      src={getSliceUrl(currentSlice)} 
+                      alt={`Slice ${currentSlice}`}
+                      className="w-full h-full object-contain"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                      <input 
+                        type="range" 
+                        min={0} 
+                        max={(result.num_slices || 1) - 1} 
+                        value={currentSlice}
+                        onChange={(e) => setCurrentSlice(parseInt(e.target.value))}
+                        className="w-full accent-teal-500 h-1 rounded-lg cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-center gap-3">
+                    <button 
+                      disabled={currentSlice === result.key_slice_index}
+                      onClick={() => setCurrentSlice(result.key_slice_index || 0)}
+                      className="text-[11px] font-bold text-teal-500 hover:text-teal-400 disabled:opacity-30 flex items-center gap-1 uppercase"
+                    >
+                      <RefreshCw className="h-3 w-3" /> Về lát cắt chính (Key Slice)
+                    </button>
+                  </div>
                 </div>
               )}
 

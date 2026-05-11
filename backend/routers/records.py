@@ -126,6 +126,9 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
                 "latest_task_id": latest_task_id,
                 "latest_error_message": latest_error_message,
                 "has_analysis": image_analysis is not None,
+                "is_series": img.is_series,
+                "num_slices": img.num_slices,
+                "key_slice_index": img.key_slice_index,
             }
         )
 
@@ -205,3 +208,66 @@ def delete_image_record(image_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Da xoa dong ket qua va anh MRI thanh cong"}
+
+@router.get("/analysis/image/{image_id}/slice/{index}")
+def get_series_slice(image_id: int, index: int, db: Session = Depends(get_db)):
+    """Lấy một lát cắt cụ thể từ chuỗi ảnh (Series) để hiển thị trên Viewer."""
+    from fastapi.responses import Response
+    import io
+    import cv2
+    import numpy as np
+
+    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh")
+    
+    if not image.is_series:
+        # Nếu không phải series, trả về chính nó (index=0)
+        bucket_name, object_name = image.file_path.lstrip("/").split("/", 1)
+        response = minio_client.get_object(bucket_name, object_name)
+    else:
+        # Xử lý chuỗi ảnh
+        bucket_name, folder_prefix = image.file_path.lstrip("/").split("/", 1)
+        objects = list(minio_client.list_objects(bucket_name, prefix=folder_prefix, recursive=True))
+        sorted_objs = sorted(objects, key=lambda x: x.object_name)
+        
+        if index < 0 or index >= len(sorted_objs):
+            raise HTTPException(status_code=404, detail=f"Index {index} vượt quá số lượng lát cắt ({len(sorted_objs)})")
+        
+        response = minio_client.get_object(bucket_name, sorted_objs[index].object_name)
+
+    try:
+        file_bytes = response.read()
+    finally:
+        response.close()
+        response.release_conn()
+
+    # Decode ảnh (PNG/JPG hoặc DICOM)
+    # Tái sử dụng logic decode cơ bản
+    def _decode(data: bytes):
+        # Thử DICOM trước
+        import pydicom
+        try:
+            dicom = pydicom.dcmread(io.BytesIO(data), force=True)
+            if hasattr(dicom, "PixelData"):
+                arr = dicom.pixel_array.astype(np.float32)
+                arr -= arr.min()
+                if arr.max() > 0: arr /= arr.max()
+                arr = (arr * 255).astype(np.uint8)
+                return arr
+        except: pass
+        # Thử ảnh thường
+        arr = np.frombuffer(data, dtype=np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
+        return img
+
+    img_arr = _decode(file_bytes)
+    if img_arr is None:
+        raise HTTPException(status_code=500, detail="Không thể giải mã lát cắt")
+
+    # Encode sang PNG để browser hiển thị được
+    success, encoded_img = cv2.imencode(".png", img_arr)
+    if not success:
+        raise HTTPException(status_code=500, detail="Lỗi khi nén ảnh")
+
+    return Response(content=encoded_img.tobytes(), media_type="image/png")

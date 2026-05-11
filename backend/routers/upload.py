@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from typing import List
 from sqlalchemy.orm import Session
 import uuid
 import crud
@@ -54,6 +55,94 @@ async def upload_mri(patient_id: str, file: UploadFile = File(...), db: Session 
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi khi xử lý file: {str(e)}")
+
+
+@router.post("/mri/series")
+async def upload_mri_series(
+    patient_id: str, 
+    files: List[UploadFile] = File(None), 
+    zip_file: UploadFile = File(None), 
+    db: Session = Depends(get_db)
+):
+    """
+    Tải lên chuỗi ảnh MRI (nhiều file hoặc 1 file ZIP).
+    Hệ thống sẽ lưu trữ toàn bộ ảnh vào một folder trên MinIO.
+    """
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy bệnh nhân '{patient_id}'")
+    
+    ensure_bucket_exists(BUCKET_NAME)
+    series_uuid = str(uuid.uuid4())
+    series_folder = f"series_{series_uuid}"
+    
+    uploaded_files = []
+    
+    # 1. Xử lý file ZIP nếu có
+    if zip_file:
+        import zipfile
+        import io
+        zip_bytes = await zip_file.read()
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+            for file_info in z.infolist():
+                if file_info.is_dir():
+                    continue
+                with z.open(file_info) as f:
+                    content = f.read()
+                    # Skip files like __MACOSX or .DS_Store
+                    if file_info.filename.startswith("__") or file_info.filename.split("/")[-1].startswith("."):
+                        continue
+                        
+                    fname = file_info.filename.split("/")[-1]
+                    prep_stream, ctype = prepare_mri_upload(content, fname)
+                    
+                    minio_path = f"{series_folder}/{fname}"
+                    minio_client.put_object(
+                        bucket_name=BUCKET_NAME,
+                        object_name=minio_path,
+                        data=prep_stream,
+                        length=prep_stream.getbuffer().nbytes,
+                        content_type=ctype
+                    )
+                    uploaded_files.append(minio_path)
+    
+    # 2. Xử lý danh sách file lẻ nếu có
+    if files:
+        for file in files:
+            content = await file.read()
+            prep_stream, ctype = prepare_mri_upload(content, file.filename)
+            
+            minio_path = f"{series_folder}/{file.filename}"
+            minio_client.put_object(
+                bucket_name=BUCKET_NAME,
+                object_name=minio_path,
+                data=prep_stream,
+                length=prep_stream.getbuffer().nbytes,
+                content_type=ctype
+            )
+            uploaded_files.append(minio_path)
+
+    if not uploaded_files:
+        raise HTTPException(status_code=400, detail="Không có file nào được tải lên")
+
+    # 3. Lưu record chuỗi ảnh vào DB
+    new_image = models.Image(
+        patient_id=patient.id,
+        modality="MRI_SERIES",
+        file_path=f"/{BUCKET_NAME}/{series_folder}",
+        is_series=True,
+        num_slices=len(uploaded_files),
+        key_slice_index=0 # Sẽ được cập nhật sau khi AI chạy
+    )
+    db.add(new_image)
+    db.commit()
+    db.refresh(new_image)
+
+    return {
+        "message": f"Tải lên chuỗi ảnh ({len(uploaded_files)} lát cắt) thành công",
+        "image_id": new_image.id,
+        "folder_path": new_image.file_path
+    }
     
     
 # API NHÁP: Tải lên WSI (Whole Slide Image) - File rất lớn, cần cơ chế streaming để tránh treo máy chủ

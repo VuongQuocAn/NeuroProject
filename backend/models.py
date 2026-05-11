@@ -25,7 +25,12 @@ class Image(Base):
     patient_id = Column(Integer, ForeignKey("patients.id"))
     scan_date = Column(DateTime, default=datetime.datetime.utcnow)
     modality = Column(String)  # MRI, CT, WSI
-    file_path = Column(String)  # Đường dẫn tới bucket MinIO
+    file_path = Column(String)  # Đường dẫn tới bucket MinIO (hoặc folder nếu là series)
+    
+    # Mở rộng cho chuỗi ảnh (Series)
+    is_series = Column(Boolean, default=False)
+    num_slices = Column(Integer, default=1)
+    key_slice_index = Column(Integer, default=0) # Index của lát cắt quan trọng nhất
 
     owner = relationship("Patient", back_populates="images")
     diagnoses = relationship("Diagnosis", back_populates="image")

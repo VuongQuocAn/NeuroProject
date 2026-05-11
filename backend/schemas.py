@@ -149,6 +149,10 @@ class ImageAIResultResponse(BaseModel):
     layercam_heatmap_data_url: Optional[str] = None
     xai_explanation: Optional[str] = None
     fusion_attention: Optional[List[float]] = None
+    # Series metadata
+    is_series: bool = False
+    num_slices: int = 1
+    key_slice_index: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

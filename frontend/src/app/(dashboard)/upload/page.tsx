@@ -39,7 +39,7 @@ export default function UploadPage() {
   const [activeTab, setActiveTab] = useState<UploadTab>("dicom");
   const [uploading, setUploading] = useState(false);
   const [patientId, setPatientId] = useState("");
-  const [mriFile, setMriFile] = useState<File | null>(null);
+  const [mriFiles, setMriFiles] = useState<File[]>([]);
   const [rnaFile, setRnaFile] = useState<File | null>(null);
   const [ki67, setKi67] = useState("");
   const [grade, setGrade] = useState("");
@@ -93,7 +93,7 @@ export default function UploadPage() {
 
   const handleMriFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
-      setMriFile(event.target.files[0]);
+      setMriFiles(Array.from(event.target.files));
     }
   };
 
@@ -115,7 +115,7 @@ export default function UploadPage() {
 
   const resetMriCard = () => {
     setUploadResult({ kind: "idle" });
-    setMriFile(null);
+    setMriFiles([]);
     setStatusMsg({ text: "", type: "" });
     if (typeof window !== "undefined") {
       window.sessionStorage.removeItem(MRI_RESULT_STORAGE_KEY);
@@ -134,9 +134,9 @@ export default function UploadPage() {
   };
 
   const handleUploadDicom = async () => {
-    if (!mriFile || !patientId.trim()) {
+    if (mriFiles.length === 0 || !patientId.trim()) {
       setStatusMsg({
-        text: "Vui lòng nhập mã bệnh nhân và chọn file ảnh/MRI.",
+        text: "Vui lòng nhập mã bệnh nhân và chọn ít nhất 1 file ảnh/MRI.",
         type: "error",
       });
       return;
@@ -147,13 +147,27 @@ export default function UploadPage() {
     setUploadResult({ kind: "idle" });
 
     try {
-      const uploadResponse = await apiService.upload.mri(patientId.trim(), mriFile);
-      const imageId = uploadResponse.data?.image_id;
+      const isSeries = mriFiles.length > 1 || mriFiles[0].name.toLowerCase().endsWith(".zip");
+      let imageId: string | number;
+
+      if (isSeries) {
+        setStatusMsg({ text: `Đang tải lên chuỗi ${mriFiles.length} ảnh...`, type: "success" });
+        const uploadResponse = await apiService.upload.mriSeries(
+          patientId.trim(), 
+          mriFiles.length === 1 && mriFiles[0].name.toLowerCase().endsWith(".zip") ? mriFiles[0] : mriFiles
+        );
+        imageId = uploadResponse.data?.image_id;
+      } else {
+        setStatusMsg({ text: "Đang tải lên ảnh MRI...", type: "success" });
+        const uploadResponse = await apiService.upload.mri(patientId.trim(), mriFiles[0]);
+        imageId = uploadResponse.data?.image_id;
+      }
 
       if (!imageId) {
         throw new Error("Upload thành công nhưng backend không trả về image_id.");
       }
 
+      setStatusMsg({ text: "Đang phân tích đồng thuận chuỗi ảnh AI...", type: "success" });
       const taskResponse = await apiService.inference.runMri(imageId);
       const taskId = taskResponse.data?.task_id;
 
@@ -169,10 +183,12 @@ export default function UploadPage() {
         data: resultResponse.data,
       });
       setStatusMsg({
-        text: "Ảnh MRI đã được tải lên và chạy xong pipeline AI.",
+        text: isSeries 
+          ? "Chuỗi ảnh MRI đã được chẩn đoán đồng thuận thành công." 
+          : "Ảnh MRI đã được tải lên và chạy xong pipeline AI.",
         type: "success",
       });
-      setMriFile(null);
+      setMriFiles([]);
       setActiveTab("dicom");
     } catch (err: any) {
       const errorText = `Lỗi upload/chạy AI: ${getErrorMessage(err, "Không thể xử lý file MRI.")}`;
@@ -328,7 +344,7 @@ export default function UploadPage() {
           Tải lên ảnh / MRI để chạy pipeline YOLOv11 {"->"} DynUNet {"->"} DenseNet169
         </h3>
         <p className="text-slate-400 italic mb-8">
-          Sau khi upload, hệ thống sẽ tự động trigger inference MRI.
+          Hỗ trợ tải lên 1 file đơn, nhiều file (.dcm/.png) hoặc file nén (.zip).
         </p>
 
         <div className="flex flex-col items-center gap-4 w-full max-w-sm">
@@ -340,20 +356,24 @@ export default function UploadPage() {
             className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mb-2 focus:border-teal-500 outline-none"
           />
           <label className="w-full relative">
-            <input type="file" className="hidden" onChange={handleMriFileChange} />
+            <input type="file" multiple className="hidden" onChange={handleMriFileChange} />
             <div className="w-full px-6 py-3 cursor-pointer bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-teal-500/20 flex justify-center">
-              + Chọn file MRI
+              + Chọn file / Chuỗi ảnh MRI
             </div>
           </label>
-          {mriFile && <div className="text-teal-400 text-sm">{mriFile.name}</div>}
-          {mriFile && (
+          {mriFiles.length > 0 && (
+            <div className="text-teal-400 text-sm">
+              Đã chọn {mriFiles.length} file {mriFiles.length === 1 ? `(${mriFiles[0].name})` : ""}
+            </div>
+          )}
+          {mriFiles.length > 0 && (
             <button
               onClick={handleUploadDicom}
               disabled={uploading || !patientId.trim()}
               className="w-full mt-2 px-6 py-3 bg-white hover:bg-slate-200 text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
             >
               {uploading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
-              Upload và chạy AI
+              {mriFiles.length > 1 || mriFiles[0]?.name.endsWith(".zip") ? "Phân tích chuỗi ảnh" : "Upload và chạy AI"}
             </button>
           )}
         </div>

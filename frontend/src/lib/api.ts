@@ -127,6 +127,18 @@ export const apiService = {
         headers: { "Content-Type": "multipart/form-data" }
       });
     },
+    mriSeries: async (patientId: string, files: File[] | File) => {
+      const formData = new FormData();
+      if (Array.isArray(files)) {
+        files.forEach(f => formData.append("files", f));
+      } else {
+        // Assume it's a ZIP file
+        formData.append("zip_file", files);
+      }
+      return api.post(`/upload/mri/series?patient_id=${encodeURIComponent(patientId)}`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+    },
     rna: async (patientId: string, file: File) => {
       const formData = new FormData();
       formData.append("file", file);

@@ -429,6 +429,9 @@ def _build_professional_report_pdf(
     layercam_image: Image.Image | None = None,
     xai_explanation: str | None = None,
     fusion_attention: list[float] | None = None,
+    is_series: bool = False,
+    num_slices: int = 1,
+    key_slice_index: int = 0,
 ) -> bytes:
     # High Resolution (300 DPI)
     scale = 2
@@ -518,7 +521,10 @@ def _build_professional_report_pdf(
         ("Nhãn dự đoán", predicted_display),
         ("Ảnh phân đoạn (Mask)", "Có" if not no_tumor_detected and mask_image is not None else "Không"),
         ("Tích hợp đa mô thức", "Sẵn sàng" if multimodal_available else "Chưa có"),
+        ("Chế độ quét", f"Series ({num_slices} lát cắt)" if is_series else "Ảnh đơn (Single)"),
     ]
+    if is_series:
+        tech_rows.append(("Lát cắt hiển thị", f"Lát cắt số {key_slice_index + 1} (Key Slice)"))
     y = 850 * scale
     for label, value in tech_rows:
         draw2.text((90 * scale, y), label, font=font_small, fill=SLATE_500)
@@ -838,9 +844,55 @@ def get_image_analysis_detail(
         layercam_heatmap_data_url=_local_image_to_data_url(result_payload.get("layercam_heatmap_path")),
         xai_explanation=result_payload.get("xai_explanation"),
         fusion_attention=result_payload.get("fusion_attention"),
+        is_series=image.is_series,
+        num_slices=image.num_slices,
+        key_slice_index=image.key_slice_index,
         created_at=created_at,
         updated_at=updated_at,
     )
+
+
+@router.get("/records/analysis/image/{image_id}/slice/{slice_index}")
+def get_slice_image(
+    image_id: int,
+    slice_index: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Khong tim thay anh MRI")
+
+    if not image.is_series:
+        # If not series, just return the only slice
+        slice_index = 0
+
+    bucket_name, folder_prefix = _parse_minio_path(image.file_path)
+    # List objects in folder and sort to find the right index
+    objects = minio_client.list_objects(bucket_name, prefix=folder_prefix, recursive=True)
+    sorted_objects = sorted(list(objects), key=lambda x: x.object_name)
+
+    if slice_index < 0 or slice_index >= len(sorted_objects):
+        raise HTTPException(status_code=404, detail="Index lat cat khong hop le")
+
+    target_obj = sorted_objects[slice_index]
+    obj_res = minio_client.get_object(bucket_name, target_obj.object_name)
+    try:
+        file_bytes = obj_res.read()
+    finally:
+        obj_res.close()
+        obj_res.release_conn()
+
+    # Decode and return as PNG
+    img_bgr = _decode_image_bytes(file_bytes)
+    if img_bgr is None:
+        raise HTTPException(status_code=500, detail="Khong the decode lat cat")
+
+    success, encoded = cv2.imencode(".png", img_bgr)
+    if not success:
+        raise HTTPException(status_code=500, detail="Loi encode PNG")
+
+    return Response(content=encoded.tobytes(), media_type="image/png")
 
 
 @router.get("/records/analysis/image/{image_id}/report")
@@ -902,6 +954,9 @@ def download_image_report(
             layercam_image=_bgr_path_to_pil(result_payload.get("layercam_heatmap_path")),
             xai_explanation=result_payload.get("xai_explanation"),
             fusion_attention=result_payload.get("fusion_attention"),
+            is_series=image.is_series,
+            num_slices=image.num_slices,
+            key_slice_index=image.key_slice_index,
         )
         import urllib.parse
         p_name = patient.name or "BenhNhan"

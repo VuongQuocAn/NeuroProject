@@ -78,14 +78,6 @@ def run_mri_pipeline(task_id: int, image_id: int):
         if not image_record:
             raise Exception(f"Khong tim thay anh MRI voi image_id={image_id}")
 
-        bucket_name, object_name = _parse_minio_path(image_record.file_path)
-        response = minio_client.get_object(bucket_name, object_name)
-        try:
-            image_bytes = response.read()
-        finally:
-            response.close()
-            response.release_conn()
-
         output_dir = os.path.join(os.path.dirname(__file__), "analysis_results", str(image_id))
         os.makedirs(output_dir, exist_ok=True)
 
@@ -103,36 +95,20 @@ def run_mri_pipeline(task_id: int, image_id: int):
                     rna_response.release_conn()
 
                 separator = "\t" if rna_record.file_format == "tsv" else ","
-                
-                # OPTIMIZATION: pandas is extremely slow for 60,000+ columns with just 1 row.
-                # Using simple string split + numpy is much faster.
                 lines = rna_bytes.decode("utf-8").strip().splitlines()
                 if not lines:
                     raise Exception("RNA file is empty.")
-                
-                # Parse headers to find gene column start
                 headers = [h.strip() for h in lines[0].split(separator)]
                 gene_start_idx = -1
                 for i, h in enumerate(headers):
                     if h.startswith("ENSG"):
                         gene_start_idx = i
                         break
-                
-                # If no ENSG column found, fall back to default
                 if gene_start_idx == -1:
                     gene_start_idx = 1
-                    
-                # Determine data line
                 data_line = lines[1] if len(lines) > 1 else lines[0]
                 parts = data_line.split(separator)
-                if not parts:
-                    raise Exception("Could not parse RNA data row.")
-                
-                # Skip first column (patient_id) and convert rest to float
-                # We use a list comprehension or np.fromstring for speed
-                # Note: some values might be empty or invalid, handle them
                 rna_vector = np.array([float(x) if x.strip() else 0.0 for x in parts[gene_start_idx:]], dtype=np.float32)
-                
             except Exception as e:
                 print(f"[CELERY WORKER] Loi khi doc RNA: {e}")
 
@@ -146,12 +122,47 @@ def run_mri_pipeline(task_id: int, image_id: int):
                 "initial_status": clinical_record.initial_status,
             }
 
-        result = get_ai_pipeline().run_multimodal_inference(
-            image_source=image_bytes,
-            rna_data=rna_vector,
-            clinical_data=clinical_dict,
-            output_dir=output_dir,
-        )
+        # ── Fetch All Slices if it's a Series ──
+        if image_record.is_series:
+            bucket_name, folder_prefix = _parse_minio_path(image_record.file_path)
+            # List objects in the series folder
+            objects = minio_client.list_objects(bucket_name, prefix=folder_prefix, recursive=True)
+            image_bytes_list = []
+            
+            # Sort by name to keep slice order if possible
+            sorted_objects = sorted(list(objects), key=lambda x: x.object_name)
+            
+            for obj in sorted_objects:
+                obj_res = minio_client.get_object(bucket_name, obj.object_name)
+                try:
+                    image_bytes_list.append(obj_res.read())
+                finally:
+                    obj_res.close()
+                    obj_res.release_conn()
+            
+            print(f"[CELERY WORKER] Dang chay SERIES pipeline voi {len(image_bytes_list)} lat cat.")
+            result = get_ai_pipeline().run_series_inference(
+                image_bytes_list=image_bytes_list,
+                rna_data=rna_vector,
+                clinical_data=clinical_dict,
+                output_dir=output_dir,
+            )
+        else:
+            # Single image mode
+            bucket_name, object_name = _parse_minio_path(image_record.file_path)
+            response = minio_client.get_object(bucket_name, object_name)
+            try:
+                image_bytes = response.read()
+            finally:
+                response.close()
+                response.release_conn()
+
+            result = get_ai_pipeline().run_multimodal_inference(
+                image_source=image_bytes,
+                rna_data=rna_vector,
+                clinical_data=clinical_dict,
+                output_dir=output_dir,
+            )
 
         if result["status"] != "success":
             raise Exception(result["error_msg"])
@@ -170,11 +181,12 @@ def run_mri_pipeline(task_id: int, image_id: int):
         analysis.tumor_label = result.get("tumor_label")
         analysis.classification_confidence = result.get("classification_confidence")
         analysis.mask_path = result.get("seg_mask_path") or None
-        analysis.gradcam_path = None
-        analysis.dice_score = None
-        analysis.iou_score = None
-        analysis.accuracy = None
-        analysis.c_index = None
+        
+        # Cập nhật metadata cho series nếu có
+        if image_record.is_series:
+            image_record.key_slice_index = result.get("key_slice_index", 0)
+            image_record.num_slices = result.get("num_slices", image_record.num_slices)
+
         analysis.risk_score = result.get("risk_score")
         analysis.risk_group = result.get("risk_group")
         analysis.survival_curve_data = result.get("survival_curve_data")
@@ -182,8 +194,8 @@ def run_mri_pipeline(task_id: int, image_id: int):
         db.commit()
 
         print(
-            "[CELERY WORKER] MRI pipeline xong | "
-            f"class={result['tumor_label']} | confidence={result['classification_confidence']}"
+            f"[CELERY WORKER] MRI {'SERIES' if image_record.is_series else 'SINGLE'} pipeline xong | "
+            f"class={result.get('tumor_label')} | key_slice={result.get('key_slice_index')}"
         )
         return {"task_id": task_id, "status": "done"}
 
@@ -216,7 +228,7 @@ def run_prognosis_pipeline(task_id: int, patient_id: int):
             db.query(models.Image)
             .filter(
                 models.Image.patient_id == patient_id,
-                models.Image.modality == "MRI",
+                models.Image.modality.in_(["MRI", "MRI_SERIES"]),
             )
             .order_by(models.Image.scan_date.desc())
             .first()
@@ -224,7 +236,19 @@ def run_prognosis_pipeline(task_id: int, patient_id: int):
         if not image_record:
             raise Exception("Khong tim thay anh MRI de chay prognosis.")
 
-        image_bucket, image_object = _parse_minio_path(image_record.file_path)
+        image_bucket, folder_or_file = _parse_minio_path(image_record.file_path)
+        
+        if image_record.is_series:
+            # For series, we must pick the key slice to run prognosis on
+            objects = list(minio_client.list_objects(image_bucket, prefix=folder_or_file, recursive=True))
+            sorted_objs = sorted(objects, key=lambda x: x.object_name)
+            key_idx = image_record.key_slice_index or 0
+            if key_idx >= len(sorted_objs): key_idx = 0
+            
+            image_object = sorted_objs[key_idx].object_name
+        else:
+            image_object = folder_or_file
+
         image_response = minio_client.get_object(image_bucket, image_object)
         try:
             image_bytes = image_response.read()

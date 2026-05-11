@@ -59,10 +59,10 @@ def trigger_mri_inference(
     if not image:
         raise HTTPException(status_code=404, detail="Không tìm thấy ảnh MRI")
 
-    if image.modality != "MRI":
+    if image.modality not in ["MRI", "MRI_SERIES"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Ảnh này có modality='{image.modality}', endpoint này chỉ xử lý MRI",
+            detail=f"Ảnh này có modality='{image.modality}', endpoint này chỉ xử lý MRI hoặc MRI_SERIES",
         )
 
     # Kiểm tra xem đã có tác vụ đang chạy cho ảnh này chưa
