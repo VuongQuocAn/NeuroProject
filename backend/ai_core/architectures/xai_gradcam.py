@@ -26,6 +26,14 @@ class GradCAMExplainer:
         self.handles.append(self.target_layer.register_forward_hook(self._save_activations))
         self.handles.append(self.target_layer.register_full_backward_hook(self._save_gradients))
 
+    def switch_target_layer(self, new_layer):
+        """Đổi layer mục tiêu động bằng cách gỡ hook cũ và gắn hook mới."""
+        if self.target_layer == new_layer:
+            return
+        self.remove_hooks()
+        self.target_layer = new_layer
+        self._register_hooks()
+
     def remove_hooks(self):
         for handle in self.handles:
             handle.remove()
@@ -100,11 +108,86 @@ class GradCAMExplainer:
         cam_max = np.max(cam)
         if cam_max != 0:
             cam = cam / cam_max
+            
+        # --- Kỹ thuật làm sạch ảnh (Premium Polish) ---
+        # 1. Dùng hàm mũ để làm các điểm nóng nổi bật hơn (nén vùng nhiễu)
+        cam = np.power(cam, 1.5)
+        
+        # 2. Lọc bỏ các vùng có độ kích hoạt quá thấp (dưới 10%)
+        cam[cam < 0.1] = 0
+        
+        return cam, None # Trả về heatmap và dummy overlay
 
-        # Resize heatmap bằng kích thước ảnh gốc (256x256)
-        cam_resized = cv2.resize(cam, (mri_tensor.shape[-1], mri_tensor.shape[-2]))
+    def generate_cam(self, input_tensor, original_image, target_class=None, method="gradcam"):
+        """
+        Tạo heatmap cho một ảnh duy nhất (dùng cho DenseNetClassifier).
+        Hỗ trợ: gradcam, gradcam++, layercam
+        """
+        self.model.eval()
+        
+        # Bật grad
+        original_grad_states = []
+        for param in self.model.parameters():
+            original_grad_states.append(param.requires_grad)
+            param.requires_grad = True
 
-        return cam_resized
+        self.model.zero_grad()
+        
+        # 1. Forward
+        output = self.model(input_tensor)
+        if target_class is None:
+            target_class = output.argmax(dim=1).item()
+            
+        # 2. Backward
+        loss = output[0, target_class]
+        loss.backward()
+
+        # Restore grad states
+        for i, param in enumerate(self.model.parameters()):
+            param.requires_grad = original_grad_states[i]
+
+        # 3. Tính Heatmap
+        gradients = self.gradients.detach().cpu().numpy()[0] # [C, H, W]
+        activations = self.activations.detach().cpu().numpy()[0] # [C, H, W]
+        
+        cam = np.zeros(activations.shape[1:], dtype=np.float32)
+        
+        if method == "gradcam":
+            weights = np.mean(gradients, axis=(1, 2))
+            for i, w in enumerate(weights):
+                cam += w * activations[i, :, :]
+        elif method == "gradcam++":
+            gradients_pos = np.maximum(gradients, 0)
+            sum_gradients = np.sum(gradients_pos, axis=(1, 2), keepdims=True)
+            sum_gradients = np.where(sum_gradients == 0, 1e-6, sum_gradients)
+            alpha = gradients_pos / sum_gradients
+            weights = np.sum(alpha * activations, axis=(1, 2))
+            for i, w in enumerate(weights):
+                cam += w * activations[i, :, :]
+        elif method == "layercam":
+            pixel_weights = np.maximum(gradients, 0)
+            cam = np.sum(pixel_weights * activations, axis=0)
+
+        # 4. Hậu xử lý
+        cam = np.maximum(cam, 0)
+        cam = cam - np.min(cam)
+        cam_max = np.max(cam)
+        if cam_max != 0:
+            cam = cam / cam_max
+            
+        cam_resized = cv2.resize(cam, (original_image.shape[1], original_image.shape[0]))
+        
+        # Tạo overlay màu
+        heatmap_colored = cv2.applyColorMap(np.uint8(255 * cam_resized), cv2.COLORMAP_JET)
+        heatmap_colored = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
+        
+        # Phủ lên ảnh gốc (chuyển sang RGB nếu đang BGR)
+        img_rgb = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
+        overlay = cv2.addWeighted(img_rgb, 0.6, heatmap_colored, 0.4, 0)
+        # Chuyển lại BGR để cv2.imwrite lưu đúng
+        overlay_bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
+        
+        return cam_resized, overlay_bgr
 
 class XAIVisualizer:
     """Lớp phụ trách việc xử lý ảnh và vẽ đồ thị XAI hiển thị lên màn hình."""

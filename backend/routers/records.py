@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +13,11 @@ from utils import minio_client
 
 router = APIRouter(prefix="/records", tags=["Records"])
 BUCKET_NAME = "medical-data"
+
+
+def _natural_sort_key(text: str):
+    """Tach chuoi thanh so va chu de sap xep tu nhien: patch_2 < patch_10."""
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', text)]
 
 LABEL_MAP = {
     "class_0": "Glioma",
@@ -161,6 +167,47 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
     }
 
 
+@router.get("/patients/{patient_id}/upload-status")
+def get_upload_status(patient_id: str, db: Session = Depends(get_db)):
+    """Lightweight check: which modalities have been uploaded for this patient."""
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    has_mri = db.query(models.Image).filter(
+        models.Image.patient_id == patient.id,
+        models.Image.modality.in_(["MRI", "MRI_SERIES"]),
+    ).first() is not None
+
+    has_wsi = db.query(models.Image).filter(
+        models.Image.patient_id == patient.id,
+        models.Image.modality == "WSI_SERIES",
+    ).first() is not None
+
+    has_rna = db.query(models.RnaData).filter(
+        models.RnaData.patient_id == patient.id
+    ).first() is not None
+
+    clinical = None
+    has_clinical = False
+    if patient.clinical_data:
+        has_clinical = True
+        clinical = {
+            "ki67_index": patient.clinical_data.ki67_index,
+            "grade": patient.clinical_data.grade,
+            "idh_mutation": patient.clinical_data.idh_mutation,
+            "mgmt_methylation": patient.clinical_data.mgmt_methylation,
+        }
+
+    return {
+        "has_mri": has_mri,
+        "has_wsi": has_wsi,
+        "has_rna": has_rna,
+        "has_clinical": has_clinical,
+        "clinical": clinical,
+    }
+
+
 @router.patch("/patients/{patient_id}")
 def update_patient_info(patient_id: str, patient_update: schemas.PatientUpdate, db: Session = Depends(get_db)):
     patient = crud.get_patient_by_id_or_external(db, patient_id)
@@ -229,7 +276,7 @@ def get_series_slice(image_id: int, index: int, db: Session = Depends(get_db)):
         # Xử lý chuỗi ảnh
         bucket_name, folder_prefix = image.file_path.lstrip("/").split("/", 1)
         objects = list(minio_client.list_objects(bucket_name, prefix=folder_prefix, recursive=True))
-        sorted_objs = sorted(objects, key=lambda x: x.object_name)
+        sorted_objs = sorted(objects, key=lambda x: _natural_sort_key(x.object_name))
         
         if index < 0 or index >= len(sorted_objs):
             raise HTTPException(status_code=404, detail=f"Index {index} vượt quá số lượng lát cắt ({len(sorted_objs)})")

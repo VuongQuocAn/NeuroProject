@@ -41,17 +41,21 @@ class DenseNetClassifier:
         self.model.to(self.device)
         self.model.eval()
 
+    def preprocess(self, roi_bgr: np.ndarray) -> torch.Tensor:
+        resized = cv2.resize(roi_bgr, (self.input_size, self.input_size))
+        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        tensor = torch.from_numpy(rgb.transpose(2, 0, 1)).float() / 255.0
+        tensor = tensor.unsqueeze(0)
+        tensor = self._normalize(tensor).to(self.device)
+        return tensor
+
     def predict(self, roi_bgr: np.ndarray) -> tuple[str, float, list[float]]:
         if self.model is None:
             raise RuntimeError("DenseNetClassifier chua duoc load weights.")
         if roi_bgr is None or roi_bgr.size == 0:
             raise ValueError("ROI dau vao cho DenseNet khong hop le.")
 
-        resized = cv2.resize(roi_bgr, (self.input_size, self.input_size))
-        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-        tensor = torch.from_numpy(rgb.transpose(2, 0, 1)).float() / 255.0
-        tensor = tensor.unsqueeze(0)
-        tensor = self._normalize(tensor).to(self.device)
+        tensor = self.preprocess(roi_bgr)
 
         with torch.no_grad():
             logits = self.model(tensor)

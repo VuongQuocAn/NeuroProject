@@ -1,5 +1,6 @@
 import os
 import io
+import re
 import sys
 import importlib
 import importlib.util
@@ -60,8 +61,8 @@ def get_ai_pipeline() -> "TumorAnalysisPipeline":
     return ai_pipeline
 
 
-@shared_task(name="tasks.run_mri_pipeline")
-def run_mri_pipeline(task_id: int, image_id: int):
+@shared_task(name="tasks.run_mri_pipeline", bind=True)
+def run_mri_pipeline(self, task_id: int, image_id: int):
     """MRI -> YOLOv11 -> ROI -> U-Net -> DenseNet169 classify."""
     print(f"[CELERY WORKER] Nhan task MRI. Task ID: {task_id} | Image ID: {image_id}")
     db = SessionLocal()
@@ -141,11 +142,19 @@ def run_mri_pipeline(task_id: int, image_id: int):
                     obj_res.release_conn()
             
             print(f"[CELERY WORKER] Dang chay SERIES pipeline voi {len(image_bytes_list)} lat cat.")
+            
+            def progress_updater(percent, status_text):
+                self.update_state(
+                    state='PROGRESS',
+                    meta={'percent': percent, 'status': status_text}
+                )
+
             result = get_ai_pipeline().run_series_inference(
                 image_bytes_list=image_bytes_list,
                 rna_data=rna_vector,
                 clinical_data=clinical_dict,
                 output_dir=output_dir,
+                progress_callback=progress_updater
             )
         else:
             # Single image mode
@@ -157,11 +166,18 @@ def run_mri_pipeline(task_id: int, image_id: int):
                 response.close()
                 response.release_conn()
 
+            def progress_updater(percent, status_text):
+                self.update_state(
+                    state='PROGRESS',
+                    meta={'percent': percent, 'status': status_text}
+                )
+
             result = get_ai_pipeline().run_multimodal_inference(
                 image_source=image_bytes,
                 rna_data=rna_vector,
                 clinical_data=clinical_dict,
                 output_dir=output_dir,
+                progress_callback=progress_updater
             )
 
         if result["status"] != "success":
@@ -210,8 +226,8 @@ def run_mri_pipeline(task_id: int, image_id: int):
         db.close()
 
 
-@shared_task(name="tasks.run_prognosis_pipeline")
-def run_prognosis_pipeline(task_id: int, patient_id: int):
+@shared_task(name="tasks.run_prognosis_pipeline", bind=True)
+def run_prognosis_pipeline(self, task_id: int, patient_id: int):
     """MRI pipeline moi -> masked ROI + RNA + clinical -> multimodal prognosis."""
     print(f"[CELERY WORKER] Nhan task prognosis. Task ID: {task_id} | Patient ID: {patient_id}")
     db = SessionLocal()
@@ -224,7 +240,15 @@ def run_prognosis_pipeline(task_id: int, patient_id: int):
         task_record.status = "processing"
         db.commit()
 
-        image_record = (
+        # Thong bao ngay cho Frontend de hien Progress Bar
+        print(f"[CELERY WORKER] Bat dau xu ly Prognosis cho Patient {patient_id}. GPU: {torch.cuda.is_available()}")
+        self.update_state(
+            state='PROGRESS',
+            meta={'percent': 5, 'status': "Đang nạp dữ liệu từ kho lưu trữ..."}
+        )
+
+        # 1. Tìm ảnh MRI (nếu có)
+        mri_record = (
             db.query(models.Image)
             .filter(
                 models.Image.patient_id == patient_id,
@@ -233,29 +257,65 @@ def run_prognosis_pipeline(task_id: int, patient_id: int):
             .order_by(models.Image.scan_date.desc())
             .first()
         )
-        if not image_record:
-            raise Exception("Khong tim thay anh MRI de chay prognosis.")
-
-        image_bucket, folder_or_file = _parse_minio_path(image_record.file_path)
         
-        if image_record.is_series:
-            # For series, we must pick the key slice to run prognosis on
-            objects = list(minio_client.list_objects(image_bucket, prefix=folder_or_file, recursive=True))
-            sorted_objs = sorted(objects, key=lambda x: x.object_name)
-            key_idx = image_record.key_slice_index or 0
-            if key_idx >= len(sorted_objs): key_idx = 0
+        mri_bytes = None
+        mri_all_bytes = None  # Toàn bộ series bytes (nếu là series)
+        is_mri_series = False
+        if mri_record:
+            image_bucket, folder_or_file = _parse_minio_path(mri_record.file_path)
+            if mri_record.is_series:
+                is_mri_series = True
+                objects = list(minio_client.list_objects(image_bucket, prefix=folder_or_file, recursive=True))
+                sorted_objs = sorted(objects, key=lambda x: [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', x.object_name)])
+                
+                # Load TOÀN BỘ slices để pipeline tự quét tìm key slice
+                mri_all_bytes = []
+                for obj in sorted_objs:
+                    resp = minio_client.get_object(image_bucket, obj.object_name)
+                    try:
+                        mri_all_bytes.append(resp.read())
+                    finally:
+                        resp.close()
+                        resp.release_conn()
+            else:
+                image_object = folder_or_file
+                image_response = minio_client.get_object(image_bucket, image_object)
+                try:
+                    mri_bytes = image_response.read()
+                finally:
+                    image_response.close()
+                    image_response.release_conn()
+
+        # 2. Tìm WSI Tiles (nếu có)
+        wsi_record = (
+            db.query(models.Image)
+            .filter(
+                models.Image.patient_id == patient_id,
+                models.Image.modality == "WSI_SERIES",
+            )
+            .order_by(models.Image.scan_date.desc())
+            .first()
+        )
+        
+        wsi_tiles = []
+        if wsi_record:
+            from concurrent.futures import ThreadPoolExecutor
+            wsi_bucket, wsi_folder = _parse_minio_path(wsi_record.file_path)
+            objects = list(minio_client.list_objects(wsi_bucket, prefix=wsi_folder, recursive=True))
             
-            image_object = sorted_objs[key_idx].object_name
-        else:
-            image_object = folder_or_file
+            def load_tile(obj_name):
+                resp = minio_client.get_object(wsi_bucket, obj_name)
+                try:
+                    return resp.read()
+                finally:
+                    resp.close()
+                    resp.release_conn()
 
-        image_response = minio_client.get_object(image_bucket, image_object)
-        try:
-            image_bytes = image_response.read()
-        finally:
-            image_response.close()
-            image_response.release_conn()
+            # Tải song song tối đa 10 tiles cùng lúc để tăng tốc độ I/O
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                wsi_tiles = list(executor.map(lambda o: load_tile(o.object_name), objects))
 
+        # 3. Tìm RNA Data (nếu có)
         rna_record = db.query(models.RnaData).filter(models.RnaData.patient_id == patient_id).first()
         rna_vector = None
         if rna_record:
@@ -270,10 +330,16 @@ def run_prognosis_pipeline(task_id: int, patient_id: int):
             separator = "\t" if rna_record.file_format == "tsv" else ","
             df = pd.read_csv(io.BytesIO(rna_bytes), sep=separator)
             numeric_df = df.select_dtypes(include=["number"])
-            if "patient_id" in numeric_df.columns:
-                numeric_df = numeric_df.drop(columns=["patient_id"])
+            
+            # Loai bo metadata va statistical columns de tranh lech vector gene
+            cols_to_drop = ["patient_id", "N_unmapped", "N_multimapping", "N_noFeature", "N_ambiguous"]
+            for col in cols_to_drop:
+                if col in numeric_df.columns:
+                    numeric_df = numeric_df.drop(columns=[col])
+                    
             rna_vector = numeric_df.to_numpy(dtype=np.float32).flatten()
 
+        # 4. Tìm Clinical Data (nếu có)
         clinical_record = db.query(models.ClinicalData).filter(models.ClinicalData.patient_id == patient_id).first()
         clinical_dict = {}
         if clinical_record:
@@ -281,37 +347,86 @@ def run_prognosis_pipeline(task_id: int, patient_id: int):
                 "ki67_index": clinical_record.ki67_index,
                 "biochemistry_markers": clinical_record.biochemistry_markers,
                 "initial_status": clinical_record.initial_status,
+                "age": clinical_record.patient.age,
+                "gender": clinical_record.patient.gender,
+                "grade": clinical_record.grade,
+                "prior_treatment": clinical_record.prior_treatment,
             }
 
         output_dir = os.path.join(os.path.dirname(__file__), "multimodal_results", str(patient_id))
         os.makedirs(output_dir, exist_ok=True)
 
-        result = get_ai_pipeline().run_multimodal_inference(
-            image_source=image_bytes,
-            rna_data=rna_vector,
-            clinical_data=clinical_dict,
-            output_dir=output_dir,
-        )
+        def progress_updater(percent, status_text):
+            self.update_state(
+                state='PROGRESS',
+                meta={'percent': percent, 'status': status_text}
+            )
+
+        # Chạy pipeline tích hợp đầy đủ
+        pipeline = get_ai_pipeline()
+
+        if is_mri_series and mri_all_bytes:
+            # Series: quét tất cả slices để tự động tìm key slice
+            result = pipeline.run_series_inference(
+                image_bytes_list=mri_all_bytes,
+                wsi_tiles=wsi_tiles,
+                rna_data=rna_vector,
+                clinical_data=clinical_dict,
+                output_dir=output_dir,
+                progress_callback=progress_updater
+            )
+            # Cập nhật key_slice_index trong DB theo kết quả quét thực tế
+            new_key_idx = result.get("key_slice_index")
+            if new_key_idx is not None and mri_record:
+                mri_record.key_slice_index = new_key_idx
+        else:
+            # Ảnh đơn hoặc không có MRI
+            result = pipeline.run_full_prognosis(
+                mri_source=mri_bytes,
+                wsi_tiles=wsi_tiles,
+                rna_data=rna_vector,
+                clinical_data=clinical_dict,
+                output_dir=output_dir,
+                progress_callback=progress_updater
+            )
+
         if result["status"] != "success":
-            raise Exception(result["error_msg"])
+            raise Exception(result.get("error_msg", "Pipeline failed"))
+
+        # Khử giá trị NaN/Inf trước khi lưu vào DB (Postgres không nhận NaN trong JSON)
+        def sanitize_json(data):
+            if isinstance(data, dict):
+                return {k: sanitize_json(v) for k, v in data.items()}
+            elif isinstance(data, list):
+                return [sanitize_json(v) for v in data]
+            elif isinstance(data, float):
+                import math
+                if math.isnan(data) or math.isinf(data):
+                    return None
+            return data
+
+        clean_result = sanitize_json(result)
 
         task_record.status = "done"
-        task_record.result = result
+        task_record.result = clean_result
 
-        analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.image_id == image_record.id).first()
+        # Prognosis process: find or create analysis for the patient
+        analysis = db.query(models.AnalysisResult).filter(
+            models.AnalysisResult.patient_id == patient_id
+        ).first()
+
         if not analysis:
             analysis = models.AnalysisResult(
                 patient_id=patient_id,
-                image_id=image_record.id,
+                image_id=mri_record.id if mri_record else None,
             )
             db.add(analysis)
 
-        analysis.tumor_label = result["tumor_label"]
-        analysis.classification_confidence = result["classification_confidence"]
-        analysis.mask_path = result["seg_mask_path"]
-        analysis.risk_score = result["risk_score"]
-        analysis.risk_group = result["risk_group"]
-        analysis.survival_curve_data = result["survival_curve_data"]
+        analysis.tumor_label = clean_result.get("tumor_label")
+        analysis.classification_confidence = clean_result.get("classification_confidence")
+        analysis.risk_score = clean_result.get("risk_score")
+        analysis.risk_group = clean_result.get("risk_group")
+        analysis.survival_curve_data = clean_result.get("survival_curve_data")
 
         db.commit()
         return {"status": "done", "patient_id": patient_id}

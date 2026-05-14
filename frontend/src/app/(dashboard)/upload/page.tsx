@@ -10,8 +10,10 @@ import {
   PlayCircle,
   Loader2,
   ArrowRight,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
-import { apiService } from "@/lib/api";
+import { api, apiService } from "@/lib/api";
 import MriResultCard from "@/components/ai/MriResultCard";
 
 const recentUploads = [
@@ -29,7 +31,7 @@ type UploadResultState = {
   error?: string;
 };
 
-type UploadTab = "dicom" | "rna" | "clinical";
+type UploadTab = "dicom" | "rna" | "clinical" | "wsi";
 
 const MRI_RESULT_STORAGE_KEY = "neuro_mri_upload_result";
 const MRI_PATIENT_STORAGE_KEY = "neuro_mri_patient_id";
@@ -40,13 +42,22 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
   const [patientId, setPatientId] = useState("");
   const [mriFiles, setMriFiles] = useState<File[]>([]);
+  const [wsiFiles, setWsiFiles] = useState<File[]>([]);
   const [rnaFile, setRnaFile] = useState<File | null>(null);
   const [ki67, setKi67] = useState("");
   const [grade, setGrade] = useState("");
   const [idhMutation, setIdhMutation] = useState("");
   const [mgmtMethylation, setMgmtMethylation] = useState("");
   const [statusMsg, setStatusMsg] = useState({ text: "", type: "" });
+  const [progress, setProgress] = useState<{ percent: number; status: string } | null>(null);
   const [uploadResult, setUploadResult] = useState<UploadResultState>({ kind: "idle" });
+  const [uploadedStatus, setUploadedStatus] = useState({
+    mri: false,
+    wsi: false,
+    rna: false,
+    clinical: false,
+  });
+  const [lastUploadedImageId, setLastUploadedImageId] = useState<number | string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -82,6 +93,39 @@ export default function UploadPage() {
     }
   }, [patientId]);
 
+  // Auto-check existing uploads from DB when patient ID changes
+  useEffect(() => {
+    const pid = patientId.trim();
+    if (!pid) {
+      setUploadedStatus({ mri: false, wsi: false, rna: false, clinical: false });
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get(`/records/patients/${encodeURIComponent(pid)}/upload-status`);
+        const data = res.data;
+        setUploadedStatus({
+          mri: Boolean(data.has_mri),
+          wsi: Boolean(data.has_wsi),
+          rna: Boolean(data.has_rna),
+          clinical: Boolean(data.has_clinical),
+        });
+        // Pre-fill clinical values if they exist
+        if (data.clinical) {
+          if (data.clinical.ki67_index != null) setKi67(String(data.clinical.ki67_index));
+          if (data.clinical.grade) setGrade(String(data.clinical.grade));
+          if (data.clinical.idh_mutation) setIdhMutation(String(data.clinical.idh_mutation));
+          if (data.clinical.mgmt_methylation) setMgmtMethylation(String(data.clinical.mgmt_methylation));
+        }
+      } catch {
+        // Patient not found or no data yet — ignore
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [patientId]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (uploadResult.kind === "idle") {
@@ -100,6 +144,12 @@ export default function UploadPage() {
   const handleRnaFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
       setRnaFile(event.target.files[0]);
+    }
+  };
+
+  const handleWsiFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      setWsiFiles(Array.from(event.target.files));
     }
   };
 
@@ -144,7 +194,6 @@ export default function UploadPage() {
 
     setUploading(true);
     setStatusMsg({ text: "", type: "" });
-    setUploadResult({ kind: "idle" });
 
     try {
       const isSeries = mriFiles.length > 1 || mriFiles[0].name.toLowerCase().endsWith(".zip");
@@ -167,42 +216,51 @@ export default function UploadPage() {
         throw new Error("Upload thành công nhưng backend không trả về image_id.");
       }
 
-      setStatusMsg({ text: "Đang phân tích đồng thuận chuỗi ảnh AI...", type: "success" });
-      const taskResponse = await apiService.inference.runMri(imageId);
-      const taskId = taskResponse.data?.task_id;
-
-      if (taskId) {
-        await apiService.inference.waitForTask(taskId, 2000, 300000);
-      }
-
-      const resultResponse = await apiService.analysis.getImageResult(imageId);
-      setUploadResult({
-        kind: "success",
-        imageId,
-        patientId: patientId.trim(),
-        data: resultResponse.data,
-      });
+      setLastUploadedImageId(imageId);
+      setUploadedStatus(prev => ({ ...prev, mri: true }));
       setStatusMsg({
-        text: isSeries 
-          ? "Chuỗi ảnh MRI đã được chẩn đoán đồng thuận thành công." 
-          : "Ảnh MRI đã được tải lên và chạy xong pipeline AI.",
+        text: "Tải lên MRI thành công. Bạn có thể tải thêm dữ liệu khác hoặc bấm 'Chạy Tổng Hợp' ở dưới.",
         type: "success",
       });
       setMriFiles([]);
-      setActiveTab("dicom");
     } catch (err: any) {
-      const errorText = `Lỗi upload/chạy AI: ${getErrorMessage(err, "Không thể xử lý file MRI.")}`;
-      setUploadResult({
-        kind: "error",
-        patientId: patientId.trim(),
-        error: errorText,
-        data: {
-          status: "failed",
-          error_message: errorText,
-        },
-      });
+      const errorText = `Lỗi upload MRI: ${getErrorMessage(err, "Không thể xử lý file MRI.")}`;
       setStatusMsg({ text: errorText, type: "error" });
-      setActiveTab("dicom");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUploadWsi = async () => {
+    if (wsiFiles.length === 0 || !patientId.trim()) {
+      setStatusMsg({
+        text: "Vui lòng nhập mã bệnh nhân và chọn file ZIP hoặc các tiles WSI.",
+        type: "error",
+      });
+      return;
+    }
+
+    setUploading(true);
+    setStatusMsg({ text: "", type: "" });
+
+    try {
+      setStatusMsg({ text: `Đang tải lên và lọc ${wsiFiles.length} tiles WSI bằng AI...`, type: "success" });
+      const response = await apiService.upload.wsiSeries(
+        patientId.trim(),
+        wsiFiles.length === 1 && wsiFiles[0].name.toLowerCase().endsWith(".zip") ? wsiFiles[0] : wsiFiles
+      );
+      
+      const { image_id, num_valid_tiles } = response.data;
+      setLastUploadedImageId(image_id);
+      setUploadedStatus(prev => ({ ...prev, wsi: true }));
+      setStatusMsg({ 
+        text: `Upload WSI thành công (Giữ lại ${num_valid_tiles} tiles).`, 
+        type: "success" 
+      });
+      setWsiFiles([]);
+    } catch (err: any) {
+      const errorText = `Lỗi xử lý WSI: ${getErrorMessage(err, "Không thể tải lên WSI.")}`;
+      setStatusMsg({ text: errorText, type: "error" });
     } finally {
       setUploading(false);
     }
@@ -222,32 +280,8 @@ export default function UploadPage() {
 
     try {
       await apiService.upload.rna(patientId.trim(), rnaFile);
-      setStatusMsg({ text: "Tải lên dữ liệu RNA thành công. Đang cập nhật tiên lượng...", type: "success" });
-
-      try {
-        const taskResponse = await apiService.inference.runPrognosis(patientId.trim());
-        const taskId = taskResponse.data?.task_id;
-        if (taskId) {
-          await apiService.inference.waitForTask(taskId, 2000, 300000);
-        }
-        
-        const resultResponse = await apiService.analysis.getResult(patientId.trim());
-        const analysisList = Array.isArray(resultResponse.data) ? resultResponse.data : [resultResponse.data];
-        const latest = analysisList[0];
-        if (latest) {
-          setUploadResult({
-            kind: "success",
-            imageId: latest.image_id,
-            patientId: patientId.trim(),
-            data: latest,
-          });
-        }
-        setStatusMsg({ text: "Đã tổng hợp dữ liệu RNA vào mô hình.", type: "success" });
-        setActiveTab("dicom");
-      } catch (e) {
-        setStatusMsg({ text: "Tải lên RNA thành công. Vui lòng tải lên ảnh MRI để chạy mô hình AI.", type: "success" });
-      }
-
+      setUploadedStatus(prev => ({ ...prev, rna: true }));
+      setStatusMsg({ text: "Tải lên dữ liệu RNA thành công.", type: "success" });
       setRnaFile(null);
     } catch (err: any) {
       setStatusMsg({
@@ -278,39 +312,52 @@ export default function UploadPage() {
         idh_mutation: idhMutation || null,
         mgmt_methylation: mgmtMethylation || null
       });
-      setStatusMsg({ text: "Cập nhật dữ liệu lâm sàng thành công. Đang cập nhật tiên lượng...", type: "success" });
-
-      try {
-        const taskResponse = await apiService.inference.runPrognosis(patientId.trim());
-        const taskId = taskResponse.data?.task_id;
-        if (taskId) {
-          await apiService.inference.waitForTask(taskId, 2000, 300000);
-        }
-        
-        const resultResponse = await apiService.analysis.getResult(patientId.trim());
-        const analysisList = Array.isArray(resultResponse.data) ? resultResponse.data : [resultResponse.data];
-        const latest = analysisList[0];
-        if (latest) {
-          setUploadResult({
-            kind: "success",
-            imageId: latest.image_id,
-            patientId: patientId.trim(),
-            data: latest,
-          });
-        }
-        setStatusMsg({ text: "Đã tổng hợp dữ liệu Lâm sàng vào mô hình.", type: "success" });
-        setActiveTab("dicom");
-      } catch (e) {
-        setStatusMsg({ text: "Cập nhật Lâm sàng thành công. Vui lòng tải lên ảnh MRI để chạy mô hình AI.", type: "success" });
-      }
-
-      setKi67("");
+      setUploadedStatus(prev => ({ ...prev, clinical: true }));
+      setStatusMsg({ text: "Cập nhật dữ liệu lâm sàng thành công.", type: "success" });
     } catch (err: any) {
       setStatusMsg({
         text: `Lỗi cập nhật: ${getErrorMessage(err, "Không thể cập nhật thông tin lâm sàng.")}`,
         type: "error",
       });
     } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRunFullPipeline = async () => {
+    if (!patientId.trim()) {
+      setStatusMsg({ text: "Vui lòng nhập Mã bệnh nhân để chạy pipeline.", type: "error" });
+      return;
+    }
+
+    setUploading(true);
+    setStatusMsg({ text: "Đang kích hoạt quy trình phân tích tổng hợp AI...", type: "success" });
+    setProgress(null);
+
+    try {
+      const taskResponse = await apiService.inference.runPrognosis(patientId.trim());
+      const taskId = taskResponse.data?.task_id;
+      
+      if (taskId) {
+        await apiService.inference.waitForTask(taskId, 3000, 1200000, (p, s) => {
+          setProgress({ percent: p, status: s });
+          setStatusMsg({ text: s, type: "success" });
+        });
+      }
+
+      // Đạt 100% trước khi chuyển trang
+      setProgress({ percent: 100, status: "Hoàn tất! Đang chuyển sang trang kết quả..." });
+      setStatusMsg({ text: "Quy trình phân tích tổng hợp hoàn tất thành công.", type: "success" });
+
+      // Delay nhẹ để người dùng thấy 100%
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Tự động chuyển sang trang kết quả
+      router.push(`/results/${patientId.trim()}`);
+    } catch (err: any) {
+      const errorText = `Lỗi chạy pipeline: ${getErrorMessage(err, "Không thể thực hiện phân tích.")}`;
+      setStatusMsg({ text: errorText, type: "error" });
+      setProgress(null);
       setUploading(false);
     }
   };
@@ -366,15 +413,27 @@ export default function UploadPage() {
               Đã chọn {mriFiles.length} file {mriFiles.length === 1 ? `(${mriFiles[0].name})` : ""}
             </div>
           )}
-          {mriFiles.length > 0 && (
+          {!uploadedStatus.mri ? (
             <button
               onClick={handleUploadDicom}
-              disabled={uploading || !patientId.trim()}
+              disabled={uploading || !patientId.trim() || mriFiles.length === 0}
               className="w-full mt-2 px-6 py-3 bg-white hover:bg-slate-200 text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
             >
-              {uploading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
-              {mriFiles.length > 1 || mriFiles[0]?.name.endsWith(".zip") ? "Phân tích chuỗi ảnh" : "Upload và chạy AI"}
+              {uploading && activeTab === "dicom" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
+              Tải lên MRI
             </button>
+          ) : (
+            <div className="flex gap-2 w-full mt-2">
+              <div className="flex-1 px-6 py-3 bg-slate-700 text-slate-400 font-bold rounded-xl flex justify-center items-center cursor-not-allowed">
+                Đã tải (MRI)
+              </div>
+              <button
+                onClick={() => setUploadedStatus(prev => ({ ...prev, mri: false }))}
+                className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl border border-slate-700 transition-all"
+              >
+                Cập nhật
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -401,7 +460,17 @@ export default function UploadPage() {
                   : "text-slate-400 hover:text-slate-200"
               }`}
             >
-              Ảnh / WSI
+              MRI (Ảnh)
+            </button>
+            <button
+              onClick={() => setActiveTab("wsi")}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                activeTab === "wsi"
+                  ? "bg-slate-700 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              WSI (Mô bệnh học)
             </button>
             <button
               onClick={() => setActiveTab("rna")}
@@ -428,25 +497,112 @@ export default function UploadPage() {
 
         {statusMsg.text && (
           <div
-            className={`mb-4 p-4 rounded-lg border flex items-center justify-between ${
+            className={`mb-6 p-5 rounded-2xl border flex flex-col gap-4 shadow-lg ${
               statusMsg.type === "error"
-                ? "bg-red-500/10 text-red-500 border-red-500/20"
+                ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
                 : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
             }`}
           >
-            <span>{statusMsg.text}</span>
-            {statusMsg.type === "success" && patientId.trim() && (
-              <button
-                onClick={() => router.push(`/patients/${patientId.trim()}`)}
-                className="flex items-center gap-1 text-sm font-bold underline hover:no-underline"
-              >
-                Xem hồ sơ <ArrowRight className="h-4 w-4" />
-              </button>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {uploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : statusMsg.type === "error" ? (
+                  <AlertCircle className="h-5 w-5" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5" />
+                )}
+                <span className="font-medium text-sm">{statusMsg.text}</span>
+              </div>
+              
+              {statusMsg.type === "success" && !uploading && patientId.trim() && (
+                <button
+                  onClick={() => router.push(`/patients/${patientId.trim()}`)}
+                  className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider bg-emerald-500 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-600 transition-all"
+                >
+                  Xem hồ sơ <ArrowRight className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Thanh tiến trình thời gian thực */}
+            {progress && (
+              <div className="w-full space-y-3 pt-2 border-t border-white/10">
+                <div className="flex justify-between items-end mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    {progress.status}
+                  </span>
+                  <span className="text-sm font-mono font-bold text-emerald-400">
+                    {progress.percent}%
+                  </span>
+                </div>
+                <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-white/5">
+                  <div 
+                    className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-full transition-all duration-700 ease-in-out relative shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                    style={{ width: `${progress.percent}%` }}
+                  >
+                    <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.1)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.1)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-[progress-bar-stripes_1s_linear_infinite]" />
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )}
 
         {activeTab === "dicom" && renderMriCard()}
+
+        {activeTab === "wsi" && (
+           <div className="flex-1 rounded-2xl border-2 border-dashed border-rose-700/50 bg-slate-900/30 flex flex-col items-center justify-center p-12 relative group hover:border-rose-500/50 hover:bg-rose-900/10 transition-all">
+             <div className="h-20 w-20 rounded-full bg-rose-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+               <UploadCloud className="h-10 w-10 text-rose-500" />
+             </div>
+
+             <h3 className="text-xl font-bold text-white mb-2 text-center">Tải lên WSI Tiles (Chuỗi ảnh)</h3>
+             <p className="text-slate-400 mb-8 max-w-md text-center italic">
+               Hệ thống sẽ tự động lọc các tiles rỗng và chọn 200 tiles tốt nhất bằng CNN.
+             </p>
+
+             <div className="flex flex-col items-center gap-4 w-full max-w-sm">
+                <input
+                  type="text"
+                  placeholder="Mã bệnh nhân (Patient ID)"
+                  value={patientId}
+                  onChange={(event) => setPatientId(event.target.value)}
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mb-2 focus:border-rose-500 outline-none"
+                />
+                <label className="w-full relative">
+                  <input type="file" multiple accept="image/*,.zip" className="hidden" onChange={handleWsiFileChange} />
+                  <div className="w-full px-6 py-3 cursor-pointer bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-rose-500/20 flex justify-center">
+                    + Chọn file ZIP / WSI Tiles
+                  </div>
+                </label>
+                {wsiFiles.length > 0 && <div className="text-rose-400 text-sm">Đã chọn {wsiFiles.length} tiles</div>}
+
+                {!uploadedStatus.wsi ? (
+                  <button
+                    onClick={handleUploadWsi}
+                    disabled={uploading || !patientId.trim() || wsiFiles.length === 0}
+                    className="w-full mt-2 px-6 py-3 bg-white hover:bg-slate-200 text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
+                  >
+                    {uploading && activeTab === "wsi" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
+                    Lọc và Tải lên WSI
+                  </button>
+                ) : (
+                  <div className="flex gap-2 w-full mt-2">
+                    <div className="flex-1 px-6 py-3 bg-slate-700 text-slate-400 font-bold rounded-xl flex justify-center items-center cursor-not-allowed">
+                      Đã tải (WSI)
+                    </div>
+                    <button
+                      onClick={() => setUploadedStatus(prev => ({ ...prev, wsi: false }))}
+                      className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl border border-slate-700 transition-all"
+                    >
+                      Cập nhật
+                    </button>
+                  </div>
+                )}
+              </div>
+           </div>
+        )}
 
         {activeTab === "rna" && (
           <div className="flex-1 rounded-2xl border-2 border-dashed border-indigo-700/50 bg-slate-900/30 flex flex-col items-center justify-center p-12 relative group hover:border-indigo-500/50 hover:bg-indigo-900/10 transition-all">
@@ -474,15 +630,28 @@ export default function UploadPage() {
                 </div>
               </label>
               {rnaFile && <div className="text-indigo-400 text-sm">{rnaFile.name}</div>}
-              {rnaFile && (
+              
+              {!uploadedStatus.rna ? (
                 <button
                   onClick={handleUploadRna}
-                  disabled={uploading || !patientId.trim()}
+                  disabled={uploading || !patientId.trim() || !rnaFile}
                   className="w-full mt-2 px-6 py-3 bg-white hover:bg-slate-200 text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
                 >
-                  {uploading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
-                  Xác thực và tải lên
+                  {uploading && activeTab === "rna" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
+                  Tải lên RNA
                 </button>
+              ) : (
+                <div className="flex gap-2 w-full mt-2">
+                  <div className="flex-1 px-6 py-3 bg-slate-700 text-slate-400 font-bold rounded-xl flex justify-center items-center cursor-not-allowed">
+                    Đã tải (RNA)
+                  </div>
+                  <button
+                    onClick={() => setUploadedStatus(prev => ({ ...prev, rna: false }))}
+                    className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl border border-slate-700 transition-all"
+                  >
+                    Cập nhật
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -514,9 +683,10 @@ export default function UploadPage() {
                     <input
                       type="number"
                       value={ki67}
+                      disabled={uploadedStatus.clinical || uploading}
                       onChange={(e) => setKi67(e.target.value)}
                       placeholder="VD: 15"
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -524,9 +694,10 @@ export default function UploadPage() {
                       <label className="block text-sm font-medium text-slate-400 mb-1.5">Bậc u (WHO Grade)</label>
                       <select
                         value={grade}
-                        onChange={(e) => setGrade(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50"
-                      >
+                        disabled={uploadedStatus.clinical || uploading}
+                      onChange={(e) => setGrade(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                         <option value="">Chọn bậc u</option>
                         <option value="2">WHO Grade II</option>
                         <option value="3">WHO Grade III</option>
@@ -537,8 +708,9 @@ export default function UploadPage() {
                       <label className="block text-sm font-medium text-slate-400 mb-1.5">Đột biến IDH</label>
                       <select
                         value={idhMutation}
+                        disabled={uploadedStatus.clinical || uploading}
                         onChange={(e) => setIdhMutation(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="">Chưa xác định</option>
                         <option value="1">Có đột biến (Mutant)</option>
@@ -549,8 +721,9 @@ export default function UploadPage() {
                       <label className="block text-sm font-medium text-slate-400 mb-1.5">MGMT Methylation</label>
                       <select
                         value={mgmtMethylation}
+                        disabled={uploadedStatus.clinical || uploading}
                         onChange={(e) => setMgmtMethylation(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="">Chưa xác định</option>
                         <option value="1">Có Methylation (Positive)</option>
@@ -561,16 +734,55 @@ export default function UploadPage() {
                 </div>
 
               <div className="pt-4">
-                <button
-                  onClick={handleUpdateClinical}
-                  disabled={uploading || !patientId.trim() || (!ki67 && !grade && !idhMutation && !mgmtMethylation)}
-                  className="w-full px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 transition-all flex justify-center items-center shadow-lg shadow-emerald-500/20"
-                >
-                  {uploading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
-                  Lưu thông tin lâm sàng
-                </button>
+                {!uploadedStatus.clinical ? (
+                  <button
+                    onClick={handleUpdateClinical}
+                    disabled={uploading || !patientId.trim() || (!ki67 && !grade && !idhMutation && !mgmtMethylation)}
+                    className="w-full px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 transition-all flex justify-center items-center shadow-lg shadow-emerald-500/20"
+                  >
+                    {uploading && activeTab === "clinical" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
+                    Lưu thông tin lâm sàng
+                  </button>
+                ) : (
+                  <div className="flex gap-2 w-full mt-2">
+                    <div className="flex-1 px-6 py-3 bg-slate-700 text-slate-400 font-bold rounded-xl flex justify-center items-center cursor-not-allowed">
+                      Đã lưu lâm sàng
+                    </div>
+                    <button
+                      onClick={() => setUploadedStatus(prev => ({ ...prev, clinical: false }))}
+                      className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl border border-slate-700 transition-all"
+                    >
+                      Cập nhật
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Nút Chạy Tổng Hợp cố định ở dưới - Chỉ hiện khi có MRI */}
+        {uploadedStatus.mri && (
+          <div className="mt-8 p-6 rounded-2xl bg-slate-800/50 border border-teal-500/30 flex flex-col items-center">
+            <h4 className="text-teal-400 font-bold mb-2 flex items-center gap-2">
+              <PlayCircle className="h-5 w-5" /> Sẵn sàng phân tích tổng hợp
+            </h4>
+            <p className="text-slate-400 text-sm mb-6 text-center">
+              Dữ liệu đã được chuẩn bị cho bệnh nhân <strong>{patientId}</strong>. 
+              Nhấn nút dưới đây để kích hoạt toàn bộ AI Pipeline.
+            </p>
+            <button
+              onClick={handleRunFullPipeline}
+              disabled={uploading}
+              className="px-12 py-4 bg-teal-600 hover:bg-teal-500 text-white text-lg font-black rounded-2xl transition-all shadow-xl shadow-teal-500/30 flex items-center gap-3 disabled:opacity-50"
+            >
+              {uploading && statusMsg.text.includes("quy trình") ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                <PlayCircle className="h-6 w-6" />
+              )}
+              CHẠY TỔNG HỢP / KÍCH HOẠT PIPELINE AI
+            </button>
           </div>
         )}
       </div>

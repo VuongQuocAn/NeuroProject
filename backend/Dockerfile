@@ -16,6 +16,9 @@ RUN apt-get update && apt-get install -y \
     libxcb1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Cài đặt PyTorch với hỗ trợ CUDA (GPU) - Bản stable nhất cho Windows Docker
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
 # Copy danh sách thư viện và cài đặt
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

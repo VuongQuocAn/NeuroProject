@@ -222,19 +222,19 @@ export default function MriResultCard({
   const imagePanels = [
     {
       key: "bbox",
-      title: "Ảnh MRI + bbox",
+      title: "Detection (BBox)",
       src: result?.bbox_overlay_data_url,
       alt: "MRI bbox overlay",
     },
     {
       key: "mask",
-      title: "Ảnh MRI + mask overlay",
+      title: "Segmentation (Mask)",
       src: result?.mask_overlay_data_url,
       alt: "MRI mask overlay",
     },
     {
       key: "contour",
-      title: "Ảnh MRI + viền khối u",
+      title: "Tumor Contour",
       src: result?.contour_overlay_data_url,
       alt: "MRI contour overlay",
     },
@@ -445,51 +445,45 @@ export default function MriResultCard({
                     </div>
                   </div>
 
-                  {/* Grad-CAM Heatmap */}
+                  {/* XAI Heatmaps — hiển thị cả 3 loại CAM */}
                   {(result.gradcam_heatmap_data_url || result.gradcam_plus_heatmap_data_url || result.layercam_heatmap_data_url) && (
                     <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-[10px] uppercase tracking-widest text-slate-500">Bản đồ nhiệt XAI (Heatmap)</div>
-                        <div className="flex gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-                          {result.gradcam_heatmap_data_url && (
-                            <button 
-                              onClick={() => setActiveHeatmap("gradcam")} 
-                              className={`text-[11px] px-2 py-1 rounded ${activeHeatmap === "gradcam" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
-                            >Grad-CAM</button>
-                          )}
-                          {result.gradcam_plus_heatmap_data_url && (
-                            <button 
-                              onClick={() => setActiveHeatmap("gradcam++")} 
-                              className={`text-[11px] px-2 py-1 rounded ${activeHeatmap === "gradcam++" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
-                            >Grad-CAM++</button>
-                          )}
-                          {result.layercam_heatmap_data_url && (
-                            <button 
-                              onClick={() => setActiveHeatmap("layercam")} 
-                              className={`text-[11px] px-2 py-1 rounded ${activeHeatmap === "layercam" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
-                            >Layer-CAM</button>
-                          )}
-                        </div>
+                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Bản đồ nhiệt XAI (Heatmap)</div>
+                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                        {result.gradcam_heatmap_data_url && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage({ title: "Grad-CAM Heatmap", src: result.gradcam_heatmap_data_url! })}
+                            className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
+                          >
+                            <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM</div>
+                            <img src={result.gradcam_heatmap_data_url} alt="Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                          </button>
+                        )}
+                        {result.gradcam_plus_heatmap_data_url && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage({ title: "Grad-CAM++ Heatmap", src: result.gradcam_plus_heatmap_data_url! })}
+                            className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
+                          >
+                            <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM++</div>
+                            <img src={result.gradcam_plus_heatmap_data_url} alt="Grad-CAM++" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                          </button>
+                        )}
+                        {result.layercam_heatmap_data_url && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage({ title: "Layer-CAM Heatmap", src: result.layercam_heatmap_data_url! })}
+                            className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
+                          >
+                            <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Layer-CAM</div>
+                            <img src={result.layercam_heatmap_data_url} alt="Layer-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                          </button>
+                        )}
                       </div>
-                      
-                      {(() => {
-                        let activeUrl = result.gradcam_heatmap_data_url;
-                        if (activeHeatmap === "gradcam++" && result.gradcam_plus_heatmap_data_url) activeUrl = result.gradcam_plus_heatmap_data_url;
-                        if (activeHeatmap === "layercam" && result.layercam_heatmap_data_url) activeUrl = result.layercam_heatmap_data_url;
-                        
-                        return activeUrl ? (
-                          <div className="flex justify-center">
-                            <button
-                              type="button"
-                              onClick={() => setPreviewImage({ title: `Bản đồ nhiệt (${activeHeatmap})`, src: activeUrl! })}
-                              className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
-                            >
-                              <img src={activeUrl} alt="XAI Heatmap" className="w-full max-w-[380px] h-auto object-cover" />
-                              <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
-                            </button>
-                          </div>
-                        ) : null;
-                      })()}
                       
                       {/* Clinical Plausibility Score */}
                       <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">

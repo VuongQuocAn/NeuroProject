@@ -145,6 +145,97 @@ async def upload_mri_series(
     }
     
     
+# API: Tải lên chuỗi lát cắt WSI (Whole Slide Image Tiles)
+@router.post("/wsi/series")
+async def upload_wsi_series(
+    patient_id: str, 
+    files: List[UploadFile] = File(None), 
+    zip_file: UploadFile = File(None), 
+    db: Session = Depends(get_db)
+):
+    """
+    Tải lên chuỗi ảnh WSI (nhiều tiles hoặc 1 file ZIP).
+    Hệ thống sẽ lọc các tiles "chất lượng" bằng CNN nhỏ trước khi lưu.
+    """
+    from ai_core.utils.wsi_filter import WSITileFilter
+    import zipfile
+    import io
+    
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy bệnh nhân '{patient_id}'")
+    
+    ensure_bucket_exists(BUCKET_NAME)
+    series_uuid = str(uuid.uuid4())
+    series_folder = f"wsi_series_{series_uuid}"
+    
+    all_raw_bytes = []
+    filenames = []
+
+    # 1. Thu thập dữ liệu thô
+    if zip_file:
+        zip_bytes = await zip_file.read()
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+            for file_info in z.infolist():
+                if file_info.is_dir() or file_info.filename.startswith("__") or file_info.filename.split("/")[-1].startswith("."):
+                    continue
+                with z.open(file_info) as f:
+                    all_raw_bytes.append(f.read())
+                    filenames.append(file_info.filename.split("/")[-1])
+    
+    if files:
+        for file in files:
+            content = await file.read()
+            all_raw_bytes.append(content)
+            filenames.append(file.filename)
+
+    if not all_raw_bytes:
+        raise HTTPException(status_code=400, detail="Không có file nào được tải lên")
+
+    # 2. Lọc Tiles bằng CNN (Giới hạn 100 tiles tốt nhất)
+    try:
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        tile_filter = WSITileFilter(device=device, top_k=100)
+        # Lấy danh sách indices của các tile tốt nhất
+        scored_tiles = tile_filter.score_tiles(all_raw_bytes)
+        top_indices = [idx for idx, score in scored_tiles]
+        
+        uploaded_paths = []
+        for idx in top_indices:
+            content = all_raw_bytes[idx]
+            fname = filenames[idx]
+            
+            minio_path = f"{series_folder}/{fname}"
+            minio_client.put_object(
+                bucket_name=BUCKET_NAME,
+                object_name=minio_path,
+                data=io.BytesIO(content),
+                length=len(content),
+                content_type="image/png"
+            )
+            uploaded_paths.append(minio_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi AI Filter WSI: {str(e)}")
+
+    # 3. Lưu record vào DB
+    new_image = models.Image(
+        patient_id=patient.id,
+        modality="WSI_SERIES",
+        file_path=f"/{BUCKET_NAME}/{series_folder}",
+        is_series=True,
+        num_slices=len(uploaded_paths)
+    )
+    db.add(new_image)
+    db.commit()
+    db.refresh(new_image)
+
+    return {
+        "message": f"Tải lên WSI thành công. Đã giữ lại {len(uploaded_paths)}/{len(all_raw_bytes)} tiles chất lượng.",
+        "image_id": new_image.id,
+        "num_valid_tiles": len(uploaded_paths)
+    }
+
 # API NHÁP: Tải lên WSI (Whole Slide Image) - File rất lớn, cần cơ chế streaming để tránh treo máy chủ
 @router.post("/wsi/")
 async def upload_wsi(patient_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):

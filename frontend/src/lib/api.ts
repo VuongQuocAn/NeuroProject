@@ -70,6 +70,9 @@ export const apiService = {
     getResult: async (patientId: string) => {
       return api.get(`/records/analysis/${patientId}`);
     },
+    getFullResult: async (patientId: string) => {
+      return api.get(`/records/analysis/patient/${patientId}/full`);
+    },
     getSurvivalCurve: async (patientId: string) => {
       return api.get(`/analytics/survival/${patientId}`);
     },
@@ -98,7 +101,7 @@ export const apiService = {
     getTask: async (taskId: string | number) => {
       return api.get(`/inference/tasks/${taskId}`);
     },
-    waitForTask: async (taskId: string | number, intervalMs = 2000, timeoutMs = 180000) => {
+    waitForTask: async (taskId: string | number, intervalMs = 2000, timeoutMs = 180000, onProgress?: (percent: number, status: string) => void) => {
       const startedAt = Date.now();
 
       while (Date.now() - startedAt < timeoutMs) {
@@ -111,6 +114,10 @@ export const apiService = {
 
         if (task.status === "failed") {
           throw new Error(task.error_message || "AI task failed");
+        }
+
+        if (task.status === "processing" && onProgress && task.progress_percent !== null) {
+          onProgress(task.progress_percent, task.progress_status || "Đang xử lý...");
         }
 
         await new Promise((resolve) => setTimeout(resolve, intervalMs));
@@ -148,6 +155,18 @@ export const apiService = {
     },
     clinical: async (patientId: string, data: any) => {
       return api.patch(`/records/patients/${patientId}/clinical`, data);
+    },
+    wsiSeries: async (patientId: string, files: File[] | File) => {
+      const formData = new FormData();
+      if (Array.isArray(files)) {
+        files.forEach(f => formData.append("files", f));
+      } else {
+        // Assume it's a ZIP file
+        formData.append("zip_file", files);
+      }
+      return api.post(`/upload/wsi/series?patient_id=${encodeURIComponent(patientId)}`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
     }
   }
 };

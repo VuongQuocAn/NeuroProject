@@ -32,14 +32,20 @@ def _create_inference_task(
     db.commit()
     db.refresh(db_task)
 
-    # Gửi task bất đồng bộ tới Celery worker
-    # Worker sẽ cập nhật trạng thái và kết quả vào bảng inference_tasks
-    celery_app.send_task(
-        celery_signature,
-        args=[db_task.id, target_id],
-        task_id=placeholder_celery_id,
-    )
+    print(f"[API] Da tao record task_id={db_task.id} trong DB. Dang gui sang Celery...")
 
+    try:
+        # Gửi task bất đồng bộ tới Celery worker
+        celery_app.send_task(
+            celery_signature,
+            args=[db_task.id, target_id],
+            task_id=placeholder_celery_id,
+        )
+        print(f"[API] Da gui task_id={db_task.id} thanh cong.")
+    except Exception as e:
+        print(f"[API] LOI KHI GUI TASK SANG CELERY: {e}")
+        # Van tra ve task_id de frontend co the polling, worker se xu ly sau khi ket noi lai
+        
     return db_task
 
 
@@ -65,17 +71,7 @@ def trigger_mri_inference(
             detail=f"Ảnh này có modality='{image.modality}', endpoint này chỉ xử lý MRI hoặc MRI_SERIES",
         )
 
-    # Kiểm tra xem đã có tác vụ đang chạy cho ảnh này chưa
-    existing = db.query(models.InferenceTask).filter(
-        models.InferenceTask.task_type == "mri_pipeline",
-        models.InferenceTask.target_id == image_id,
-        models.InferenceTask.status.in_(["pending", "processing"]),
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Tác vụ phân tích ảnh này đang chạy (task_id={existing.id}). Vui lòng chờ.",
-        )
+    # Tương tự như Prognosis, bỏ qua việc check task cũ để tránh deadlock khi worker sập.
 
     db_task = _create_inference_task(
         db=db,
@@ -99,38 +95,33 @@ def trigger_mri_inference(
 
 @router.post("/prognosis/{patient_id}", response_model=schemas.InferenceTaskResponse)
 def trigger_prognosis_inference(
-    patient_id: int,
+    patient_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    # Xác minh bệnh nhân tồn tại
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    import crud
+    # Xác minh bệnh nhân tồn tại (hỗ trợ cả ID số và External ID chuỗi)
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
     if not patient:
-        raise HTTPException(status_code=404, detail="Không tìm thấy bệnh nhân")
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy bệnh nhân với ID '{patient_id}'")
+
+    # Sử dụng ID số nội bộ từ đây
+    real_id = patient.id
 
     # Kiểm tra dữ liệu RNA đã được tải lên chưa (cần thiết cho Fusion Model)
     # RnaData is no longer strictly mandatory since the model handles missing data gracefully via masking,
     # but we still check if the patient has any data uploaded.
-    rna = db.query(models.RnaData).filter(models.RnaData.patient_id == patient_id).first()
+    rna = db.query(models.RnaData).filter(models.RnaData.patient_id == real_id).first()
     if not rna:
         print(f"[Warning] Không có dữ liệu RNA-seq cho bệnh nhân {patient_id}. Mô hình sẽ tự động bỏ qua qua Attention Mask.")
 
-    # Kiểm tra tác vụ đang chạy
-    existing = db.query(models.InferenceTask).filter(
-        models.InferenceTask.task_type == "prognosis",
-        models.InferenceTask.target_id == patient_id,
-        models.InferenceTask.status.in_(["pending", "processing"]),
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Tác vụ tiên lượng đang chạy (task_id={existing.id}). Vui lòng chờ.",
-        )
+    # Loại bỏ cơ chế kiểm tra tác vụ cũ vì nếu Worker sập, DB sẽ lưu trạng thái 'processing' mãi mãi.
+    # Luôn luôn tạo một task mới khi người dùng yêu cầu để tránh bị kẹt (deadlock).
 
     db_task = _create_inference_task(
         db=db,
         task_type="prognosis",
-        target_id=patient_id,
+        target_id=real_id,
         celery_signature="tasks.run_prognosis_pipeline",
     )
 
@@ -157,11 +148,24 @@ def get_task_status(
     if not task:
         raise HTTPException(status_code=404, detail=f"Không tìm thấy tác vụ id={task_id}")
 
+    progress_percent = None
+    progress_status = None
+
+    # Nếu đang chạy, thử lấy meta-data từ Celery (Progress Bar)
+    if task.status == "processing":
+        from celery.result import AsyncResult
+        res = AsyncResult(task.celery_task_id)
+        if res.state == 'PROGRESS':
+            progress_percent = res.info.get('percent')
+            progress_status = res.info.get('status')
+
     return schemas.InferenceTaskStatus(
         task_id=task.id,
         celery_task_id=task.celery_task_id,
         task_type=task.task_type,
         status=task.status,
+        progress_percent=progress_percent,
+        progress_status=progress_status,
         result=task.result,
         error_message=task.error_message,
         created_at=task.created_at,

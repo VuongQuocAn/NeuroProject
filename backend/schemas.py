@@ -84,6 +84,8 @@ class InferenceTaskStatus(BaseModel):
     celery_task_id: str
     task_type: str
     status: str                        # pending | processing | done | failed
+    progress_percent: Optional[int] = None
+    progress_status: Optional[str] = None
     result: Optional[Any] = None
     error_message: Optional[str] = None
     created_at: datetime
@@ -148,7 +150,7 @@ class ImageAIResultResponse(BaseModel):
     gradcam_plus_heatmap_data_url: Optional[str] = None
     layercam_heatmap_data_url: Optional[str] = None
     xai_explanation: Optional[str] = None
-    fusion_attention: Optional[List[float]] = None
+    fusion_attention: Optional[List[Optional[float]]] = None
     # Series metadata
     is_series: bool = False
     num_slices: int = 1

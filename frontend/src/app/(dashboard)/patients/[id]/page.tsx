@@ -223,7 +223,26 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
     );
   }
 
-  const { patient, images = [], rna_uploaded, clinical_data } = data;
+  const { patient, images: rawImages = [], rna_uploaded, clinical_data } = data;
+
+  // Dedup và Lọc: Chỉ giữ MRI (MRI hoặc MRI_SERIES), lấy bản mới nhất
+  const images = Object.values(
+    rawImages
+      .filter((img: any) => img.modality.includes("MRI"))
+      .reduce((acc: Record<string, any>, img: any) => {
+        const key = img.modality;
+        if (!acc[key] || new Date(img.scan_date) > new Date(acc[key].scan_date)) {
+          acc[key] = img;
+        }
+        return acc;
+      }, {} as Record<string, any>)
+  ) as any[];
+
+  const mriImages = rawImages.filter((img: any) => img.modality === "MRI" || img.modality === "MRI_SERIES");
+  const wsiImages = rawImages.filter((img: any) => img.modality === "WSI_SERIES");
+
+  const totalMriFiles = mriImages.reduce((sum: number, img: any) => sum + (img.num_slices || 1), 0);
+  const totalWsiFiles = wsiImages.reduce((sum: number, img: any) => sum + (img.num_slices || 1), 0);
 
   return (
     <div className="flex flex-col space-y-6 pb-10">
@@ -305,6 +324,13 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                         backendStatus === "processing" ||
                         analyzingId === String(img.image_id);
 
+                      const primaryLabel =
+                        backendStatus === "done"
+                          ? "KẾT QUẢ"
+                          : backendStatus === "failed"
+                            ? "XEM LỖI"
+                            : "PHÂN TÍCH MRI";
+
                       const statusLabel =
                         backendStatus === "done"
                           ? "Done"
@@ -313,13 +339,6 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                             : backendStatus === "processing" || backendStatus === "pending"
                               ? "Pending"
                               : "Ready";
-
-                      const primaryLabel =
-                        backendStatus === "done"
-                          ? "KẾT QUẢ"
-                          : backendStatus === "failed"
-                            ? "XEM LỖI"
-                            : "CHẠY MRI";
 
                       return (
                         <tr key={img.image_id} className="hover:bg-slate-800/30 transition-colors group">
@@ -364,7 +383,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                               <button
                                 onClick={() =>
                                   backendStatus === "done" || backendStatus === "failed"
-                                    ? handleOpenResult(img.image_id)
+                                    ? router.push(`/results/${patient.external_id || patient.id}`)
                                     : handleAnalyze(img)
                                 }
                                 disabled={isBusy}
@@ -435,6 +454,47 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
         </div>
 
         <div className="space-y-6">
+          {/* --- MRI Data Tab --- */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-5">
+              <ImageIcon className="h-5 w-5 text-teal-500" /> Dữ liệu MRI
+            </h3>
+            <div className="p-5 rounded-2xl bg-teal-500/5 border border-teal-500/10 text-center">
+              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                {totalMriFiles > 0
+                  ? `MRI đã được upload: ${totalMriFiles} tệp MRI, sẵn sàng cho phân tích AI.`
+                  : "Chưa có dữ liệu MRI cho bệnh nhân này."}
+              </p>
+              <button
+                onClick={() => router.push("/upload")}
+                className="w-full py-2.5 rounded-xl bg-teal-600/20 hover:bg-teal-600 text-teal-400 hover:text-white text-xs font-bold transition-all border border-teal-600/30 flex items-center justify-center gap-2"
+              >
+                {mriImages.length > 0 ? "CẬP NHẬT MRI" : "UPLOAD MRI"} <ExternalLink className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* --- WSI Data Tab --- */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-5">
+              <ImageIcon className="h-5 w-5 text-amber-500" /> Dữ liệu WSI
+            </h3>
+            <div className="p-5 rounded-2xl bg-amber-500/5 border border-amber-500/10 text-center">
+              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                {totalWsiFiles > 0
+                  ? `WSI đã được upload: ${totalWsiFiles} tệp WSI (mô bệnh học).`
+                  : "Chưa có dữ liệu WSI cho bệnh nhân này."}
+              </p>
+              <button
+                onClick={() => router.push("/upload")}
+                className="w-full py-2.5 rounded-xl bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white text-xs font-bold transition-all border border-amber-600/30 flex items-center justify-center gap-2"
+              >
+                {wsiImages.length > 0 ? "CẬP NHẬT WSI" : "UPLOAD WSI"} <ExternalLink className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* --- RNA Data Tab --- */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-5">
               <Dna className="h-5 w-5 text-indigo-500" /> Dữ liệu RNA

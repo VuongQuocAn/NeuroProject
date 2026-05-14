@@ -61,6 +61,13 @@ services:
       - redis
     networks:
       - neuro_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   worker:
     image: neuroproject-ai:latest
@@ -82,6 +89,13 @@ services:
       - redis
     networks:
       - neuro_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   frontend:
     build:

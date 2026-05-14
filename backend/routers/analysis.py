@@ -512,7 +512,7 @@ def _build_professional_report_pdf(
     _draw_image_card(page2, "Overlay / Masked ROI", overlay_image, (60 * scale, 170 * scale, 1180 * scale, 740 * scale), font_label, font_small, scale=scale)
 
     draw2.text((60 * scale, 780 * scale), "Thông Số Kỹ Thuật (Model Details)", font=font_h2, fill=TEAL)
-    tech_box = (60 * scale, 820 * scale, 1180 * scale, 1150 * scale)
+    tech_box = (60 * scale, 820 * scale, 1180 * scale, 1250 * scale)
     draw2.rounded_rectangle(tech_box, radius=12 * scale, fill=WHITE, outline=SLATE_100, width=2 * scale)
     tech_rows = [
         ("Tọa độ Bounding Box", str(bbox) if bbox else "N/A"),
@@ -532,15 +532,15 @@ def _build_professional_report_pdf(
         draw2.line((90 * scale, y + 35 * scale, 1150 * scale, y + 35 * scale), fill=SLATE_100, width=1 * scale)
         y += 50 * scale
 
-    draw2.text((60 * scale, 1200 * scale), "Khuyến Cáo Y Tế", font=font_h2, fill=RED_500)
-    disclaimer_box = (60 * scale, 1240 * scale, 1180 * scale, 1400 * scale)
+    draw2.text((60 * scale, 1400 * scale), "Khuyến Cáo Y Tế", font=font_h2, fill=RED_500)
+    disclaimer_box = (60 * scale, 1440 * scale, 1180 * scale, 1600 * scale)
     draw2.rounded_rectangle(disclaimer_box, radius=12 * scale, fill=(254, 242, 242), outline=(252, 165, 165), width=2 * scale)
     disclaimer_lines = [
         "Báo cáo này được tự động tạo ra bởi trí tuệ nhân tạo (AI) nhằm mục đích hỗ trợ quyết định lâm sàng.",
         "Kết quả dự đoán KHÔNG thay thế cho chẩn đoán y khoa của bác sĩ chuyên khoa. Mọi quyết định",
         "điều trị phải dựa trên đánh giá toàn diện của bác sĩ điều trị và kết quả xét nghiệm liên quan.",
     ]
-    current_y = 1270 * scale
+    current_y = 1470 * scale
     for line in disclaimer_lines:
         current_y = _draw_wrapped_text(draw2, line, (90 * scale, current_y), font_body, SLATE_900, max_width=1040 * scale, line_spacing=8 * scale)
         current_y += 10 * scale
@@ -752,17 +752,166 @@ def _get_latest_mri_task(db: Session, image_id: int) -> models.InferenceTask | N
     )
 
 
-@router.get("/records/analysis/{patient_id}", response_model=List[schemas.AnalysisResultResponse])
-def get_patient_analysis(
-    patient_id: int,
+@router.get("/records/analysis/patient/{patient_id}/full", response_model=schemas.ImageAIResultResponse)
+def get_patient_full_analysis(
+    patient_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    """
+    Endpoint đầy đủ: kết hợp AnalysisResult + InferenceTask.result
+    để trả về overlay images, heatmaps, multimodal fields cho Frontend.
+    """
+    import crud
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
     if not patient:
         raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
 
-    results = db.query(models.AnalysisResult).filter(models.AnalysisResult.patient_id == patient_id).all()
+    real_id = patient.id
+
+    # Lấy AnalysisResult mới nhất
+    analysis = (
+        db.query(models.AnalysisResult)
+        .filter(models.AnalysisResult.patient_id == real_id)
+        .order_by(models.AnalysisResult.created_at.desc())
+        .first()
+    )
+
+    # Lấy InferenceTask mới nhất (prognosis hoặc mri_pipeline)
+    prognosis_task = (
+        db.query(models.InferenceTask)
+        .filter(
+            models.InferenceTask.task_type == "prognosis",
+            models.InferenceTask.target_id == real_id,
+        )
+        .order_by(models.InferenceTask.created_at.desc())
+        .first()
+    )
+
+    # Cũng tìm MRI task nếu có (để lấy overlay images)
+    mri_image = (
+        db.query(models.Image)
+        .filter(
+            models.Image.patient_id == real_id,
+            models.Image.modality.in_(["MRI", "MRI_SERIES"]),
+        )
+        .order_by(models.Image.scan_date.desc())
+        .first()
+    )
+
+    mri_task = None
+    if mri_image:
+        mri_task = _get_latest_mri_task(db, mri_image.id)
+
+    if not analysis and not prognosis_task and not mri_task:
+        raise HTTPException(status_code=404, detail="Chua co ket qua phan tich cho benh nhan nay.")
+
+    # Merge dữ liệu từ cả 2 task (prognosis có multimodal, mri có overlay images)
+    result_payload = {}
+    if mri_task and mri_task.result:
+        result_payload.update(mri_task.result)
+    if prognosis_task and prognosis_task.result:
+        result_payload.update(prognosis_task.result)
+
+    # Xác định image_id và metadata
+    image_id = mri_image.id if mri_image else (analysis.image_id if analysis else 0)
+    is_series = mri_image.is_series if mri_image else False
+    num_slices = mri_image.num_slices if mri_image else 1
+    key_slice_index = mri_image.key_slice_index if mri_image else 0
+
+    # Xác định status
+    status = "done"
+    error_message = None
+    task_id = None
+    created_at = analysis.created_at if analysis else None
+    updated_at = None
+
+    if prognosis_task:
+        status = prognosis_task.status
+        error_message = prognosis_task.error_message
+        task_id = prognosis_task.id
+        updated_at = prognosis_task.updated_at
+        if not created_at:
+            created_at = prognosis_task.created_at
+    elif mri_task:
+        status = mri_task.status
+        error_message = mri_task.error_message
+        task_id = mri_task.id
+        updated_at = mri_task.updated_at
+        if not created_at:
+            created_at = mri_task.created_at
+
+    # Build overlay data URLs từ local paths
+    no_tumor_detected = bool(result_payload.get("no_tumor_detected"))
+    bbox = result_payload.get("bbox")
+    seg_mask_path = result_payload.get("seg_mask_path")
+
+    mask_overlay_data_url = _local_image_to_data_url(result_payload.get("mask_overlay_path"))
+    contour_overlay_data_url = _local_image_to_data_url(result_payload.get("contour_overlay_path"))
+
+    if mask_overlay_data_url is None or contour_overlay_data_url is None:
+        original_image_bgr = _load_image_from_minio(mri_image.file_path) if mri_image else None
+        fallback_mask, fallback_contour = _build_segmentation_overlays(
+            original_image_bgr=original_image_bgr,
+            bbox=bbox,
+            seg_mask_path=seg_mask_path,
+        )
+        if mask_overlay_data_url is None:
+            mask_overlay_data_url = fallback_mask
+        if contour_overlay_data_url is None:
+            contour_overlay_data_url = fallback_contour
+
+    return schemas.ImageAIResultResponse(
+        image_id=image_id,
+        patient_id=real_id,
+        task_id=task_id,
+        status=status,
+        no_tumor_detected=no_tumor_detected,
+        error_message=error_message,
+        bbox=bbox,
+        bbox_confidence=result_payload.get("bbox_confidence"),
+        tumor_label=_display_tumor_label(
+            result_payload.get("tumor_label") or (analysis.tumor_label if analysis else None),
+            no_tumor_detected=no_tumor_detected,
+        ),
+        classification_confidence=result_payload.get("classification_confidence")
+            if result_payload.get("classification_confidence") is not None
+            else (analysis.classification_confidence if analysis else None),
+        class_probabilities=result_payload.get("class_probabilities"),
+        bbox_overlay_data_url=_local_image_to_data_url(result_payload.get("bbox_image_path")),
+        mask_data_url=_local_image_to_data_url(result_payload.get("seg_mask_path")),
+        mask_overlay_data_url=mask_overlay_data_url,
+        contour_overlay_data_url=contour_overlay_data_url,
+        risk_score=result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis and analysis.risk_score is not None else (0.0 if result_payload.get("risk_group") or (analysis and analysis.risk_group) else None)),
+        risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
+        survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
+        gradcam_heatmap_data_url=_local_image_to_data_url(result_payload.get("gradcam_heatmap_path") or result_payload.get("xai_heatmap_path")),
+        gradcam_plus_heatmap_data_url=_local_image_to_data_url(result_payload.get("gradcam_plus_heatmap_path")),
+        layercam_heatmap_data_url=_local_image_to_data_url(result_payload.get("layercam_heatmap_path")),
+        xai_explanation=result_payload.get("xai_explanation"),
+        fusion_attention=[v if v is not None else 0.0 for v in result_payload["fusion_attention"]] if result_payload.get("fusion_attention") else None,
+        is_series=is_series,
+        num_slices=num_slices,
+        key_slice_index=key_slice_index,
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+
+
+@router.get("/records/analysis/{patient_id}", response_model=List[schemas.AnalysisResultResponse])
+def get_patient_analysis(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    import crud
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
+
+    # Sử dụng ID số nội bộ để truy vấn
+    real_id = patient.id
+    results = db.query(models.AnalysisResult).filter(models.AnalysisResult.patient_id == real_id).all()
     if not results:
         raise HTTPException(status_code=404, detail="Chua co ket qua phan tich cho benh nhan nay.")
 
@@ -906,11 +1055,28 @@ def download_image_report(
         raise HTTPException(status_code=404, detail="Khong tim thay anh MRI")
 
     latest_task = _get_latest_mri_task(db, image_id)
+    # Cũng tìm prognosis task theo patient_id nếu không có mri_pipeline task
+    prognosis_task = (
+        db.query(models.InferenceTask)
+        .filter(
+            models.InferenceTask.task_type == "prognosis",
+            models.InferenceTask.target_id == image.patient_id,
+        )
+        .order_by(models.InferenceTask.created_at.desc())
+        .first()
+    )
     analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.image_id == image_id).first()
-    if not latest_task and not analysis:
+    if not analysis:
+        analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.patient_id == image.patient_id).first()
+    if not latest_task and not prognosis_task and not analysis:
         raise HTTPException(status_code=404, detail="Chua co ket qua de xuat bao cao")
 
-    result_payload = latest_task.result if latest_task and latest_task.result else {}
+    # Merge results from both task types
+    result_payload = {}
+    if latest_task and latest_task.result:
+        result_payload.update(latest_task.result)
+    if prognosis_task and prognosis_task.result:
+        result_payload.update(prognosis_task.result)
     no_tumor_detected = bool(result_payload.get("no_tumor_detected"))
     tumor_label = _display_tumor_label(
         result_payload.get("tumor_label") or (analysis.tumor_label if analysis else None),
@@ -922,8 +1088,9 @@ def download_image_report(
     patient = db.query(models.Patient).filter(models.Patient.id == image.patient_id).first()
     patient_code = patient.patient_external_id if patient and patient.patient_external_id else str(image.patient_id)
     report_id = f"RPT-{patient_code}-{image_id}"
+    best_task = latest_task or prognosis_task
     processing_date = (
-        latest_task.updated_at.strftime("%Y-%m-%d %H:%M") if latest_task and latest_task.updated_at else "N/A"
+        best_task.updated_at.strftime("%Y-%m-%d %H:%M") if best_task and best_task.updated_at else "N/A"
     )
     
     try:
@@ -931,7 +1098,7 @@ def download_image_report(
             report_id=report_id,
             patient_code=patient_code,
             image_id=image_id,
-            status=(latest_task.status if latest_task else "done"),
+            status=(best_task.status if best_task else "done"),
             processing_date=processing_date,
             tumor_label=tumor_label,
             classification_confidence=classification_confidence,
@@ -939,21 +1106,21 @@ def download_image_report(
             bbox=result_payload.get("bbox"),
             class_probabilities=result_payload.get("class_probabilities"),
             no_tumor_detected=no_tumor_detected,
-            multimodal_available=bool(analysis and analysis.risk_score is not None),
+            multimodal_available=bool((analysis and (analysis.risk_score is not None or analysis.risk_group)) or result_payload.get("risk_group")),
             original_image=_load_image_for_report(minio_file_path=image.file_path, local_path=result_payload.get("original_image_path")),
             bbox_image=_load_image_for_report(local_path=result_payload.get("bbox_image_path")),
             cropped_roi_image=_load_image_for_report(local_path=result_payload.get("cropped_roi_path")),
             mask_image=_load_image_for_report(local_path=result_payload.get("seg_mask_path")),
             overlay_image=_load_image_for_report(local_path=result_payload.get("mask_overlay_path"))
             or _load_image_for_report(local_path=result_payload.get("masked_roi_path")),
-            risk_score=analysis.risk_score if analysis else None,
-            risk_group=analysis.risk_group if analysis else None,
-            survival_curve_data=analysis.survival_curve_data if analysis else None,
-            heatmap_image=_bgr_path_to_pil(result_payload.get("gradcam_heatmap_path")),
+            risk_score=result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis and analysis.risk_score is not None else (0.0 if result_payload.get("risk_group") or (analysis and analysis.risk_group) else None)),
+            risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
+            survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
+            heatmap_image=_bgr_path_to_pil(result_payload.get("gradcam_heatmap_path") or result_payload.get("xai_heatmap_path")),
             gradcam_plus_image=_bgr_path_to_pil(result_payload.get("gradcam_plus_heatmap_path")),
             layercam_image=_bgr_path_to_pil(result_payload.get("layercam_heatmap_path")),
             xai_explanation=result_payload.get("xai_explanation"),
-            fusion_attention=result_payload.get("fusion_attention"),
+            fusion_attention=[v if v is not None else 0.0 for v in result_payload["fusion_attention"]] if result_payload.get("fusion_attention") else None,
             is_series=image.is_series,
             num_slices=image.num_slices,
             key_slice_index=image.key_slice_index,
@@ -999,18 +1166,20 @@ def get_xai_overlay(
 
 @router.get("/analytics/survival/{patient_id}", response_model=schemas.SurvivalCurveResponse)
 def get_survival_curve(
-    patient_id: int,
+    patient_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    import crud
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
     if not patient:
         raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
 
+    real_id = patient.id
     result = (
         db.query(models.AnalysisResult)
         .filter(
-            models.AnalysisResult.patient_id == patient_id,
+            models.AnalysisResult.patient_id == real_id,
             models.AnalysisResult.survival_curve_data.isnot(None),
         )
         .order_by(models.AnalysisResult.created_at.desc())
@@ -1029,7 +1198,7 @@ def get_survival_curve(
     ]
 
     return schemas.SurvivalCurveResponse(
-        patient_id=patient_id,
+        patient_id=real_id,
         risk_group=result.risk_group,
         curve=curve_points,
     )
