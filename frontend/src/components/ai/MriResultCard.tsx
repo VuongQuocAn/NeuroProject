@@ -13,6 +13,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import RnaXaiChart from "./RnaXaiChart";
 
 type MriResult = {
   image_id?: number | string;
@@ -41,6 +42,8 @@ type MriResult = {
   is_series?: boolean;
   num_slices?: number;
   key_slice_index?: number;
+  // RNA XAI
+  rna_xai?: { gene: string; ensembl_id: string; importance: number; expression: number; impact: "High Risk" | "Protective" }[] | null;
 };
 
 type Props = {
@@ -597,6 +600,13 @@ export default function MriResultCard({
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* RNA XAI Display */}
+              {result?.rna_xai && result.rna_xai.length > 0 && (
+                <div className="mt-4">
+                  <RnaXaiChart data={result.rna_xai} />
                 </div>
               )}
 

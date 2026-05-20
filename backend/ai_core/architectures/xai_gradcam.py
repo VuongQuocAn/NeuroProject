@@ -108,13 +108,6 @@ class GradCAMExplainer:
         cam_max = np.max(cam)
         if cam_max != 0:
             cam = cam / cam_max
-            
-        # --- Kỹ thuật làm sạch ảnh (Premium Polish) ---
-        # 1. Dùng hàm mũ để làm các điểm nóng nổi bật hơn (nén vùng nhiễu)
-        cam = np.power(cam, 1.5)
-        
-        # 2. Lọc bỏ các vùng có độ kích hoạt quá thấp (dưới 10%)
-        cam[cam < 0.1] = 0
         
         return cam, None # Trả về heatmap và dummy overlay
 

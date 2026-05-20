@@ -92,7 +92,8 @@ class TumorAnalysisPipeline:
         rna_data: np.ndarray | None = None,
         clinical_data: dict[str, Any] | None = None,
         output_dir: str = "results",
-        progress_callback=None
+        progress_callback=None,
+        rna_gene_names: list[str] | None = None
     ) -> dict[str, Any]:
         """Legacy method for MRI-only multimodal inference, redirected to full prognosis."""
         return self.run_full_prognosis(
@@ -101,7 +102,8 @@ class TumorAnalysisPipeline:
             rna_data=rna_data,
             clinical_data=clinical_data,
             output_dir=output_dir,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            rna_gene_names=rna_gene_names
         )
 
     def run_full_prognosis(
@@ -111,7 +113,8 @@ class TumorAnalysisPipeline:
         rna_data: np.ndarray | None = None,
         clinical_data: dict[str, Any] | None = None,
         output_dir: str = "results",
-        progress_callback=None
+        progress_callback=None,
+        rna_gene_names: list[str] | None = None
     ) -> dict[str, Any]:
         """
         Quy trình tiên lượng đầy đủ (Full Multimodal Prognosis).
@@ -133,10 +136,11 @@ class TumorAnalysisPipeline:
             if progress_callback: progress_callback(50, "Đang xử lý MRI Core (YOLO + U-Net)...")
             mri_res = self._run_mri_core(image_source=mri_source, output_dir=output_dir)
             if mri_res["status"] == "success" and not mri_res.get("no_tumor_detected"):
-                masked_roi = mri_res.get("_masked_roi")
-                if masked_roi is not None:
+                # Trích xuất đặc trưng trực tiếp từ ảnh khối u đã cắt theo đúng thiết kế
+                cropped_img = mri_res.get("_cropped_img")
+                if cropped_img is not None:
                     if progress_callback: progress_callback(60, "Đang trích xuất đặc trưng MRI...")
-                    mri_tensor = self.preprocess_for_multimodal(masked_roi)
+                    mri_tensor = self.preprocess_for_multimodal(cropped_img)
                     has_mri = 1.0
             result_dict.update(mri_res)
 
@@ -170,7 +174,17 @@ class TumorAnalysisPipeline:
                 "wsi_mask": torch.tensor([[has_wsi]], device=self.device),
             }
 
-            with torch.no_grad():
+            # Enable gradient calculation if we want RNA XAI
+            calc_rna_xai = (has_rna == 1.0) and (rna_gene_names is not None) and (len(rna_gene_names) > 0)
+            
+            if calc_rna_xai:
+                rna_tensor.requires_grad_(True)
+                self.multimodal_model.zero_grad()
+                context = torch.enable_grad()
+            else:
+                context = torch.no_grad()
+
+            with context:
                 risk_score, attn_weights = self.multimodal_model(
                     mri_tensor,
                     wsi_tensor,
@@ -183,6 +197,49 @@ class TumorAnalysisPipeline:
                     mri_mask=masks["mri_mask"],
                     wsi_mask=masks["wsi_mask"],
                 )
+                
+                if calc_rna_xai:
+                    # Backward pass to get gradients for RNA
+                    risk_score.backward(retain_graph=True)
+                    
+                    rna_grad = rna_tensor.grad[0].detach().cpu().numpy()
+                    rna_input = rna_tensor[0].detach().cpu().numpy()
+                    
+                    # Compute feature importance: Input * Gradient
+                    importance = rna_grad * rna_input
+                    
+                    # Sort indices by absolute importance
+                    sorted_indices = np.argsort(np.abs(importance))[::-1]
+                    
+                    top_n = min(10, len(rna_gene_names))
+                    top_indices = sorted_indices[:top_n]
+                    
+                    # Import dynamically to avoid circular issues
+                    from .utils.gene_mapper import gene_mapper
+                    
+                    top_ensg_ids = [rna_gene_names[i] for i in top_indices if i < len(rna_gene_names)]
+                    mapped_symbols = gene_mapper.map_ensembl_to_symbols(top_ensg_ids)
+                    
+                    rna_xai = []
+                    for idx in top_indices:
+                        if idx >= len(rna_gene_names): continue
+                        ensg = rna_gene_names[idx]
+                        symbol = mapped_symbols.get(ensg, ensg)
+                        imp_val = float(importance[idx])
+                        expr_val = float(rna_input[idx])
+                        
+                        # Add only significant ones
+                        if abs(imp_val) > 1e-6:
+                            rna_xai.append({
+                                "gene": symbol,
+                                "ensembl_id": ensg,
+                                "importance": imp_val,
+                                "expression": expr_val,
+                                "impact": "High Risk" if imp_val > 0 else "Protective"
+                            })
+                    
+                    if rna_xai:
+                        result_dict["rna_xai"] = rna_xai
 
             score_val = float(risk_score.item())
             if np.isnan(score_val) or np.isinf(score_val):
@@ -225,7 +282,8 @@ class TumorAnalysisPipeline:
         rna_data: np.ndarray | None = None,
         clinical_data: dict[str, Any] | None = None,
         output_dir: str = "results",
-        progress_callback=None
+        progress_callback=None,
+        rna_gene_names: list[str] | None = None
     ) -> dict[str, Any]:
         """Chạy inference trên toàn bộ chuỗi ảnh (Series) với cơ chế đồng thuận."""
         os.makedirs(output_dir, exist_ok=True)
@@ -273,7 +331,8 @@ class TumorAnalysisPipeline:
             rna_data=rna_data,
             clinical_data=clinical_data,
             output_dir=output_dir,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            rna_gene_names=rna_gene_names
         )
         
         final_result.update({
@@ -364,15 +423,15 @@ class TumorAnalysisPipeline:
                 xai_methods = ["gradcam", "gradcam++", "layercam"]
                 xai_paths = {}
                 
-                # Định nghĩa các layer đích cho từng phương pháp (DenseNet121)
+                # Định nghĩa các layer đích cho từng phương pháp (DenseNet)
+                # Sửa lỗi: Thay vì hook vào 1 conv2 layer (chỉ bắt được 32 channels), 
+                # ta phải hook vào đầu ra của toàn bộ feature_extractor (sau norm5) để lấy trọn vẹn 1024 channels.
                 if self.multimodal_model is not None:
-                    # Grad-CAMs: Dùng layer cuối cùng của block 4 (Semantic nhất, vùng ảnh hưởng rộng)
-                    last_layer = self.multimodal_model.mri_encoder.feature_extractor.denseblock4.denselayer16.conv2
-                    # Layer-CAM: Dùng layer gần cuối (denselayer12) để vừa đúng vị trí vừa sắc nét
-                    mid_layer = self.multimodal_model.mri_encoder.feature_extractor.denseblock4.denselayer12.conv2
+                    last_layer = self.multimodal_model.mri_encoder.feature_extractor
+                    mid_layer = self.multimodal_model.mri_encoder.feature_extractor
                 else:
-                    last_layer = self.classifier.model.features.denseblock4.denselayer32.conv2
-                    mid_layer = self.classifier.model.features.denseblock4.denselayer16.conv2
+                    last_layer = self.classifier.model.features
+                    mid_layer = self.classifier.model.features
 
                 # Chuẩn bị dummy inputs cho Multimodal XAI
                 # [1, 1, 3, 224, 224] - Batch 1, 1 Slice
@@ -410,13 +469,21 @@ class TumorAnalysisPipeline:
                     if heatmap_gray is None:
                         continue
                     
-                    # Hậu xử lý overlay
+                    # Hậu xử lý overlay giống hệt test script
                     cam_resized = cv2.resize(heatmap_gray, (cropped_img.shape[1], cropped_img.shape[0]))
                     heatmap_colored = cv2.applyColorMap(np.uint8(255 * cam_resized), cv2.COLORMAP_JET)
-                    heatmap_colored = cv2.cvtColor(heatmap_colored, cv2.COLOR_BGR2RGB)
-                    img_rgb = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB)
-                    overlay = cv2.addWeighted(img_rgb, 0.5, heatmap_colored, 0.5, 0)
-                    overlay_bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
+                    
+                    # Chuyển sang float32 để blend
+                    heatmap_f32 = np.float32(heatmap_colored) / 255.0
+                    img_f32 = np.float32(cropped_img) / 255.0
+                    
+                    # Blend theo công thức của test script
+                    cam_img = heatmap_f32 + img_f32
+                    cam_max_val = np.max(cam_img)
+                    if cam_max_val != 0:
+                        cam_img = cam_img / cam_max_val
+                        
+                    overlay_bgr = np.uint8(255 * cam_img)
 
                     safe_method = method.replace("++", "_plus")
                     hm_path = os.path.join(output_dir, f"step7_{safe_method}_heatmap.png")

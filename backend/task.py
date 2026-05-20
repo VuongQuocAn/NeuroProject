@@ -85,6 +85,7 @@ def run_mri_pipeline(self, task_id: int, image_id: int):
         # Fetch RNA data if available
         rna_record = db.query(models.RnaData).filter(models.RnaData.patient_id == image_record.patient_id).first()
         rna_vector = None
+        rna_gene_names = None
         if rna_record:
             try:
                 rna_bucket, rna_object = _parse_minio_path(rna_record.file_path)
@@ -110,6 +111,7 @@ def run_mri_pipeline(self, task_id: int, image_id: int):
                 data_line = lines[1] if len(lines) > 1 else lines[0]
                 parts = data_line.split(separator)
                 rna_vector = np.array([float(x) if x.strip() else 0.0 for x in parts[gene_start_idx:]], dtype=np.float32)
+                rna_gene_names = headers[gene_start_idx:]
             except Exception as e:
                 print(f"[CELERY WORKER] Loi khi doc RNA: {e}")
 
@@ -154,7 +156,8 @@ def run_mri_pipeline(self, task_id: int, image_id: int):
                 rna_data=rna_vector,
                 clinical_data=clinical_dict,
                 output_dir=output_dir,
-                progress_callback=progress_updater
+                progress_callback=progress_updater,
+                rna_gene_names=rna_gene_names
             )
         else:
             # Single image mode
@@ -177,7 +180,8 @@ def run_mri_pipeline(self, task_id: int, image_id: int):
                 rna_data=rna_vector,
                 clinical_data=clinical_dict,
                 output_dir=output_dir,
-                progress_callback=progress_updater
+                progress_callback=progress_updater,
+                rna_gene_names=rna_gene_names
             )
 
         if result["status"] != "success":
