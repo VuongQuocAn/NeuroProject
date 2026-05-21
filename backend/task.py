@@ -322,6 +322,7 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
         # 3. Tìm RNA Data (nếu có)
         rna_record = db.query(models.RnaData).filter(models.RnaData.patient_id == patient_id).first()
         rna_vector = None
+        rna_gene_names = None
         if rna_record:
             rna_bucket, rna_object = _parse_minio_path(rna_record.file_path)
             rna_response = minio_client.get_object(rna_bucket, rna_object)
@@ -342,6 +343,8 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
                     numeric_df = numeric_df.drop(columns=[col])
                     
             rna_vector = numeric_df.to_numpy(dtype=np.float32).flatten()
+            # Lay danh sach ten gene tu cac cot so de truyen vao pipeline phuc vu tinh toan XAI
+            rna_gene_names = list(numeric_df.columns)
 
         # 4. Tìm Clinical Data (nếu có)
         clinical_record = db.query(models.ClinicalData).filter(models.ClinicalData.patient_id == patient_id).first()
@@ -377,7 +380,8 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
                 rna_data=rna_vector,
                 clinical_data=clinical_dict,
                 output_dir=output_dir,
-                progress_callback=progress_updater
+                progress_callback=progress_updater,
+                rna_gene_names=rna_gene_names
             )
             # Cập nhật key_slice_index trong DB theo kết quả quét thực tế
             new_key_idx = result.get("key_slice_index")
@@ -391,7 +395,8 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
                 rna_data=rna_vector,
                 clinical_data=clinical_dict,
                 output_dir=output_dir,
-                progress_callback=progress_updater
+                progress_callback=progress_updater,
+                rna_gene_names=rna_gene_names
             )
 
         if result["status"] != "success":
