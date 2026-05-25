@@ -1,7 +1,8 @@
+name: neuroproject-tunnel
+
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: neuroproject-postgres
+  db:
+    image: postgres:15
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-neuroproject}
@@ -10,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - neuro-net
+      - neuro_net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-neuroproject} -d ${POSTGRES_DB:-neuroproject}"]
       interval: 10s
@@ -18,14 +19,13 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
-    container_name: neuroproject-redis
+    image: redis:alpine
     restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
     networks:
-      - neuro-net
+      - neuro_net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -33,49 +33,72 @@ services:
       retries: 10
 
   backend:
+    image: neuroproject-ai:latest
     build:
       context: ./backend
-      dockerfile: Dockerfile.tunnel
-    container_name: neuroproject-backend
+      dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
-      - ${ENV_FILE:-.env.tunnel}
+      - .env.tunnel
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-neuroproject}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-neuroproject}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      PYTHONPATH: /app
       PORT: ${PORT:-8000}
+    volumes:
+      - ./backend:/app
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
       redis:
         condition: service_healthy
     ports:
       - "8000:8000"
     networks:
-      - neuro-net
+      - neuro_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.tunnel
-    container_name: neuroproject-worker
+    image: neuroproject-ai:latest
     restart: unless-stopped
     env_file:
-      - ${ENV_FILE:-.env.tunnel}
+      - .env.tunnel
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-neuroproject}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-neuroproject}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      PYTHONPATH: /app
     command: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
+    volumes:
+      - ./backend:/app
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
-      - neuro-net
+      - neuro_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+networks:
+  neuro_net:
+    driver: bridge
 
 volumes:
   postgres_data:
   redis_data:
-
-networks:
-  neuro-net:
-    driver: bridge

@@ -1,164 +1,143 @@
-# Deploy bằng Vercel + Cloudflare Quick Tunnel
+# Chay local va deploy tunnel
 
-Kiến trúc:
+Du an co 2 che do rieng:
 
 ```text
-Vercel frontend
-  -> https://random-name.trycloudflare.com
-  -> Cloudflare Quick Tunnel
-  -> Laptop cá nhân chạy Docker Compose
-       - FastAPI backend
-       - Celery worker
-       - Redis
-       - PostgreSQL
-  -> Cloudflare R2 bucket analysis-results
+LOCAL:
+docker-compose.yml
+db + redis + minio + backend + worker + frontend
+
+DEPLOY TUNNEL:
+docker-compose.tunnel.yml
+db + redis + backend + worker + R2 + cloudflared
 ```
 
-Điều kiện quan trọng:
+Backend va worker dung chung 1 image:
 
-- Laptop phải đang bật.
-- Docker Desktop phải đang chạy.
-- Stack `docker-compose.tunnel.yml` phải đang chạy.
-- Cửa sổ `cloudflared tunnel` phải đang mở.
-- Nếu tắt máy hoặc tắt tunnel thì frontend Vercel không gọi được backend.
+```text
+neuroproject-ai:latest
+```
 
-## 1. Chuẩn bị phần mềm
+## 1. Build lai tu dau
 
-Kiểm tra trên PowerShell:
+Neu da xoa het image/container, build lai image AI chung:
 
 ```powershell
-docker --version
-docker compose version
-git --version
-cloudflared --version
+docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel build backend
 ```
 
-## 2. Tạo env tunnel
+Lenh nay tao image:
 
-Tạo file `.env.tunnel` từ mẫu:
+```text
+neuroproject-ai:latest
+```
+
+Worker dung lai image nay, khong can build rieng.
+
+## 2. Chay deploy tunnel
+
+Dam bao local dang tat de khong dung port 8000:
 
 ```powershell
-Copy-Item .env.tunnel.example .env.tunnel
-notepad .env.tunnel
+docker compose stop
 ```
 
-Tạo `SECRET_KEY`:
+Chay deploy:
 
 ```powershell
-python -c "import secrets; print(secrets.token_hex(32))"
+docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel up -d
 ```
 
-Điền các giá trị thật cho PostgreSQL password, Cloudflare R2, Gemini và Hugging Face.
-
-## 3. Chạy backend stack local
-
-```powershell
-docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel up -d --build
-docker compose -f docker-compose.tunnel.yml ps
-```
-
-Xem log:
-
-```powershell
-docker compose -f docker-compose.tunnel.yml logs -f backend
-docker compose -f docker-compose.tunnel.yml logs -f worker
-```
-
-Test local:
+Test backend:
 
 ```powershell
 curl http://localhost:8000/health
 ```
 
-Mở Swagger:
-
-```text
-http://localhost:8000/docs
-```
-
-## 4. Chạy migration nếu cần
-
-```powershell
-Get-Content .\backend\migrations\001_xai_paths.sql | docker compose -f docker-compose.tunnel.yml exec -T postgres psql -U neuroproject -d neuroproject
-```
-
-## 5. Mở Cloudflare Quick Tunnel
-
-Mở PowerShell mới:
+Mo Cloudflare Tunnel:
 
 ```powershell
 cloudflared tunnel --url http://localhost:8000
 ```
 
-Copy URL dạng:
+Copy URL dang:
 
 ```text
 https://abc-def-xyz.trycloudflare.com
 ```
 
-Test:
+Test tunnel:
 
 ```powershell
 curl https://abc-def-xyz.trycloudflare.com/health
 ```
 
-## 6. Test frontend local
+## 3. Chay local
 
-Trong `frontend/.env.local`:
-
-```text
-NEXT_PUBLIC_API_URL=https://abc-def-xyz.trycloudflare.com
-```
-
-Chạy:
+Tat deploy tunnel truoc:
 
 ```powershell
-cd frontend
-npm install
-npm run dev
+docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel stop
 ```
 
-## 7. Deploy frontend lên Vercel
-
-Trên Vercel:
-
-- Import GitHub repo.
-- Root Directory: `frontend`.
-- Environment Variable:
-
-```text
-NEXT_PUBLIC_API_URL=https://abc-def-xyz.trycloudflare.com
-```
-
-Deploy xong sẽ có URL dạng:
-
-```text
-https://neuroproject.vercel.app
-```
-
-## 8. Cập nhật CORS
-
-Sửa `.env.tunnel`:
-
-```text
-FRONTEND_URL=https://neuroproject.vercel.app
-CORS_ORIGINS=http://localhost:3000,https://neuroproject.vercel.app
-```
-
-Restart:
+Chay local:
 
 ```powershell
-docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel up -d --build
+docker compose up -d
 ```
 
-## 9. Test full flow
+Mo:
 
-1. Docker Desktop đang chạy.
-2. `postgres`, `redis`, `backend`, `worker` đều `Up`.
-3. `cloudflared tunnel` đang chạy.
-4. Mở frontend Vercel.
-5. Upload ảnh MRI.
-6. Gửi phân tích.
-7. Worker xử lý job.
-8. Kết quả/XAI được lưu vào R2 bucket `analysis-results`.
-9. Frontend hiển thị kết quả.
+```text
+Frontend: http://localhost:3000
+Backend:  http://localhost:8000/docs
+MinIO:    http://localhost:9001
+```
+
+## 4. Doi qua lai
+
+Muon deploy:
+
+```powershell
+docker compose stop
+docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel up -d
+cloudflared tunnel --url http://localhost:8000
+```
+
+Muon local:
+
+```powershell
+docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel stop
+docker compose up -d
+```
+
+## 5. Khi nao moi build
+
+Chi build khi:
+
+```text
+doi Dockerfile
+doi requirements.txt
+xoa image
+muon lam lai tu dau
+```
+
+Build:
+
+```powershell
+docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel build backend
+```
+
+Chay lai:
+
+```powershell
+docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel up -d
+```
+
+Khong dung:
+
+```powershell
+docker compose down -v
+```
+
+Neu khong muon xoa volume database/MinIO.
