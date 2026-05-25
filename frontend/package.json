@@ -2,12 +2,9 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
-  "engines": {
-    "node": "20.x"
-  },
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build --webpack",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
