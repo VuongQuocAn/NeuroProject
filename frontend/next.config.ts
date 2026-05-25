@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  turbopack: {},
+
   // Cornerstone.js requires WASM & web workers
   webpack: (config, { isServer }) => {
     if (!isServer) {
