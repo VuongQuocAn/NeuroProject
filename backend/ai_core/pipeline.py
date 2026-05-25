@@ -899,26 +899,7 @@ class TumorAnalysisPipeline:
             has_clinical = 1.0
             
         # Grade (e.g., 2, 3, 4)
-        grade = clinical_data.get("grade")
-        if grade and str(grade).isdigit():
-            clinical_vec[0, 14] = float(grade) / 4.0
-            has_clinical = 1.0
-
-        # Prior Treatment (0/1)
-        prior = clinical_data.get("prior_treatment")
-        if prior is not None:
-            clinical_vec[0, 15] = 1.0 if str(prior) in ["1", "1.0", "yes"] else 0.0
-            has_clinical = 1.0
-            
-        # Pharmaceutical Therapy (0/1)
-        pharma = clinical_data.get("pharmaceutical_therapy")
-        if pharma is not None:
-            clinical_vec[0, 16] = 1.0 if str(pharma) in ["1", "1.0", "yes"] else 0.0
-            has_clinical = 1.0
-
-        return clinical_vec, has_clinical
-
-    def _generate_xai_narrative(
+      def _generate_xai_narrative(
         self,
         result_dict: dict[str, Any],
         has_mri: float,
@@ -929,7 +910,7 @@ class TumorAnalysisPipeline:
         num_wsi_tiles: int,
     ) -> str:
         """
-        Sinh giải thích biện giải lâm sàng XAI dựa trên kết quả thực tế của hệ thống.
+        Sinh giải thích biện giải lâm sàng XAI dựa trên kết quả thực tế của mô hình.
 
         Input:
             result_dict: Từ điển chứa kết quả tính toán của pipeline.
@@ -945,12 +926,12 @@ class TumorAnalysisPipeline:
         """
         sections: list[str] = []
         risk_score = result_dict.get("risk_score", 0.0)
-        risk_group = result_dict.get("risk_group", "Medium")
-        attn = result_dict.get("fusion_attention", [])
-        tumor_label = result_dict.get("tumor_label", "")
+        risk_group = result_dict.get("risk_group") or self.get_risk_level(risk_score)
+        tumor_label = result_dict.get("tumor_label")
         tumor_conf = result_dict.get("classification_confidence", 0.0)
+        attn = result_dict.get("fusion_attention")
 
-        # --- BẢN ĐỒ NHÃN PHÂN LOẠI KHỐI U ---
+        # --- Bản đồ nhãn phân loại khối u ---
         label_vn = {
             "class_0": "U thần kinh đệm (Glioma)",
             "class_1": "U màng não (Meningioma)",
@@ -988,6 +969,7 @@ class TumorAnalysisPipeline:
             for i, (name, weight) in enumerate(zip(modality_names, attn[:4])):
                 pct = round(weight * 100, 1)
                 if active_mods[i]:
+                    # Không sử dụng bất kỳ biểu tượng icon nào (như ★) theo đúng RULE
                     marker = " (Chính)" if i == dominant_idx else ""
                     attn_strs.append(f"{name}: {pct}%{marker}")
             sections.append(
@@ -1039,6 +1021,7 @@ class TumorAnalysisPipeline:
         if not has_rna: missing.append("RNA")
         if not has_clinical: missing.append("Lâm sàng")
         if missing:
+            # Không sử dụng bất kỳ biểu tượng emoji cảnh báo nào ở đây
             rec += f"\nLưu ý: Thiếu dữ liệu nguồn {', '.join(missing)} - kết quả tiên lượng có thể chưa đầy đủ."
 
         sections.append(rec)
@@ -1046,6 +1029,15 @@ class TumorAnalysisPipeline:
         return "\n\n".join(sections)
 
     def get_risk_level(self, score: float) -> str:
+        """
+        Xác định nhóm nguy cơ dựa trên điểm rủi ro.
+
+        Input:
+            score: Điểm rủi ro (risk score).
+
+        Output:
+            Tên nhóm nguy cơ tương ứng (Very High, High, Medium, Low).
+        """
         if score > 1.5:
             return "Very High"
         if score > 0.5:
@@ -1055,8 +1047,15 @@ class TumorAnalysisPipeline:
         return "Low"
 
     def build_survival_curve(self, risk_score: float) -> list[dict[str, float]]:
-        # S(t) = S0(t)^exp(risk_score)
-        # Baseline survival S0(t) typical for brain tumors (roughly)
+        """
+        Xây dựng đường cong sinh tồn dựa trên điểm rủi ro và tỷ lệ hazard.
+
+        Input:
+            risk_score: Điểm rủi ro (risk score).
+
+        Output:
+            Danh sách các điểm biểu diễn xác suất sinh tồn theo các mốc thời gian.
+        """
         baseline = [
             (0, 1.0),
             (6, 0.95),
@@ -1068,7 +1067,7 @@ class TumorAnalysisPipeline:
         ]
         
         # Hazard ratio = exp(risk_score)
-        # Clip risk_score to avoid overflow/underflow
+        # Kẹp risk_score lại để tránh tràn số
         clamped_score = max(-3.0, min(3.0, risk_score))
         hazard_ratio = np.exp(clamped_score)
         
@@ -1100,5 +1099,5 @@ class TumorAnalysisPipeline:
             img = Image.open(io.BytesIO(b)).convert("RGB")
             tensors.append(transform(img))
             
-        # Stack thÃ nh [S, 3, 224, 224] sau Ä‘Ã³ thÃªm batch dim -> [1, S, 3, 224, 224]
+        # Ghép thành [S, 3, 224, 224] sau đó thêm chiều batch thành [1, S, 3, 224, 224]
         return torch.stack(tensors).unsqueeze(0).to(self.device)
