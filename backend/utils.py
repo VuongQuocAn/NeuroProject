@@ -18,7 +18,8 @@ minio_client = Minio(
     os.getenv("MINIO_URL", "minio:9000"),
     access_key=os.getenv("MINIO_ACCESS_KEY", "admin"),
     secret_key=os.getenv("MINIO_SECRET_KEY", "password123"),
-    secure=False,
+    secure=os.getenv("MINIO_SECURE", "false").lower() in {"1", "true", "yes", "on"},
+    region=os.getenv("MINIO_REGION") or None,
 )
 
 

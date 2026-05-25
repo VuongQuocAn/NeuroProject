@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  Loader2,
   RefreshCw,
   Search,
   Trash2,
@@ -33,10 +34,19 @@ type MriResult = {
   risk_score?: number | null;
   risk_group?: string | null;
   survival_curve_data?: { time: number; survival_probability: number }[] | null;
+  multimodal_risk_xai_data_url?: string | null;
   gradcam_heatmap_data_url?: string | null;
   gradcam_plus_heatmap_data_url?: string | null;
   layercam_heatmap_data_url?: string | null;
+  detection_xai_data_url?: string | null;
+  segmentation_xai_data_url?: string | null;
+  classification_xai_data_url?: string | null;
+  xai_methods?: Record<string, string> | null;
+  xai_warnings?: Record<string, string> | null;
+  xai_metadata?: Record<string, unknown> | null;
   xai_explanation?: string | null;
+  classification_xai_explanation?: string | null;
+  multimodal_xai_explanation?: string | null;
   fusion_attention?: number[] | null;
   // Series metadata
   is_series?: boolean;
@@ -195,6 +205,10 @@ export default function MriResultCard({
   const [rating, setRating] = useState<number | null>(null);
   const [submittingRating, setSubmittingRating] = useState(false);
   const [currentSlice, setCurrentSlice] = useState<number>(result?.key_slice_index ?? 0);
+  const [aiExplanation, setAiExplanation] = useState<string | null>(result?.classification_xai_explanation ?? null);
+  const [explainingXai, setExplainingXai] = useState(false);
+  const [explanationError, setExplanationError] = useState<string | null>(null);
+  const explanationRequestRef = useRef<string | number | null>(null);
 
   const getSliceUrl = (index: number) => {
     if (!result?.image_id) return "";
@@ -210,18 +224,48 @@ export default function MriResultCard({
         heatmap_method: activeHeatmap,
       });
       setRating(star);
-    } catch (error: any) {
-      console.error("Failed to submit rating:", error.response?.data || error.message);
-      const detail = error.response?.data?.detail || "Lỗi khi lưu đánh giá. Vui lòng thử lại.";
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } }; message?: string };
+      console.error("Failed to submit rating:", err.response?.data || err.message);
+      const detail = err.response?.data?.detail || "Lỗi khi lưu đánh giá. Vui lòng thử lại.";
       alert(detail);
     } finally {
       setSubmittingRating(false);
     }
   };
 
+  useEffect(() => {
+    const imageId = result?.image_id;
+    if (!imageId || !result?.classification_xai_data_url || result?.classification_xai_explanation) {
+      setAiExplanation(result?.classification_xai_explanation ?? null);
+      return;
+    }
+    if (explanationRequestRef.current === imageId) return;
+
+    explanationRequestRef.current = imageId;
+    setExplainingXai(true);
+    setExplanationError(null);
+
+    api
+      .post(`/records/analysis/image/${imageId}/explain/classification`)
+      .then((response) => {
+        setAiExplanation(response.data?.content || "");
+      })
+      .catch((error: unknown) => {
+        const err = error as { response?: { data?: { detail?: string } }; message?: string };
+        console.error("Failed to explain classification XAI:", err.response?.data || err.message);
+        setExplanationError(err.response?.data?.detail || "Khong the sinh giai thich XAI. Kiem tra backend/RAG/Gemini key.");
+      })
+      .finally(() => {
+        setExplainingXai(false);
+      });
+  }, [result?.image_id, result?.classification_xai_data_url, result?.classification_xai_explanation]);
+
   const isFailed = result?.status === "failed";
   const isDone = result?.status === "done" || result?.status === "completed";
   const noTumorDetected = Boolean(result?.no_tumor_detected);
+  const multimodalRiskXaiUrl = result?.multimodal_risk_xai_data_url || result?.gradcam_heatmap_data_url || null;
+  const multimodalExplanation = result?.multimodal_xai_explanation || result?.xai_explanation || null;
   const imagePanels = [
     {
       key: "bbox",
@@ -421,6 +465,66 @@ export default function MriResultCard({
                 </div>
               </div>
 
+              {(result?.detection_xai_data_url || result?.segmentation_xai_data_url || result?.classification_xai_data_url || explainingXai || explanationError || aiExplanation) && (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5 space-y-5">
+                  <div className="text-[11px] uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                    <Search className="h-4 w-4 text-teal-500" />
+                    MRI Core XAI
+                  </div>
+
+                  {(result?.detection_xai_data_url || result?.segmentation_xai_data_url || result?.classification_xai_data_url) && (
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                      {result.detection_xai_data_url && (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage({ title: "Detection XAI - ODAM", src: result.detection_xai_data_url! })}
+                          className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
+                        >
+                          <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Detection / ODAM</div>
+                          <img src={result.detection_xai_data_url} alt="Detection XAI" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                        </button>
+                      )}
+                      {result.segmentation_xai_data_url && (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage({ title: "Segmentation XAI - Seg-Eigen-CAM", src: result.segmentation_xai_data_url! })}
+                          className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
+                        >
+                          <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Segmentation / Seg-Eigen-CAM</div>
+                          <img src={result.segmentation_xai_data_url} alt="Segmentation XAI" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                        </button>
+                      )}
+                      {result.classification_xai_data_url && (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage({ title: "Classification XAI - Finer-CAM", src: result.classification_xai_data_url! })}
+                          className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
+                        >
+                          <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Classification / Finer-CAM</div>
+                          <img src={result.classification_xai_data_url} alt="Classification XAI" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {(explainingXai || explanationError || aiExplanation) && (
+                    <div className="p-4 bg-teal-500/10 rounded-lg border border-teal-500/20">
+                      <div className="text-[11px] uppercase tracking-widest text-teal-500 font-bold mb-2">Giải thích</div>
+                      {explainingXai ? (
+                        <div className="flex items-center gap-2 text-sm text-slate-200">
+                          <Loader2 className="h-4 w-4 animate-spin text-teal-400" />
+                          Đang sinh giải thích từ heatmap Finer-CAM, metadata và RAG...
+                        </div>
+                      ) : explanationError ? (
+                        <p className="text-sm text-amber-200 leading-relaxed whitespace-pre-wrap">{explanationError}</p>
+                      ) : (
+                        <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{aiExplanation}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {result?.risk_score != null && (
                 <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5 space-y-5">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
@@ -448,42 +552,19 @@ export default function MriResultCard({
                     </div>
                   </div>
 
-                  {/* XAI Heatmaps — hiển thị cả 3 loại CAM */}
-                  {(result.gradcam_heatmap_data_url || result.gradcam_plus_heatmap_data_url || result.layercam_heatmap_data_url) && (
+                  {/* Multimodal prognosis risk heatmap */}
+                  {multimodalRiskXaiUrl && (
                     <div>
-                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Bản đồ nhiệt XAI (Heatmap)</div>
+                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Multimodal Risk Grad-CAM</div>
                       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                        {result.gradcam_heatmap_data_url && (
+                        {multimodalRiskXaiUrl && (
                           <button
                             type="button"
-                            onClick={() => setPreviewImage({ title: "Grad-CAM Heatmap", src: result.gradcam_heatmap_data_url! })}
+                            onClick={() => setPreviewImage({ title: "Multimodal Prognosis - Risk Grad-CAM", src: multimodalRiskXaiUrl })}
                             className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
                           >
-                            <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM</div>
-                            <img src={result.gradcam_heatmap_data_url} alt="Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
-                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
-                          </button>
-                        )}
-                        {result.gradcam_plus_heatmap_data_url && (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewImage({ title: "Grad-CAM++ Heatmap", src: result.gradcam_plus_heatmap_data_url! })}
-                            className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
-                          >
-                            <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM++</div>
-                            <img src={result.gradcam_plus_heatmap_data_url} alt="Grad-CAM++" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
-                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
-                          </button>
-                        )}
-                        {result.layercam_heatmap_data_url && (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewImage({ title: "Layer-CAM Heatmap", src: result.layercam_heatmap_data_url! })}
-                            className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
-                          >
-                            <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Layer-CAM</div>
-                            <img src={result.layercam_heatmap_data_url} alt="Layer-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
-                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                            <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Risk Score / MRI Branch Grad-CAM</div>
+                            <img src={multimodalRiskXaiUrl} alt="Multimodal Risk Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
                           </button>
                         )}
                       </div>
@@ -512,11 +593,10 @@ export default function MriResultCard({
                     </div>
                   )}
 
-                  {/* Textual Explanation */}
-                  {result.xai_explanation && (
+                  {multimodalExplanation && (
                     <div className="p-4 bg-teal-500/10 rounded-lg border border-teal-500/20">
-                      <div className="text-[11px] uppercase tracking-widest text-teal-500 font-bold mb-2">Giải thích lâm sàng (XAI)</div>
-                      <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{result.xai_explanation}</p>
+                      <div className="text-[11px] uppercase tracking-widest text-teal-500 font-bold mb-2">Giải thích lâm sàng từ Multimodal Prognosis</div>
+                      <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{multimodalExplanation}</p>
                     </div>
                   )}
 

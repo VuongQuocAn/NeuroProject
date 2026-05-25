@@ -31,3 +31,6 @@ backend/ai_core/weights/*.pth
 !backend/ai_core/weights/placeholder.txt
 ke_hoach/
 .gemini/
+notebooks/
+deep-research-report.md
+implementation_plan_final.md

@@ -4,6 +4,9 @@ import re
 import sys
 import importlib
 import importlib.util
+import mimetypes
+import shutil
+import tempfile
 from typing import TYPE_CHECKING
 
 from celery import shared_task
@@ -13,7 +16,7 @@ import torch
 
 import models
 from database import SessionLocal
-from utils import minio_client
+from utils import ensure_bucket_exists, minio_client
 
 CURRENT_DIR = os.path.dirname(__file__)
 if CURRENT_DIR not in sys.path:
@@ -23,7 +26,32 @@ if TYPE_CHECKING:
     from ai_core.pipeline import TumorAnalysisPipeline
 
 WEIGHTS_DIR = os.path.join(CURRENT_DIR, "ai_core", "weights")
+RESULTS_BUCKET = "analysis-results"
 ai_pipeline: "TumorAnalysisPipeline | None" = None
+
+
+def _upload_result_files_to_minio(result: dict, prefix: str) -> dict:
+    """Upload generated pipeline files to MinIO and replace local paths by MinIO paths."""
+    ensure_bucket_exists(RESULTS_BUCKET)
+    clean_result = dict(result)
+
+    for key, value in list(clean_result.items()):
+        if not (isinstance(value, str) and value and os.path.isfile(value)):
+            continue
+
+        filename = os.path.basename(value)
+        object_name = f"{prefix}/{filename}"
+        content_type = mimetypes.guess_type(value)[0] or "application/octet-stream"
+
+        minio_client.fput_object(
+            bucket_name=RESULTS_BUCKET,
+            object_name=object_name,
+            file_path=value,
+            content_type=content_type,
+        )
+        clean_result[key] = f"/{RESULTS_BUCKET}/{object_name}"
+
+    return clean_result
 
 
 def _load_pipeline_class():
@@ -79,8 +107,7 @@ def run_mri_pipeline(self, task_id: int, image_id: int):
         if not image_record:
             raise Exception(f"Khong tim thay anh MRI voi image_id={image_id}")
 
-        output_dir = os.path.join(os.path.dirname(__file__), "analysis_results", str(image_id))
-        os.makedirs(output_dir, exist_ok=True)
+        output_dir = tempfile.mkdtemp(prefix=f"neuro_mri_{image_id}_{task_id}_")
 
         # Fetch RNA data if available
         rna_record = db.query(models.RnaData).filter(models.RnaData.patient_id == image_record.patient_id).first()
@@ -187,6 +214,11 @@ def run_mri_pipeline(self, task_id: int, image_id: int):
         if result["status"] != "success":
             raise Exception(result["error_msg"])
 
+        result = _upload_result_files_to_minio(
+            result=result,
+            prefix=f"mri/{image_id}/task-{task_id}",
+        )
+
         task_record.status = "done"
         task_record.result = result
 
@@ -210,6 +242,10 @@ def run_mri_pipeline(self, task_id: int, image_id: int):
         analysis.risk_score = result.get("risk_score")
         analysis.risk_group = result.get("risk_group")
         analysis.survival_curve_data = result.get("survival_curve_data")
+        analysis.finer_cam_path = result.get("classification_xai_path") or result.get("finer_cam_path")
+        analysis.seg_eigen_cam_path = result.get("segmentation_xai_path") or result.get("seg_eigen_cam_path")
+        analysis.odam_path = result.get("detection_xai_path") or result.get("odam_path")
+        analysis.xai_3_panel_path = result.get("xai_3_panel_path")
 
         db.commit()
 
@@ -227,6 +263,8 @@ def run_mri_pipeline(self, task_id: int, image_id: int):
             db.commit()
         return {"task_id": task_id, "status": "failed", "error": str(exc)}
     finally:
+        if "output_dir" in locals() and output_dir and os.path.isdir(output_dir):
+            shutil.rmtree(output_dir, ignore_errors=True)
         db.close()
 
 
@@ -360,8 +398,7 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
                 "prior_treatment": clinical_record.prior_treatment,
             }
 
-        output_dir = os.path.join(os.path.dirname(__file__), "multimodal_results", str(patient_id))
-        os.makedirs(output_dir, exist_ok=True)
+        output_dir = tempfile.mkdtemp(prefix=f"neuro_prognosis_{patient_id}_{task_id}_")
 
         def progress_updater(percent, status_text):
             self.update_state(
@@ -402,6 +439,11 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
         if result["status"] != "success":
             raise Exception(result.get("error_msg", "Pipeline failed"))
 
+        result = _upload_result_files_to_minio(
+            result=result,
+            prefix=f"prognosis/{patient_id}/task-{task_id}",
+        )
+
         # Khử giá trị NaN/Inf trước khi lưu vào DB (Postgres không nhận NaN trong JSON)
         def sanitize_json(data):
             if isinstance(data, dict):
@@ -436,6 +478,10 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
         analysis.risk_score = clean_result.get("risk_score")
         analysis.risk_group = clean_result.get("risk_group")
         analysis.survival_curve_data = clean_result.get("survival_curve_data")
+        analysis.finer_cam_path = clean_result.get("classification_xai_path") or clean_result.get("finer_cam_path")
+        analysis.seg_eigen_cam_path = clean_result.get("segmentation_xai_path") or clean_result.get("seg_eigen_cam_path")
+        analysis.odam_path = clean_result.get("detection_xai_path") or clean_result.get("odam_path")
+        analysis.xai_3_panel_path = clean_result.get("xai_3_panel_path")
 
         db.commit()
         return {"status": "done", "patient_id": patient_id}
@@ -446,6 +492,8 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
             db.commit()
         return {"status": "failed", "patient_id": patient_id, "error": str(exc)}
     finally:
+        if "output_dir" in locals() and output_dir and os.path.isdir(output_dir):
+            shutil.rmtree(output_dir, ignore_errors=True)
         db.close()
 
 

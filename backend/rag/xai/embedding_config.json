@@ -1,0 +1,13 @@
+{
+  "rag_mode": "child_parent",
+  "embed_dataset": "child_only",
+  "model_name": "BAAI/bge-m3",
+  "normalize_embeddings": true,
+  "max_seq_length": 8192,
+  "batch_size": 8,
+  "embedding_dim": 1024,
+  "num_child_records": 876,
+  "num_parent_records": 150,
+  "child_jsonl_name": "brain_tumor_child_chunks_source_clean_v2_final_labels.jsonl",
+  "parent_jsonl_name": "brain_tumor_parent_chunks_source_clean_v2_final_labels.jsonl"
+}

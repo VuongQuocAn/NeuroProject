@@ -2,7 +2,7 @@
 
 import type { ChangeEvent } from "react";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   UploadCloud,
   FileType,
@@ -38,6 +38,7 @@ const MRI_PATIENT_STORAGE_KEY = "neuro_mri_patient_id";
 
 export default function UploadPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<UploadTab>("dicom");
   const [uploading, setUploading] = useState(false);
   const [patientId, setPatientId] = useState("");
@@ -62,27 +63,44 @@ export default function UploadPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const queryPatientId = searchParams.get("patientId") || searchParams.get("patient_id");
+    const queryTab = searchParams.get("tab");
+    const forceNewUpload = searchParams.get("new") === "1";
     const savedResult = window.sessionStorage.getItem(MRI_RESULT_STORAGE_KEY);
     const savedPatientId = window.sessionStorage.getItem(MRI_PATIENT_STORAGE_KEY);
 
-    if (savedPatientId) {
+    if (forceNewUpload) {
+      window.sessionStorage.removeItem(MRI_RESULT_STORAGE_KEY);
+      setUploadResult({ kind: "idle" });
+      setLastUploadedImageId(null);
+      setProgress(null);
+      setStatusMsg({ text: "", type: "" });
+    }
+
+    if (queryPatientId) {
+      setPatientId(queryPatientId);
+    } else if (savedPatientId) {
       setPatientId(savedPatientId);
     }
 
-    if (!savedResult) {
+    if (queryTab === "dicom" || queryTab === "rna" || queryTab === "clinical" || queryTab === "wsi") {
+      setActiveTab(queryTab);
+    }
+
+    if (forceNewUpload || !savedResult) {
       return;
     }
 
     try {
       const parsed = JSON.parse(savedResult);
       setUploadResult(parsed);
-      if (parsed?.patientId) {
+      if (!queryPatientId && parsed?.patientId) {
         setPatientId(parsed.patientId);
       }
     } catch {
       window.sessionStorage.removeItem(MRI_RESULT_STORAGE_KEY);
     }
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -96,6 +114,8 @@ export default function UploadPage() {
   // Auto-check existing uploads from DB when patient ID changes
   useEffect(() => {
     const pid = patientId.trim();
+    const queryTab = searchParams.get("tab");
+    const forceNewUpload = searchParams.get("new") === "1";
     if (!pid) {
       setUploadedStatus({ mri: false, wsi: false, rna: false, clinical: false });
       return;
@@ -106,10 +126,10 @@ export default function UploadPage() {
         const res = await api.get(`/records/patients/${encodeURIComponent(pid)}/upload-status`);
         const data = res.data;
         setUploadedStatus({
-          mri: Boolean(data.has_mri),
-          wsi: Boolean(data.has_wsi),
-          rna: Boolean(data.has_rna),
-          clinical: Boolean(data.has_clinical),
+          mri: forceNewUpload && queryTab === "dicom" ? false : Boolean(data.has_mri),
+          wsi: forceNewUpload && queryTab === "wsi" ? false : Boolean(data.has_wsi),
+          rna: forceNewUpload && queryTab === "rna" ? false : Boolean(data.has_rna),
+          clinical: forceNewUpload && queryTab === "clinical" ? false : Boolean(data.has_clinical),
         });
         // Pre-fill clinical values if they exist
         if (data.clinical) {
@@ -124,7 +144,7 @@ export default function UploadPage() {
     }, 600);
 
     return () => clearTimeout(timer);
-  }, [patientId]);
+  }, [patientId, searchParams]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

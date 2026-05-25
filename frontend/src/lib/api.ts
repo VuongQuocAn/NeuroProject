@@ -82,6 +82,9 @@ export const apiService = {
     getImageResult: async (imageId: string | number) => {
       return api.get(`/records/analysis/image/${imageId}`);
     },
+    explainClassificationXai: async (imageId: string | number) => {
+      return api.post(`/records/analysis/image/${imageId}/explain/classification`);
+    },
     downloadReport: async (imageId: string | number) => {
       return api.get(`/records/analysis/image/${imageId}/report`, {
         responseType: "blob",

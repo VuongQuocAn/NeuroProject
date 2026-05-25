@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from database import get_db
+from services.gemini_service import GeminiXaiExplanationService
+from services.rag_service import get_xai_rag_service
 from utils import get_current_user, minio_client
 
 router = APIRouter(tags=["Analysis & XAI"])
@@ -71,6 +73,51 @@ def _local_image_to_data_url(file_path: str | None) -> str | None:
         encoded = base64.b64encode(image_file.read()).decode("ascii")
 
     return f"data:{mime_type};base64,{encoded}"
+
+
+def _stored_image_to_data_url(file_path: str | None) -> str | None:
+    """Return data URL for either a local result file or a MinIO object path."""
+    if not file_path:
+        return None
+
+    if os.path.exists(file_path):
+        return _local_image_to_data_url(file_path)
+
+    try:
+        bucket_name, object_name = _parse_minio_path(file_path)
+        response = minio_client.get_object(bucket_name, object_name)
+        try:
+            data = response.read()
+        finally:
+            response.close()
+            response.release_conn()
+
+        extension = os.path.splitext(object_name)[1].lower()
+        mime_type = "image/png"
+        if extension in {".jpg", ".jpeg"}:
+            mime_type = "image/jpeg"
+        elif extension == ".bmp":
+            mime_type = "image/bmp"
+        elif extension in {".tif", ".tiff"}:
+            mime_type = "image/tiff"
+
+        encoded = base64.b64encode(data).decode("ascii")
+        return f"data:{mime_type};base64,{encoded}"
+    except Exception:
+        return None
+
+
+def _stored_file_exists(file_path: str | None) -> bool:
+    if not file_path:
+        return False
+    if os.path.exists(file_path):
+        return True
+    try:
+        bucket_name, object_name = _parse_minio_path(file_path)
+        minio_client.stat_object(bucket_name, object_name)
+        return True
+    except Exception:
+        return False
 
 
 def _image_array_to_data_url(image_bgr: np.ndarray | None) -> str | None:
@@ -316,9 +363,14 @@ def _draw_image_card(
 
 
 def _bgr_path_to_pil(path: str | None) -> Image.Image | None:
-    if not path or not os.path.exists(path):
+    if not path:
         return None
-    image = cv2.imread(path, cv2.IMREAD_COLOR)
+
+    if os.path.exists(path):
+        image = cv2.imread(path, cv2.IMREAD_COLOR)
+    else:
+        image = _load_image_from_minio(path)
+
     if image is None:
         return None
     rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -326,7 +378,7 @@ def _bgr_path_to_pil(path: str | None) -> Image.Image | None:
 
 
 def _load_image_for_report(minio_file_path: str | None = None, local_path: str | None = None) -> Image.Image | None:
-    if local_path and os.path.exists(local_path):
+    if local_path:
         return _bgr_path_to_pil(local_path)
     
     if minio_file_path:
@@ -427,6 +479,10 @@ def _build_professional_report_pdf(
     heatmap_image: Image.Image | None = None,
     gradcam_plus_image: Image.Image | None = None,
     layercam_image: Image.Image | None = None,
+    detection_xai_image: Image.Image | None = None,
+    segmentation_xai_image: Image.Image | None = None,
+    classification_xai_image: Image.Image | None = None,
+    classification_xai_explanation: str | None = None,
     xai_explanation: str | None = None,
     fusion_attention: list[float] | None = None,
     is_series: bool = False,
@@ -547,6 +603,36 @@ def _build_professional_report_pdf(
 
     # ── Page 3: Multimodal Prognosis ──────────────────────────
     all_pages = [page2]
+
+    if detection_xai_image or segmentation_xai_image or classification_xai_image or classification_xai_explanation:
+        page_xai = Image.new("RGB", page_size, WHITE)
+        draw_xai = ImageDraw.Draw(page_xai)
+
+        draw_xai.rectangle((0, 0, page_size[0], 20 * scale), fill=TEAL)
+        draw_xai.text((60 * scale, 50 * scale), "MRI Core XAI", font=font_title, fill=TEAL)
+        draw_xai.text((page_size[0] - 340 * scale, 55 * scale), f"Mã Báo Cáo: {report_id}", font=font_small, fill=SLATE_800)
+        draw_xai.line((60 * scale, 100 * scale, page_size[0] - 60 * scale, 100 * scale), fill=SLATE_100, width=2 * scale)
+
+        draw_xai.text((60 * scale, 130 * scale), "3. Bản đồ nhiệt giải thích MRI Core", font=font_h2, fill=TEAL)
+        _draw_image_card(page_xai, "Detection / ODAM", detection_xai_image, (60 * scale, 180 * scale, 400 * scale, 650 * scale), font_label, font_small, scale=scale)
+        _draw_image_card(page_xai, "Segmentation / Seg-Eigen-CAM", segmentation_xai_image, (450 * scale, 180 * scale, 790 * scale, 650 * scale), font_label, font_small, scale=scale)
+        _draw_image_card(page_xai, "Classification / Finer-CAM", classification_xai_image, (840 * scale, 180 * scale, 1180 * scale, 650 * scale), font_label, font_small, scale=scale)
+
+        if classification_xai_explanation:
+            explanation_box = (60 * scale, 710 * scale, 1180 * scale, 1600 * scale)
+            draw_xai.rounded_rectangle(explanation_box, radius=12 * scale, fill=WHITE, outline=SLATE_100, width=2 * scale)
+            draw_xai.text((90 * scale, 740 * scale), "Giải thích", font=font_label, fill=SLATE_900)
+            _draw_wrapped_text(
+                draw_xai,
+                classification_xai_explanation,
+                (90 * scale, 780 * scale),
+                font_small,
+                SLATE_800,
+                max_width=1040 * scale,
+                line_spacing=7 * scale,
+            )
+
+        all_pages.append(page_xai)
 
     if multimodal_available and risk_score is not None:
         page3 = Image.new("RGB", page_size, WHITE)
@@ -752,6 +838,22 @@ def _get_latest_mri_task(db: Session, image_id: int) -> models.InferenceTask | N
     )
 
 
+def _get_latest_classification_xai_task(db: Session, image: models.Image) -> models.InferenceTask | None:
+    mri_task = _get_latest_mri_task(db, image.id)
+    if mri_task and isinstance(mri_task.result, dict) and mri_task.result.get("classification_xai_path"):
+        return mri_task
+
+    return (
+        db.query(models.InferenceTask)
+        .filter(
+            models.InferenceTask.task_type == "prognosis",
+            models.InferenceTask.target_id == image.patient_id,
+        )
+        .order_by(models.InferenceTask.created_at.desc())
+        .first()
+    )
+
+
 @router.get("/records/analysis/patient/{patient_id}/full", response_model=schemas.ImageAIResultResponse)
 def get_patient_full_analysis(
     patient_id: str,
@@ -846,8 +948,8 @@ def get_patient_full_analysis(
     bbox = result_payload.get("bbox")
     seg_mask_path = result_payload.get("seg_mask_path")
 
-    mask_overlay_data_url = _local_image_to_data_url(result_payload.get("mask_overlay_path"))
-    contour_overlay_data_url = _local_image_to_data_url(result_payload.get("contour_overlay_path"))
+    mask_overlay_data_url = _stored_image_to_data_url(result_payload.get("mask_overlay_path"))
+    contour_overlay_data_url = _stored_image_to_data_url(result_payload.get("contour_overlay_path"))
 
     if mask_overlay_data_url is None or contour_overlay_data_url is None:
         original_image_bgr = _load_image_from_minio(mri_image.file_path) if mri_image else None
@@ -860,6 +962,12 @@ def get_patient_full_analysis(
             mask_overlay_data_url = fallback_mask
         if contour_overlay_data_url is None:
             contour_overlay_data_url = fallback_contour
+
+    classification_xai_path = result_payload.get("classification_xai_path")
+    classification_explanation = GeminiXaiExplanationService._format_for_display(
+        result_payload.get("classification_xai_explanation") or ""
+    ) or None
+    xai_metadata = result_payload.get("xai_metadata") or {}
 
     return schemas.ImageAIResultResponse(
         image_id=image_id,
@@ -878,17 +986,26 @@ def get_patient_full_analysis(
             if result_payload.get("classification_confidence") is not None
             else (analysis.classification_confidence if analysis else None),
         class_probabilities=result_payload.get("class_probabilities"),
-        bbox_overlay_data_url=_local_image_to_data_url(result_payload.get("bbox_image_path")),
-        mask_data_url=_local_image_to_data_url(result_payload.get("seg_mask_path")),
+        bbox_overlay_data_url=_stored_image_to_data_url(result_payload.get("bbox_image_path")),
+        mask_data_url=_stored_image_to_data_url(result_payload.get("seg_mask_path")),
         mask_overlay_data_url=mask_overlay_data_url,
         contour_overlay_data_url=contour_overlay_data_url,
         risk_score=result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis and analysis.risk_score is not None else (0.0 if result_payload.get("risk_group") or (analysis and analysis.risk_group) else None)),
         risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
         survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
-        gradcam_heatmap_data_url=_local_image_to_data_url(result_payload.get("gradcam_heatmap_path") or result_payload.get("xai_heatmap_path")),
-        gradcam_plus_heatmap_data_url=_local_image_to_data_url(result_payload.get("gradcam_plus_heatmap_path")),
-        layercam_heatmap_data_url=_local_image_to_data_url(result_payload.get("layercam_heatmap_path")),
+        multimodal_risk_xai_data_url=_stored_image_to_data_url(result_payload.get("multimodal_risk_xai_path") or result_payload.get("gradcam_heatmap_path")),
+        gradcam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("gradcam_heatmap_path")),
+        gradcam_plus_heatmap_data_url=_stored_image_to_data_url(result_payload.get("gradcam_plus_heatmap_path")),
+        layercam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("layercam_heatmap_path")),
+        detection_xai_data_url=_stored_image_to_data_url(result_payload.get("detection_xai_path") or result_payload.get("odam_path")),
+        segmentation_xai_data_url=_stored_image_to_data_url(result_payload.get("segmentation_xai_path") or result_payload.get("seg_eigen_cam_path")),
+        classification_xai_data_url=_stored_image_to_data_url(classification_xai_path),
+        xai_methods=result_payload.get("xai_methods"),
+        xai_warnings=result_payload.get("xai_warnings"),
+        xai_metadata=xai_metadata,
         xai_explanation=result_payload.get("xai_explanation"),
+        classification_xai_explanation=classification_explanation,
+        multimodal_xai_explanation=result_payload.get("multimodal_xai_explanation") or result_payload.get("xai_explanation"),
         fusion_attention=[v if v is not None else 0.0 for v in result_payload["fusion_attention"]] if result_payload.get("fusion_attention") else None,
         rna_xai=result_payload.get("rna_xai"),
         is_series=is_series,
@@ -950,8 +1067,8 @@ def get_image_analysis_detail(
     bbox = result_payload.get("bbox")
     seg_mask_path = result_payload.get("seg_mask_path")
     no_tumor_detected = bool(result_payload.get("no_tumor_detected"))
-    mask_overlay_data_url = _local_image_to_data_url(result_payload.get("mask_overlay_path"))
-    contour_overlay_data_url = _local_image_to_data_url(result_payload.get("contour_overlay_path"))
+    mask_overlay_data_url = _stored_image_to_data_url(result_payload.get("mask_overlay_path"))
+    contour_overlay_data_url = _stored_image_to_data_url(result_payload.get("contour_overlay_path"))
 
     if mask_overlay_data_url is None or contour_overlay_data_url is None:
         original_image_bgr = _load_image_from_minio(image.file_path)
@@ -964,6 +1081,12 @@ def get_image_analysis_detail(
             mask_overlay_data_url = fallback_mask_overlay_data_url
         if contour_overlay_data_url is None:
             contour_overlay_data_url = fallback_contour_overlay_data_url
+
+    classification_xai_path = result_payload.get("classification_xai_path")
+    classification_explanation = GeminiXaiExplanationService._format_for_display(
+        result_payload.get("classification_xai_explanation") or ""
+    ) or None
+    xai_metadata = result_payload.get("xai_metadata") or {}
 
     return schemas.ImageAIResultResponse(
         image_id=image_id,
@@ -982,17 +1105,26 @@ def get_image_analysis_detail(
         if result_payload.get("classification_confidence") is not None
         else (analysis.classification_confidence if analysis else None),
         class_probabilities=result_payload.get("class_probabilities"),
-        bbox_overlay_data_url=_local_image_to_data_url(result_payload.get("bbox_image_path")),
-        mask_data_url=_local_image_to_data_url(result_payload.get("seg_mask_path")),
+        bbox_overlay_data_url=_stored_image_to_data_url(result_payload.get("bbox_image_path")),
+        mask_data_url=_stored_image_to_data_url(result_payload.get("seg_mask_path")),
         mask_overlay_data_url=mask_overlay_data_url,
         contour_overlay_data_url=contour_overlay_data_url,
         risk_score=result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis else None),
         risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
         survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
-        gradcam_heatmap_data_url=_local_image_to_data_url(result_payload.get("gradcam_heatmap_path")),
-        gradcam_plus_heatmap_data_url=_local_image_to_data_url(result_payload.get("gradcam_plus_heatmap_path")),
-        layercam_heatmap_data_url=_local_image_to_data_url(result_payload.get("layercam_heatmap_path")),
+        multimodal_risk_xai_data_url=_stored_image_to_data_url(result_payload.get("multimodal_risk_xai_path") or result_payload.get("gradcam_heatmap_path")),
+        gradcam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("gradcam_heatmap_path")),
+        gradcam_plus_heatmap_data_url=_stored_image_to_data_url(result_payload.get("gradcam_plus_heatmap_path")),
+        layercam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("layercam_heatmap_path")),
+        detection_xai_data_url=_stored_image_to_data_url(result_payload.get("detection_xai_path") or result_payload.get("odam_path")),
+        segmentation_xai_data_url=_stored_image_to_data_url(result_payload.get("segmentation_xai_path") or result_payload.get("seg_eigen_cam_path")),
+        classification_xai_data_url=_stored_image_to_data_url(classification_xai_path),
+        xai_methods=result_payload.get("xai_methods"),
+        xai_warnings=result_payload.get("xai_warnings"),
+        xai_metadata=xai_metadata,
         xai_explanation=result_payload.get("xai_explanation"),
+        classification_xai_explanation=classification_explanation,
+        multimodal_xai_explanation=result_payload.get("multimodal_xai_explanation") or result_payload.get("xai_explanation"),
         fusion_attention=result_payload.get("fusion_attention"),
         rna_xai=result_payload.get("rna_xai"),
         is_series=image.is_series,
@@ -1000,6 +1132,113 @@ def get_image_analysis_detail(
         key_slice_index=image.key_slice_index,
         created_at=created_at,
         updated_at=updated_at,
+    )
+
+
+@router.post("/records/analysis/image/{image_id}/explain/classification", response_model=schemas.ClassificationXAIExplanationResponse)
+def explain_classification_xai(
+    image_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Khong tim thay anh MRI")
+
+    latest_task = _get_latest_classification_xai_task(db, image)
+    analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.image_id == image_id).first()
+    if not latest_task:
+        raise HTTPException(status_code=404, detail="Chua co task chua classification XAI that cho anh nay.")
+
+    result_payload = latest_task.result if latest_task and latest_task.result else {}
+    tumor_label = result_payload.get("tumor_label") or (analysis.tumor_label if analysis else None)
+    classification_confidence = result_payload.get("classification_confidence")
+    if classification_confidence is None and analysis:
+        classification_confidence = analysis.classification_confidence
+    heatmap_path = result_payload.get("classification_xai_path")
+    if not _stored_file_exists(heatmap_path):
+        raise HTTPException(
+            status_code=404,
+            detail="Chua co heatmap classification XAI. Hay chay MRI analysis truoc.",
+        )
+
+    xai_metadata = (result_payload.get("xai_metadata") or {}).get("classification") or {}
+    if not xai_metadata:
+        raise HTTPException(
+            status_code=404,
+            detail="Chua co metadata classification XAI trong task result. Hay chay lai MRI analysis that.",
+        )
+
+    existing_explanation = GeminiXaiExplanationService._format_for_display(
+        result_payload.get("classification_xai_explanation") or ""
+    )
+    if existing_explanation:
+        return schemas.ClassificationXAIExplanationResponse(
+            image_id=image_id,
+            patient_id=image.patient_id,
+            explanation_type="classification_xai",
+            model_name=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+            content=existing_explanation,
+            rag_context=(result_payload.get("xai_explanation_metadata") or {}).get("classification"),
+            xai_metadata=xai_metadata,
+        )
+
+    try:
+        rag_service = get_xai_rag_service()
+        contexts, rag_diagnostics = rag_service.retrieve_classification_context(
+            tumor_label=tumor_label,
+            classification_confidence=classification_confidence,
+            xai_metadata=xai_metadata,
+            top_k=3,
+            candidate_k=10,
+        )
+        gemini_service = GeminiXaiExplanationService()
+        explanation_text = gemini_service.generate_classification_explanation(
+            tumor_label=tumor_label,
+            classification_confidence=classification_confidence,
+            heatmap_path=heatmap_path,
+            xai_metadata=xai_metadata,
+            contexts=contexts,
+            rag_diagnostics=rag_diagnostics,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Khong the sinh giai thich XAI: {exc}") from exc
+
+    rag_context = {
+        "diagnostics": rag_diagnostics,
+        "contexts": [
+            {
+                "child_id": context.child_id,
+                "parent_id": context.parent_id,
+                "score": context.score,
+                "source_title": context.source_title,
+                "source_url": context.source_url,
+                "labels": context.labels,
+                "child_preview": context.child_text[:500],
+            }
+            for context in contexts
+        ],
+    }
+
+    latest_result = dict(latest_task.result or {})
+    latest_result["classification_xai_explanation"] = explanation_text
+    latest_result.setdefault("xai_explanation_metadata", {})["classification"] = {
+        "rag": rag_context,
+        "model_name": os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+    }
+    latest_task.result = latest_result
+    db.commit()
+
+    return schemas.ClassificationXAIExplanationResponse(
+        image_id=image_id,
+        patient_id=image.patient_id,
+        explanation_type="classification_xai",
+        model_name=os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+        content=explanation_text,
+        rag_context=rag_context,
+        xai_metadata=xai_metadata,
     )
 
 
@@ -1087,6 +1326,47 @@ def download_image_report(
     classification_confidence = result_payload.get("classification_confidence")
     if classification_confidence is None and analysis:
         classification_confidence = analysis.classification_confidence
+    classification_xai_explanation = GeminiXaiExplanationService._format_for_display(
+        result_payload.get("classification_xai_explanation") or ""
+    ) or None
+    if not classification_xai_explanation:
+        classification_xai_path = result_payload.get("classification_xai_path")
+        classification_xai_metadata = (result_payload.get("xai_metadata") or {}).get("classification") or {}
+        if classification_xai_path and _stored_file_exists(classification_xai_path) and classification_xai_metadata:
+            try:
+                rag_service = get_xai_rag_service()
+                contexts, rag_diagnostics = rag_service.retrieve_classification_context(
+                    tumor_label=tumor_label,
+                    classification_confidence=classification_confidence,
+                    xai_metadata=classification_xai_metadata,
+                    top_k=3,
+                    candidate_k=10,
+                )
+                gemini_service = GeminiXaiExplanationService()
+                classification_xai_explanation = gemini_service.generate_classification_explanation(
+                    tumor_label=tumor_label,
+                    classification_confidence=classification_confidence,
+                    heatmap_path=classification_xai_path,
+                    xai_metadata=classification_xai_metadata,
+                    contexts=contexts,
+                    rag_diagnostics=rag_diagnostics,
+                )
+
+                xai_task = latest_task
+                if not (
+                    xai_task
+                    and isinstance(xai_task.result, dict)
+                    and xai_task.result.get("classification_xai_path")
+                ):
+                    xai_task = prognosis_task
+
+                if xai_task:
+                    latest_result = dict(xai_task.result or {})
+                    latest_result["classification_xai_explanation"] = classification_xai_explanation
+                    xai_task.result = latest_result
+                    db.commit()
+            except Exception as exc:
+                print(f"[Warning] Classification XAI explanation for PDF failed: {exc}")
     patient = db.query(models.Patient).filter(models.Patient.id == image.patient_id).first()
     patient_code = patient.patient_external_id if patient and patient.patient_external_id else str(image.patient_id)
     report_id = f"RPT-{patient_code}-{image_id}"
@@ -1118,10 +1398,14 @@ def download_image_report(
             risk_score=result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis and analysis.risk_score is not None else (0.0 if result_payload.get("risk_group") or (analysis and analysis.risk_group) else None)),
             risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
             survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
-            heatmap_image=_bgr_path_to_pil(result_payload.get("gradcam_heatmap_path") or result_payload.get("xai_heatmap_path")),
+            heatmap_image=_bgr_path_to_pil(result_payload.get("multimodal_risk_xai_path") or result_payload.get("gradcam_heatmap_path")),
             gradcam_plus_image=_bgr_path_to_pil(result_payload.get("gradcam_plus_heatmap_path")),
             layercam_image=_bgr_path_to_pil(result_payload.get("layercam_heatmap_path")),
-            xai_explanation=result_payload.get("xai_explanation"),
+            detection_xai_image=_bgr_path_to_pil(result_payload.get("detection_xai_path") or result_payload.get("odam_path")),
+            segmentation_xai_image=_bgr_path_to_pil(result_payload.get("segmentation_xai_path") or result_payload.get("seg_eigen_cam_path")),
+            classification_xai_image=_bgr_path_to_pil(result_payload.get("classification_xai_path")),
+            classification_xai_explanation=classification_xai_explanation,
+            xai_explanation=result_payload.get("multimodal_xai_explanation") or result_payload.get("xai_explanation"),
             fusion_attention=[v if v is not None else 0.0 for v in result_payload["fusion_attention"]] if result_payload.get("fusion_attention") else None,
             is_series=image.is_series,
             num_slices=image.num_slices,

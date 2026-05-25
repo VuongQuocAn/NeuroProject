@@ -1,0 +1,107 @@
+services:
+  - type: web
+    name: neuroproject-backend
+    runtime: docker
+    plan: starter
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile.render
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: neuroproject-postgres
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: neuroproject-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: neuroproject-redis
+          property: connectionString
+      - key: MINIO_URL
+        sync: false
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+      - key: MINIO_SECURE
+        value: "true"
+      - key: MINIO_REGION
+        value: auto
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.1-flash-lite
+      - key: HF_API_TOKEN
+        sync: false
+      - key: HF_EMBEDDING_API_URL
+        value: https://router.huggingface.co/hf-inference/models/BAAI/bge-m3/pipeline/feature-extraction
+      - key: HF_RERANKER_MODEL
+        value: BAAI/bge-reranker-v2-m3
+      - key: HF_RERANKER_API_URL
+        sync: false
+
+  - type: worker
+    name: neuroproject-worker
+    runtime: docker
+    plan: starter
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile.render
+    startCommand: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: neuroproject-postgres
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: neuroproject-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: neuroproject-redis
+          property: connectionString
+      - key: MINIO_URL
+        sync: false
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+      - key: MINIO_SECURE
+        value: "true"
+      - key: MINIO_REGION
+        value: auto
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.1-flash-lite
+      - key: HF_API_TOKEN
+        sync: false
+      - key: HF_EMBEDDING_API_URL
+        value: https://router.huggingface.co/hf-inference/models/BAAI/bge-m3/pipeline/feature-extraction
+      - key: HF_RERANKER_MODEL
+        value: BAAI/bge-reranker-v2-m3
+      - key: HF_RERANKER_API_URL
+        sync: false
+
+  - type: redis
+    name: neuroproject-redis
+    plan: starter
+    ipAllowList: []
+
+databases:
+  - name: neuroproject-postgres
+    plan: starter

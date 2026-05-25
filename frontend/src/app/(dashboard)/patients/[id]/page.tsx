@@ -243,6 +243,9 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
 
   const totalMriFiles = mriImages.reduce((sum: number, img: any) => sum + (img.num_slices || 1), 0);
   const totalWsiFiles = wsiImages.reduce((sum: number, img: any) => sum + (img.num_slices || 1), 0);
+  const patientUploadId = encodeURIComponent(patient.external_id || String(patient.id));
+  const uploadHref = (tab: "dicom" | "wsi" | "rna" | "clinical" = "dicom") =>
+    `/upload?patientId=${patientUploadId}&tab=${tab}&new=1`;
 
   return (
     <div className="flex flex-col space-y-6 pb-10">
@@ -280,7 +283,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
             Sửa thông tin
           </button>
           <button
-            onClick={() => router.push("/upload")}
+            onClick={() => router.push(uploadHref("dicom"))}
             className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold shadow-lg shadow-teal-500/20 transition-all active:scale-95 flex items-center gap-2"
           >
             <PlusCircle className="h-4 w-4" />
@@ -466,7 +469,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                   : "Chưa có dữ liệu MRI cho bệnh nhân này."}
               </p>
               <button
-                onClick={() => router.push("/upload")}
+                onClick={() => router.push(uploadHref("dicom"))}
                 className="w-full py-2.5 rounded-xl bg-teal-600/20 hover:bg-teal-600 text-teal-400 hover:text-white text-xs font-bold transition-all border border-teal-600/30 flex items-center justify-center gap-2"
               >
                 {mriImages.length > 0 ? "CẬP NHẬT MRI" : "UPLOAD MRI"} <ExternalLink className="h-3.5 w-3.5" />
@@ -486,7 +489,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                   : "Chưa có dữ liệu WSI cho bệnh nhân này."}
               </p>
               <button
-                onClick={() => router.push("/upload")}
+                onClick={() => router.push(uploadHref("wsi"))}
                 className="w-full py-2.5 rounded-xl bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white text-xs font-bold transition-all border border-amber-600/30 flex items-center justify-center gap-2"
               >
                 {wsiImages.length > 0 ? "CẬP NHẬT WSI" : "UPLOAD WSI"} <ExternalLink className="h-3.5 w-3.5" />
@@ -506,7 +509,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                   : "Chưa có RNA cho bệnh nhân này."}
               </p>
               <button
-                onClick={() => router.push("/upload")}
+                onClick={() => router.push(uploadHref("rna"))}
                 className="w-full py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white text-xs font-bold transition-all border border-indigo-600/30 flex items-center justify-center gap-2"
               >
                 {rna_uploaded ? "CẬP NHẬT RNA" : "UPLOAD RNA"} <ExternalLink className="h-3.5 w-3.5" />
@@ -549,7 +552,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
               </div>
               <hr className="border-slate-800" />
               <button
-                onClick={() => router.push("/upload")}
+                onClick={() => router.push(uploadHref("clinical"))}
                 className="w-full py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold transition-all"
               >
                 CẬP NHẬT LÂM SÀNG

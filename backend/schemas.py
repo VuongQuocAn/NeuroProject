@@ -146,10 +146,19 @@ class ImageAIResultResponse(BaseModel):
     risk_score: Optional[float] = None
     risk_group: Optional[str] = None
     survival_curve_data: Optional[List[dict]] = None
+    multimodal_risk_xai_data_url: Optional[str] = None
     gradcam_heatmap_data_url: Optional[str] = None
     gradcam_plus_heatmap_data_url: Optional[str] = None
     layercam_heatmap_data_url: Optional[str] = None
+    detection_xai_data_url: Optional[str] = None
+    segmentation_xai_data_url: Optional[str] = None
+    classification_xai_data_url: Optional[str] = None
+    xai_methods: Optional[dict] = None
+    xai_warnings: Optional[dict] = None
+    xai_metadata: Optional[dict] = None
     xai_explanation: Optional[str] = None
+    classification_xai_explanation: Optional[str] = None
+    multimodal_xai_explanation: Optional[str] = None
     fusion_attention: Optional[List[Optional[float]]] = None
     rna_xai: Optional[List[dict]] = None
     # Series metadata
@@ -158,6 +167,21 @@ class ImageAIResultResponse(BaseModel):
     key_slice_index: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class ClassificationXAIExplanationResponse(BaseModel):
+    image_id: int
+    patient_id: Optional[int] = None
+    explanation_type: str
+    model_name: Optional[str] = None
+    content: str
+    rag_context: Optional[dict] = None
+    xai_metadata: Optional[dict] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 
 class XAIOverlayResponse(BaseModel):

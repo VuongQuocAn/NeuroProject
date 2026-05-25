@@ -49,6 +49,8 @@ export default function ResultsPage({ params }: { params: Promise<{ patientId: s
     }
   };
 
+  const uploadHref = `/upload?patientId=${encodeURIComponent(patientId)}&tab=dicom&new=1`;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-6rem)]">
@@ -66,7 +68,7 @@ export default function ResultsPage({ params }: { params: Promise<{ patientId: s
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => router.push("/upload")}
+            onClick={() => router.push(uploadHref)}
             className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors group"
           >
             <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
@@ -81,7 +83,7 @@ export default function ResultsPage({ params }: { params: Promise<{ patientId: s
           </button>
         </div>
         <button
-          onClick={() => router.push("/upload")}
+          onClick={() => router.push(uploadHref)}
           className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold shadow-lg shadow-teal-500/20 transition-all flex items-center gap-2"
         >
           <Upload className="h-4 w-4" /> Tải dữ liệu mới
@@ -110,7 +112,7 @@ export default function ResultsPage({ params }: { params: Promise<{ patientId: s
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-center">
           <p className="text-red-400 mb-4">{error}</p>
           <button
-            onClick={() => router.push("/upload")}
+            onClick={() => router.push(uploadHref)}
             className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all"
           >
             Quay lại Upload
@@ -124,7 +126,7 @@ export default function ResultsPage({ params }: { params: Promise<{ patientId: s
           title="Kết quả phân tích AI tổng hợp"
           result={result}
           onDownload={result.image_id ? handleDownloadReport : undefined}
-          onExtraAction={() => router.push("/upload")}
+          onExtraAction={() => router.push(uploadHref)}
           extraActionLabel="Tải dữ liệu mới"
         />
       )}

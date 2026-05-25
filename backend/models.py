@@ -136,9 +136,32 @@ class AnalysisResult(Base):
     mask_path = Column(String, nullable=True)          # File phân đoạn mask
 
     # --- Dữ liệu survival curve dạng JSON: [{time, survival_prob}] ---
+    finer_cam_path = Column(String, nullable=True)
+    seg_eigen_cam_path = Column(String, nullable=True)
+    odam_path = Column(String, nullable=True)
+    xai_3_panel_path = Column(String, nullable=True)
     survival_curve_data = Column(JSON, nullable=True)
 
     image = relationship("Image", back_populates="analysis_result")
+
+
+class AIExplanation(Base):
+    """Stores generated text explanations for XAI outputs."""
+    __tablename__ = "ai_explanations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    image_id = Column(Integer, ForeignKey("images.id"), index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True, nullable=True)
+    explanation_type = Column(String, index=True)  # classification_xai | risk_score
+    model_name = Column(String, nullable=True)
+    content = Column(Text)
+    rag_context = Column(JSON, nullable=True)
+    xai_metadata = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    image = relationship("Image")
+    patient = relationship("Patient")
 
 
 class ExpertValidation(Base):

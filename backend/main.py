@@ -1,5 +1,10 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import models
 from database import engine, SessionLocal
@@ -18,10 +23,16 @@ app = FastAPI(
     version="2.0.0",
 )
 
+
+def _get_cors_origins() -> list[str]:
+    configured = os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_URL") or ""
+    origins = [origin.strip() for origin in configured.split(",") if origin.strip()]
+    return origins or ["http://localhost:3000", "http://127.0.0.1:3000"]
+
 # CORS — cấu hình cho môi trường phát triển
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=_get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -79,3 +90,8 @@ def read_root():
         "version": "2.0.0",
         "docs": "/docs",
     }
+
+
+@app.get("/health", tags=["Health"])
+def health_check():
+    return {"status": "ok"}
