@@ -1,0 +1,10 @@
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+analysis_results
+multimodal_results
+test_output_manual
+test_prognosis_output
+scratch
+*.log

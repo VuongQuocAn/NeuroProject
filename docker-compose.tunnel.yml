@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: neuroproject-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-neuroproject}
+      POSTGRES_USER: ${POSTGRES_USER:-neuroproject}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - neuro-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-neuroproject} -d ${POSTGRES_DB:-neuroproject}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: neuroproject-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - neuro-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.tunnel
+    container_name: neuroproject-backend
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env.tunnel}
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+      PORT: ${PORT:-8000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - neuro-net
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.tunnel
+    container_name: neuroproject-worker
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env.tunnel}
+    command: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - neuro-net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  neuro-net:
+    driver: bridge

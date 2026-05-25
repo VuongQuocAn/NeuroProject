@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from ai_core.pipeline import TumorAnalysisPipeline
 
 WEIGHTS_DIR = os.path.join(CURRENT_DIR, "ai_core", "weights")
-RESULTS_BUCKET = "analysis-results"
+RESULTS_BUCKET = os.getenv("MINIO_BUCKET") or os.getenv("R2_BUCKET") or "analysis-results"
 ai_pipeline: "TumorAnalysisPipeline | None" = None
 
 
