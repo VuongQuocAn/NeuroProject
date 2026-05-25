@@ -488,6 +488,7 @@ def _build_professional_report_pdf(
     is_series: bool = False,
     num_slices: int = 1,
     key_slice_index: int = 0,
+    rna_xai: list[dict] | None = None,
 ) -> bytes:
     # High Resolution (300 DPI)
     scale = 2
@@ -808,10 +809,70 @@ def _build_professional_report_pdf(
 
             for t, p in zip(times, probs):
                 x = chart_left + int(chart_w * t / max_time) if max_time > 0 else chart_left
-                y = chart_bottom - int(chart_h * p)
+                y = (sc_y + chart_height - 40 * scale) - int((chart_height - 90 * scale) * p)
                 draw3.ellipse((x - 4 * scale, y - 4 * scale, x + 4 * scale, y + 4 * scale), fill=TEAL, outline="white", width=2 * scale)
         else:
             draw3.text((400 * scale, sc_y + chart_height // 2), "Chưa có dữ liệu sinh tồn", font=font_small, fill=SLATE_500)
+
+        # ── RNA XAI Section ──
+        chart_bottom = sc_y + chart_height
+        if rna_xai and len(rna_xai) > 0:
+            rna_y = chart_bottom + 40 * scale
+            draw3.text((60 * scale, rna_y), "Phân Tích Dấu Ấn Phân Tử (RNA-seq Feature Importance)", font=font_h2, fill=TEAL)
+            rna_y += 45 * scale
+            
+            rna_box = (60 * scale, rna_y, 1180 * scale, rna_y + 550 * scale)
+            draw3.rounded_rectangle(rna_box, radius=12 * scale, fill=WHITE, outline=SLATE_100, width=2 * scale)
+            
+            # Headers
+            draw3.text((rna_box[0] + 30 * scale, rna_y + 20 * scale), "Top 10 gene có biểu hiện thực tế đóng góp mạnh nhất vào dự đoán rủi ro của AI", font=font_small, fill=SLATE_500)
+            
+            # Table Headers
+            ty = rna_y + 60 * scale
+            draw3.text((rna_box[0] + 30 * scale, ty), "Ký hiệu Gene", font=font_label, fill=SLATE_800)
+            draw3.text((rna_box[0] + 250 * scale, ty), "Độ Đóng Góp (Importance)", font=font_label, fill=SLATE_800)
+            draw3.text((rna_box[0] + 680 * scale, ty), "Biểu Hiện (Expression)", font=font_label, fill=SLATE_800)
+            draw3.text((rna_box[0] + 930 * scale, ty), "Ảnh Hưởng (Impact)", font=font_label, fill=SLATE_800)
+            
+            draw3.line((rna_box[0] + 30 * scale, ty + 25 * scale, rna_box[2] - 30 * scale, ty + 25 * scale), fill=SLATE_100, width=1 * scale)
+            ty += 40 * scale
+            
+            # Row details
+            max_imp = max(abs(pt.get("importance", 1.0)) for pt in rna_xai) if rna_xai else 1.0
+            if max_imp == 0: max_imp = 1.0
+            
+            for item in rna_xai[:10]:
+                gene_symbol = item.get("gene", "--")
+                imp_val = item.get("importance", 0.0)
+                expr_val = item.get("expression", 0.0)
+                impact = item.get("impact", "--")
+                
+                # Gene name
+                draw3.text((rna_box[0] + 30 * scale, ty), gene_symbol, font=font_body, fill=SLATE_800)
+                
+                # Contribution Bar
+                bar_max_w = 320 * scale
+                bar_x = rna_box[0] + 250 * scale
+                draw3.rounded_rectangle((bar_x, ty + 2 * scale, bar_x + bar_max_w, ty + 20 * scale), radius=4 * scale, fill=SLATE_100)
+                
+                pct_w = int(bar_max_w * (abs(imp_val) / max_imp))
+                bar_color = RED_500 if imp_val > 0 else TEAL
+                if pct_w > 0:
+                    draw3.rounded_rectangle((bar_x, ty + 2 * scale, bar_x + pct_w, ty + 20 * scale), radius=4 * scale, fill=bar_color)
+                
+                # Imp value text
+                draw3.text((bar_x + bar_max_w + 15 * scale, ty), f"{imp_val:+.4f}", font=font_small, fill=bar_color)
+                
+                # Expression
+                draw3.text((rna_box[0] + 680 * scale, ty), f"{expr_val:.2f}", font=font_body, fill=SLATE_800)
+                
+                # Impact badge
+                badge_color = RED_500 if impact == "High Risk" else TEAL
+                impact_text = "Tăng rủi ro" if impact == "High Risk" else "Bảo vệ"
+                draw3.text((rna_box[0] + 930 * scale, ty), impact_text, font=font_label, fill=badge_color)
+                
+                draw3.line((rna_box[0] + 30 * scale, ty + 30 * scale, rna_box[2] - 30 * scale, ty + 30 * scale), fill=SLATE_100, width=1 * scale)
+                ty += 45 * scale
 
         # ── Medical Disclaimer at the absolute bottom ──
         # This will be drawn on the current page (either Page 3 or Page 4)
@@ -1048,6 +1109,9 @@ def get_patient_full_analysis(
         risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
         survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
         multimodal_risk_xai_data_url=_stored_image_to_data_url(result_payload.get("multimodal_risk_xai_path") or result_payload.get("gradcam_heatmap_path")),
+        multimodal_gradcam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("multimodal_gradcam_heatmap_path")),
+        multimodal_gradcam_plus_heatmap_data_url=_stored_image_to_data_url(result_payload.get("multimodal_gradcam_plus_heatmap_path")),
+        multimodal_layercam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("multimodal_layercam_heatmap_path")),
         gradcam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("gradcam_heatmap_path")),
         gradcam_plus_heatmap_data_url=_stored_image_to_data_url(result_payload.get("gradcam_plus_heatmap_path")),
         layercam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("layercam_heatmap_path")),
@@ -1167,6 +1231,9 @@ def get_image_analysis_detail(
         risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
         survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
         multimodal_risk_xai_data_url=_stored_image_to_data_url(result_payload.get("multimodal_risk_xai_path") or result_payload.get("gradcam_heatmap_path")),
+        multimodal_gradcam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("multimodal_gradcam_heatmap_path")),
+        multimodal_gradcam_plus_heatmap_data_url=_stored_image_to_data_url(result_payload.get("multimodal_gradcam_plus_heatmap_path")),
+        multimodal_layercam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("multimodal_layercam_heatmap_path")),
         gradcam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("gradcam_heatmap_path")),
         gradcam_plus_heatmap_data_url=_stored_image_to_data_url(result_payload.get("gradcam_plus_heatmap_path")),
         layercam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("layercam_heatmap_path")),
@@ -1470,8 +1537,8 @@ def download_image_report(
             risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
             survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
             heatmap_image=_bgr_path_to_pil(result_payload.get("multimodal_risk_xai_path") or result_payload.get("gradcam_heatmap_path")),
-            gradcam_plus_image=_bgr_path_to_pil(result_payload.get("gradcam_plus_heatmap_path")),
-            layercam_image=_bgr_path_to_pil(result_payload.get("layercam_heatmap_path")),
+            gradcam_plus_image=_bgr_path_to_pil(result_payload.get("multimodal_gradcam_plus_heatmap_path") or result_payload.get("gradcam_plus_heatmap_path")),
+            layercam_image=_bgr_path_to_pil(result_payload.get("multimodal_layercam_heatmap_path") or result_payload.get("layercam_heatmap_path")),
             detection_xai_image=_bgr_path_to_pil(result_payload.get("detection_xai_path") or result_payload.get("odam_path")),
             segmentation_xai_image=_bgr_path_to_pil(result_payload.get("segmentation_xai_path") or result_payload.get("seg_eigen_cam_path")),
             classification_xai_image=_bgr_path_to_pil(result_payload.get("classification_xai_path")),
@@ -1481,6 +1548,7 @@ def download_image_report(
             is_series=image.is_series,
             num_slices=image.num_slices,
             key_slice_index=image.key_slice_index,
+            rna_xai=result_payload.get("rna_xai"),
         )
         import urllib.parse
         p_name = patient.name or "BenhNhan"

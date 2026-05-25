@@ -1,0 +1,53 @@
+{
+  "query": 7462,
+  "queries": [
+    7462
+  ],
+  "query_scale": "P4",
+  "query_scales": [
+    "P4"
+  ],
+  "matched_iou": 0.9999812841415405,
+  "class_score": 0.8393073678016663,
+  "confidence_closeness": 0.9999949336051941,
+  "match_score": 0.972667396068573,
+  "topk": 1,
+  "iou_threshold": 0.5,
+  "raw_box_xyxy_letterbox": [
+    292.1345520019531,
+    380.041748046875,
+    449.4020080566406,
+    514.2059326171875
+  ],
+  "selected_box_xyxy_letterbox": [
+    292.1342468261719,
+    380.04150390625,
+    449.4020080566406,
+    514.2039184570312
+  ],
+  "selected_class_idx": 1,
+  "selected_confidence": 0.8393124341964722,
+  "matching_note": "Post-NMS bbox is mapped to one raw query by class, IoU, and confidence closeness. This matching score is not used as the ODAM target.",
+  "target_layer_index": 19,
+  "target_layer_name": "C3k2",
+  "inside_bbox_energy_ratio": 0.9301841533804127,
+  "top20_inside_bbox_ratio": 0.9139886578363519,
+  "top20_metric_note": "ratio of top 20% positive heatmap pixels that fall inside the selected bbox",
+  "method": "odam_original_yolo",
+  "target_scalar": "class_score_and_bbox_coordinates",
+  "target_attributes": [
+    "class_score",
+    "x1",
+    "y1",
+    "x2",
+    "y2"
+  ],
+  "combined_heatmap": "max(H_class, H_x1, H_y1, H_x2, H_y2)",
+  "bbox_coordinate_system": "decoded_xyxy_letterbox",
+  "bbox_mask_applied": false,
+  "brain_mask_applied": false,
+  "post_smooth_sigma": 0.0,
+  "gradient_smooth_sigma": 0.8385150909423829,
+  "fallback_used": false,
+  "method_note": "Original ODAM formulation for a selected YOLO11 detection instance. The post-NMS bbox only selects the instance. The matched pre-NMS query is explained with separate scalar targets for class score and decoded bbox coordinates x1, y1, x2, y2. Each heatmap is computed as ReLU(sum_k(Phi(dY/dA)_k * A_k)); the final map is their element-wise max."
+}

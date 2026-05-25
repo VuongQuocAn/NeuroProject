@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -10,6 +10,41 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
+
+def run_migrations():
+    """
+    Hàm thực hiện quét và chạy các câu lệnh SQL migration để nâng cấp cơ sở dữ liệu.
+    Bổ sung các cột còn thiếu trong bảng analysis_results nếu chúng chưa tồn tại.
+
+    Input:
+        Không có.
+    Output:
+        Không có.
+    """
+    # Định nghĩa các câu lệnh ALTER TABLE để thêm các cột còn thiếu
+    migrations = [
+        "ALTER TABLE analysis_results ADD COLUMN IF NOT EXISTS finer_cam_path VARCHAR;",
+        "ALTER TABLE analysis_results ADD COLUMN IF NOT EXISTS seg_eigen_cam_path VARCHAR;",
+        "ALTER TABLE analysis_results ADD COLUMN IF NOT EXISTS odam_path VARCHAR;",
+        "ALTER TABLE analysis_results ADD COLUMN IF NOT EXISTS xai_3_panel_path VARCHAR;",
+        "ALTER TABLE analysis_results ADD COLUMN IF NOT EXISTS survival_curve_data JSON;"
+    ]
+    with engine.begin() as conn:
+        for query in migrations:
+            try:
+                conn.execute(text(query))
+            except Exception as e:
+                # Không sử dụng bất kỳ biểu tượng icon nào trong câu lệnh hiển thị
+                print(f"[DATABASE MIGRATION] Error running query '{query}': {e}")
+
+
+# Tự động thực thi migration khi module cơ sở dữ liệu được nạp
+try:
+    run_migrations()
+except Exception as e:
+    print(f"[DATABASE MIGRATION] Cannot run auto migrations: {e}")
+
 
 # Dependency để lấy DB session cho các API sau này
 def get_db():

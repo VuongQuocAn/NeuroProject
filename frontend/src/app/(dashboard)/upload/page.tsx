@@ -59,6 +59,8 @@ export default function UploadPage() {
     clinical: false,
   });
   const [lastUploadedImageId, setLastUploadedImageId] = useState<number | string | null>(null);
+  // Khi vào từ "Tải dữ liệu mới", ẩn nút pipeline cho đến khi user thực sự upload file mới
+  const [requireNewUpload, setRequireNewUpload] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -75,6 +77,10 @@ export default function UploadPage() {
       setLastUploadedImageId(null);
       setProgress(null);
       setStatusMsg({ text: "", type: "" });
+      // Yêu cầu upload mới, ẩn nút pipeline cho đến khi upload xong
+      setRequireNewUpload(true);
+    } else {
+      setRequireNewUpload(false);
     }
 
     if (queryPatientId) {
@@ -125,12 +131,19 @@ export default function UploadPage() {
       try {
         const res = await api.get(`/records/patients/${encodeURIComponent(pid)}/upload-status`);
         const data = res.data;
+        const hasMri = Boolean(data.has_mri);
         setUploadedStatus({
-          mri: forceNewUpload && queryTab === "dicom" ? false : Boolean(data.has_mri),
-          wsi: forceNewUpload && queryTab === "wsi" ? false : Boolean(data.has_wsi),
-          rna: forceNewUpload && queryTab === "rna" ? false : Boolean(data.has_rna),
-          clinical: forceNewUpload && queryTab === "clinical" ? false : Boolean(data.has_clinical),
+          mri: hasMri,
+          wsi: Boolean(data.has_wsi),
+          rna: Boolean(data.has_rna),
+          clinical: Boolean(data.has_clinical),
         });
+        
+        // Nếu bệnh nhân đã có sẵn MRI trong DB, không yêu cầu upload mới nữa để cho phép chạy pipeline ngay lập tức
+        if (hasMri) {
+          setRequireNewUpload(false);
+        }
+
         // Pre-fill clinical values if they exist
         if (data.clinical) {
           if (data.clinical.ki67_index != null) setKi67(String(data.clinical.ki67_index));
@@ -193,14 +206,21 @@ export default function UploadPage() {
   };
 
   const handleDownloadReport = async (imageId: string | number) => {
-    const response = await apiService.analysis.downloadReport(imageId);
-    const blob = new Blob([response.data], { type: "application/pdf" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `mri_report_${imageId}.pdf`;
-    link.click();
-    window.URL.revokeObjectURL(url);
+    try {
+      const response = await apiService.analysis.downloadReport(imageId);
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `mri_report_${imageId}.pdf`;
+      link.click();
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 60000);
+    } catch (err: any) {
+      console.error("PDF Download Error:", err);
+      alert(err.response?.data?.detail || "Lỗi tải báo cáo.");
+    }
   };
 
   const handleUploadDicom = async () => {
@@ -238,6 +258,8 @@ export default function UploadPage() {
 
       setLastUploadedImageId(imageId);
       setUploadedStatus(prev => ({ ...prev, mri: true }));
+      // Upload mới thành công — cho phép hiện nút pipeline
+      setRequireNewUpload(false);
       setStatusMsg({
         text: "Tải lên MRI thành công. Bạn có thể tải thêm dữ liệu khác hoặc bấm 'Chạy Tổng Hợp' ở dưới.",
         type: "success",
@@ -782,7 +804,7 @@ export default function UploadPage() {
         )}
 
         {/* Nút Chạy Tổng Hợp cố định ở dưới - Chỉ hiện khi có MRI */}
-        {uploadedStatus.mri && (
+        {uploadedStatus.mri && !requireNewUpload && (
           <div className="mt-8 p-6 rounded-2xl bg-slate-800/50 border border-teal-500/30 flex flex-col items-center">
             <h4 className="text-teal-400 font-bold mb-2 flex items-center gap-2">
               <PlayCircle className="h-5 w-5" /> Sẵn sàng phân tích tổng hợp

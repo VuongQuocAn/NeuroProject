@@ -256,11 +256,18 @@ def run_mri_pipeline(self, task_id: int, image_id: int):
         return {"task_id": task_id, "status": "done"}
 
     except Exception as exc:
-        print(f"[CELERY WORKER] Loi he thong: {exc}")
-        if "task_record" in locals() and task_record:
-            task_record.status = "failed"
-            task_record.error_message = str(exc)
-            db.commit()
+        print(f"[CELERY WORKER] System error: {exc}")
+        # Thu hồi giao dịch lỗi ngay lập tức để làm sạch session
+        db.rollback()
+        try:
+            # Tạo một truy vấn mới để ghi nhận trạng thái lỗi
+            task_record = db.query(models.InferenceTask).filter(models.InferenceTask.id == task_id).first()
+            if task_record:
+                task_record.status = "failed"
+                task_record.error_message = str(exc)
+                db.commit()
+        except Exception as commit_exc:
+            print(f"[CELERY WORKER] Cannot save error status to database: {commit_exc}")
         return {"task_id": task_id, "status": "failed", "error": str(exc)}
     finally:
         if "output_dir" in locals() and output_dir and os.path.isdir(output_dir):
@@ -486,10 +493,18 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
         db.commit()
         return {"status": "done", "patient_id": patient_id}
     except Exception as exc:
-        if "task_record" in locals() and task_record:
-            task_record.status = "failed"
-            task_record.error_message = str(exc)
-            db.commit()
+        print(f"[CELERY WORKER] Prognosis pipeline system error: {exc}")
+        # Thu hồi giao dịch lỗi ngay lập tức để làm sạch session
+        db.rollback()
+        try:
+            # Tạo một truy vấn mới để ghi nhận trạng thái lỗi
+            task_record = db.query(models.InferenceTask).filter(models.InferenceTask.id == task_id).first()
+            if task_record:
+                task_record.status = "failed"
+                task_record.error_message = str(exc)
+                db.commit()
+        except Exception as commit_exc:
+            print(f"[CELERY WORKER] Cannot save prognosis error status to database: {commit_exc}")
         return {"status": "failed", "patient_id": patient_id, "error": str(exc)}
     finally:
         if "output_dir" in locals() and output_dir and os.path.isdir(output_dir):

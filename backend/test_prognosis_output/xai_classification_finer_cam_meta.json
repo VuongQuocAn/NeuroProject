@@ -1,0 +1,61 @@
+{
+  "method": "finer_cam",
+  "target_class_idx": 1,
+  "target_class_name": "Meningioma",
+  "target_logit": 4.994003772735596,
+  "target_probability": 0.9953065514564514,
+  "reference_class_idx": 2,
+  "reference_class_name": "Pituitary tumor",
+  "reference_logit": -6.2921953201293945,
+  "reference_probability": 1.2485980732890312e-05,
+  "target_minus_reference_logit_margin": 11.28619909286499,
+  "target_scalar": "target_logit_minus_gamma_times_reference_logit",
+  "target_scalar_value": 8.769320964813232,
+  "gamma": 0.6,
+  "target_layer_name": "Conv2d",
+  "heatmap_scope": "classification_roi_after_detection",
+  "roi_shape_hw": [
+    53,
+    63
+  ],
+  "heatmap_shape_hw": [
+    7,
+    7
+  ],
+  "heatmap_summary": {
+    "max_value": 0.9981911778450012,
+    "mean_value": 0.5929118394851685,
+    "total_energy": 1979.732666015625,
+    "peak_xy": [
+      49,
+      41
+    ],
+    "peak_xy_normalized": [
+      0.7903225806451613,
+      0.7884615384615384
+    ],
+    "energy_center_xy": [
+      31.5006305724083,
+      28.754456868441185
+    ],
+    "energy_center_xy_normalized": [
+      0.5080746866517468,
+      0.5529703243930997
+    ],
+    "top20_threshold": 0.8005678057670593,
+    "top20_area_ratio": 0.2000598981731057,
+    "top20_bbox_xyxy": [
+      12,
+      17,
+      56,
+      46
+    ],
+    "top10_energy_ratio": 0.15223307849256104,
+    "localization_strength": "diffuse"
+  },
+  "interpretation_notes": [
+    "Heatmap is computed on the cropped ROI after detection, not on the full MRI image.",
+    "Higher heatmap values indicate regions that contributed more positively to the Finer-CAM target scalar.",
+    "The heatmap supports model-behavior explanation only; it is not pathology proof."
+  ]
+}

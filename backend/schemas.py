@@ -147,6 +147,9 @@ class ImageAIResultResponse(BaseModel):
     risk_group: Optional[str] = None
     survival_curve_data: Optional[List[dict]] = None
     multimodal_risk_xai_data_url: Optional[str] = None
+    multimodal_gradcam_heatmap_data_url: Optional[str] = None
+    multimodal_gradcam_plus_heatmap_data_url: Optional[str] = None
+    multimodal_layercam_heatmap_data_url: Optional[str] = None
     gradcam_heatmap_data_url: Optional[str] = None
     gradcam_plus_heatmap_data_url: Optional[str] = None
     layercam_heatmap_data_url: Optional[str] = None

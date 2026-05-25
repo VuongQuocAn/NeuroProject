@@ -43,7 +43,9 @@ export default function ResultsPage({ params }: { params: Promise<{ patientId: s
       link.href = url;
       link.download = `report_${patientId}.pdf`;
       link.click();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 60000);
     } catch (err: any) {
       alert(err.response?.data?.detail || "Lỗi tải báo cáo.");
     }

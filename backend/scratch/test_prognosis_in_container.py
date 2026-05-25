@@ -30,7 +30,7 @@ def main():
           sau do goi pipeline va hien thi ket qua XAI de kiem chung.
     """
     db = SessionLocal()
-    patient_id = 1
+    patient_id = 2
     
     try:
         print("--- STEP 1: LOAD PATIENT DATA ---")

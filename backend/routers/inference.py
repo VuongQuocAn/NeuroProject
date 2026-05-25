@@ -113,7 +113,7 @@ def trigger_prognosis_inference(
     # but we still check if the patient has any data uploaded.
     rna = db.query(models.RnaData).filter(models.RnaData.patient_id == real_id).first()
     if not rna:
-        print(f"[Warning] Không có dữ liệu RNA-seq cho bệnh nhân {patient_id}. Mô hình sẽ tự động bỏ qua qua Attention Mask.")
+        print(f"[Warning] No RNA-seq data found cho bệnh nhân {patient_id}. The model will automatically skip it using Attention Mask.")
 
     # Loại bỏ cơ chế kiểm tra tác vụ cũ vì nếu Worker sập, DB sẽ lưu trạng thái 'processing' mãi mãi.
     # Luôn luôn tạo một task mới khi người dùng yêu cầu để tránh bị kẹt (deadlock).

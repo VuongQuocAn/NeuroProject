@@ -174,7 +174,9 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
       link.href = url;
       link.download = `mri_report_${imageId}.pdf`;
       link.click();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 60000);
     } catch (err: any) {
       console.error("PDF Download Error:", err);
       setActionError(err.response?.data?.detail || err.message || "Không thể tải báo cáo PDF.");

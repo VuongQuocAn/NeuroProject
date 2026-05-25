@@ -1,0 +1,17 @@
+{
+  "method": "multimodal_mri_branch_cam_suite",
+  "target_scalar": "risk_score",
+  "risk_score": 0.7283979654312134,
+  "target_layer_name": "Conv2d",
+  "input_scope": "masked_roi_after_detection_and_segmentation",
+  "heatmap_shape_after_resize": [
+    53,
+    63
+  ],
+  "heatmaps_generated": [
+    "gradcam",
+    "gradcam++",
+    "layercam"
+  ],
+  "note": "Suite Grad-CAM, Grad-CAM++, Layer-CAM computed from a single forward+backward pass on the MRI branch of the multimodal prognosis model."
+}

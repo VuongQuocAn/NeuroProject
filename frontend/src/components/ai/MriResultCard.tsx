@@ -35,6 +35,9 @@ type MriResult = {
   risk_group?: string | null;
   survival_curve_data?: { time: number; survival_probability: number }[] | null;
   multimodal_risk_xai_data_url?: string | null;
+  multimodal_gradcam_heatmap_data_url?: string | null;
+  multimodal_gradcam_plus_heatmap_data_url?: string | null;
+  multimodal_layercam_heatmap_data_url?: string | null;
   gradcam_heatmap_data_url?: string | null;
   gradcam_plus_heatmap_data_url?: string | null;
   layercam_heatmap_data_url?: string | null;
@@ -553,24 +556,98 @@ export default function MriResultCard({
                   </div>
 
                   {/* Multimodal prognosis risk heatmap */}
-                  {multimodalRiskXaiUrl && (
-                    <div>
-                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Multimodal Risk Grad-CAM</div>
+                  {(result.multimodal_gradcam_heatmap_data_url || result.multimodal_gradcam_plus_heatmap_data_url || result.multimodal_layercam_heatmap_data_url || multimodalRiskXaiUrl) && (
+                    <div className="mb-6">
+                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Multimodal Risk XAI (Heatmap)</div>
                       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                        {multimodalRiskXaiUrl && (
+                        {(result.multimodal_gradcam_heatmap_data_url || multimodalRiskXaiUrl) && (
                           <button
                             type="button"
-                            onClick={() => setPreviewImage({ title: "Multimodal Prognosis - Risk Grad-CAM", src: multimodalRiskXaiUrl })}
-                            className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
+                            onClick={() => setPreviewImage({ title: "Multimodal Prognosis - Grad-CAM", src: (result.multimodal_gradcam_heatmap_data_url || multimodalRiskXaiUrl)! })}
+                            className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
                           >
-                            <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Risk Score / MRI Branch Grad-CAM</div>
-                            <img src={multimodalRiskXaiUrl} alt="Multimodal Risk Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                            <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM</div>
+                            <img src={result.multimodal_gradcam_heatmap_data_url || multimodalRiskXaiUrl || undefined} alt="Multimodal Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                          </button>
+                        )}
+                        {result.multimodal_gradcam_plus_heatmap_data_url && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage({ title: "Multimodal Prognosis - Grad-CAM++", src: result.multimodal_gradcam_plus_heatmap_data_url! })}
+                            className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
+                          >
+                            <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM++</div>
+                            <img src={result.multimodal_gradcam_plus_heatmap_data_url} alt="Multimodal Grad-CAM++" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                          </button>
+                        )}
+                        {result.multimodal_layercam_heatmap_data_url && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage({ title: "Multimodal Prognosis - Layer-CAM", src: result.multimodal_layercam_heatmap_data_url! })}
+                            className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
+                          >
+                            <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Layer-CAM</div>
+                            <img src={result.multimodal_layercam_heatmap_data_url} alt="Multimodal Layer-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
                           </button>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {multimodalExplanation && (
+                    <div className="p-4 bg-teal-500/10 rounded-lg border border-teal-500/20 mb-6">
+                      <div className="text-[11px] uppercase tracking-widest text-teal-500 font-bold mb-2">Giải thích lâm sàng từ Multimodal Prognosis</div>
+                      <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{multimodalExplanation}</p>
+                    </div>
+                  )}
+
+                  {/* XAI Heatmaps — hiển thị cả 3 loại CAM cho MRI Classification */}
+                  {(result.gradcam_heatmap_data_url || result.gradcam_plus_heatmap_data_url || result.layercam_heatmap_data_url) && (
+                    <div className="space-y-4">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Bản đồ nhiệt XAI Phân loại (Heatmap)</div>
+                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                          {result.gradcam_heatmap_data_url && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage({ title: "Classification Grad-CAM", src: result.gradcam_heatmap_data_url! })}
+                              className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
+                            >
+                              <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM</div>
+                              <img src={result.gradcam_heatmap_data_url} alt="Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                              <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                            </button>
+                          )}
+                          {result.gradcam_plus_heatmap_data_url && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage({ title: "Classification Grad-CAM++", src: result.gradcam_plus_heatmap_data_url! })}
+                              className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
+                            >
+                              <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM++</div>
+                              <img src={result.gradcam_plus_heatmap_data_url} alt="Grad-CAM++" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                              <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                            </button>
+                          )}
+                          {result.layercam_heatmap_data_url && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage({ title: "Classification Layer-CAM", src: result.layercam_heatmap_data_url! })}
+                              className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
+                            >
+                              <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Layer-CAM</div>
+                              <img src={result.layercam_heatmap_data_url} alt="Layer-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                              <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                            </button>
+                          )}
+                        </div>
+                      </div>
                       
                       {/* Clinical Plausibility Score */}
-                      <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                      <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
                         <div className="text-[11px] text-slate-400 mb-1">Đánh giá tính hợp lý lâm sàng (Sanity Check):</div>
                         <div className="flex gap-1 items-center">
                           {[1, 2, 3, 4, 5].map((star) => (
@@ -590,13 +667,6 @@ export default function MriResultCard({
                           <span className="text-xs text-slate-500 ml-2">{rating ? "Đã ghi nhận" : "Chưa đánh giá"}</span>
                         </div>
                       </div>
-                    </div>
-                  )}
-
-                  {multimodalExplanation && (
-                    <div className="p-4 bg-teal-500/10 rounded-lg border border-teal-500/20">
-                      <div className="text-[11px] uppercase tracking-widest text-teal-500 font-bold mb-2">Giải thích lâm sàng từ Multimodal Prognosis</div>
-                      <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{multimodalExplanation}</p>
                     </div>
                   )}
 
@@ -664,8 +734,7 @@ export default function MriResultCard({
                       <div className="space-y-2">
                         {["MRI", "WSI", "RNA", "Clinical"].map((label, i) => {
                           const val = result.fusion_attention![i] || 0;
-                          const maxVal = Math.max(...result.fusion_attention!.slice(0, 4));
-                          const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
+                          const pct = val * 100;
                           const colors = ["bg-teal-500", "bg-slate-500", "bg-amber-500", "bg-violet-500"];
                           return (
                             <div key={label} className="flex items-center gap-2">

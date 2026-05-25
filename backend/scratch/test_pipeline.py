@@ -25,4 +25,4 @@ if __name__ == "__main__":
         print("===============")
         print(f"Vui lòng mở thư mục '{output_dir}' để xem 3 bức ảnh kết quả (bbox, seg, heatmap)!")
     else:
-        print(f"Không tìm thấy file {test_image} để test.")
+        print(f"Not found file {test_image} để test.")

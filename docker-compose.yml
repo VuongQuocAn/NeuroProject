@@ -55,6 +55,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - PYTHONPATH=/app
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
     depends_on:
       - db
       - minio
@@ -83,6 +84,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - PYTHONPATH=/app
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
     depends_on:
       - db
       - minio

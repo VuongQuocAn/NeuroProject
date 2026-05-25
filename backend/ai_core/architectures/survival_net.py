@@ -364,7 +364,8 @@ class MultimodalBrainTumorModel(nn.Module):
         # --- BƯỚC 1: ENCODE ---
         # những mẫu input=0 (đen xì) thì feature ra cũng vô nghĩa, sẽ bị Mask chặn lại sau
         feat_mri = self.mri_encoder(mri, slice_mask = mri_mask)
-        feat_wsi = self.wsi_encoder(wsi, slice_mask = wsi_mask)
+        with torch.no_grad():
+            feat_wsi = self.wsi_encoder(wsi, slice_mask = wsi_mask).detach()
 
         if self.rna_encoder is not None:
             feat_rna = self.rna_encoder(rna)

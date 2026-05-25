@@ -40,15 +40,21 @@ class GradCAMExplainer:
         self.handles = []
 
     def _save_activations(self, module, input, output):
-        self.activations = output
+        # Giải phóng tensor CUDA cũ trước khi lưu tensor mới để tránh lỗi CUDACachingAllocator
+        if self.activations is not None:
+            self.activations = None
+        self.activations = output.detach()
 
     def _save_gradients(self, module, grad_input, grad_output):
-        self.gradients = grad_output[0]
+        # Giải phóng tensor gradient CUDA cũ để tránh lỗi double-free handles
+        if self.gradients is not None:
+            self.gradients = None
+        self.gradients = grad_output[0].detach()
 
     def generate_heatmap(self, mri_tensor, wsi_dummy, rna_dummy, clinical_dummy, masks, method="gradcam"):
         self.model.eval()
 
-        # Optimize: Only set requires_grad if necessary
+        # Bật grad cho tất cả tham số trước khi backward
         original_grad_states = []
         for param in self.model.parameters():
             original_grad_states.append(param.requires_grad)
@@ -63,16 +69,17 @@ class GradCAMExplainer:
             mri_mask=masks['mri_mask'], wsi_mask=masks['wsi_mask']
         )
 
-        # 2. Backward Pass
+        # 2. Backward Pass — graph sẽ được giải phóng ngay sau khi xong
         risk_score.backward()
 
-        # Restore original grad states
+        # Khôi phục trạng thái grad ban đầu
         for i, param in enumerate(self.model.parameters()):
             param.requires_grad = original_grad_states[i]
 
         # 3. Tính toán Heatmap tùy theo phương pháp
-        gradients = self.gradients.detach().cpu().numpy()[0] # Shape: [C, H, W]
-        activations = self.activations.detach().cpu().numpy()[0] # Shape: [C, H, W]
+        # Hook đã detach sẵn nên chỉ cần .cpu().numpy()
+        gradients = self.gradients.cpu().numpy()[0] # Shape: [C, H, W]
+        activations = self.activations.cpu().numpy()[0] # Shape: [C, H, W]
 
         cam = np.zeros(activations.shape[1:], dtype=np.float32) # Shape: [H, W]
 

@@ -1,8 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import io
 import json
 import os
+import gc
 from pathlib import Path
 from typing import Any
 
@@ -63,17 +64,17 @@ class TumorAnalysisPipeline:
             self.multimodal_model.to(device)
             self.multimodal_model.eval()
 
-        print(f"[AI PIPELINE] ÄÃ£ khá»Ÿi táº¡o hoÃ n táº¥t trÃªn thiáº¿t bá»‹: {device}")
+        print(f"[AI PIPELINE] Initialization completed on device: {device}")
         
-        # XAI bÃ¢y giá» sáº½ giáº£i thÃ­ch cho MULTIMODAL MODEL (Prognosis) thay vÃ¬ Classifier
-        # Giáº£i thÃ­ch táº¡i sao Risk Score cao/tháº¥p cÃ³ giÃ¡ trá»‹ lÃ¢m sÃ ng cao hÆ¡n
+        # XAI bây giờ sẽ giải thích cho MULTIMODAL MODEL (Prognosis) thay vì Classifier
+        # Giải thích tại sao Risk Score cao/thấp có giá trị lâm sàng cao hơn
         if self.multimodal_model is not None:
             self.xai_heatmap_generator = GradCAMExplainer(
                 model=self.multimodal_model,
                 target_layer=self.multimodal_model.mri_encoder.feature_extractor.denseblock4.denselayer16.conv2,
             )
         else:
-            # Fallback náº¿u khÃ´ng load Ä‘Æ°á»£c multimodal (hiáº¿m khi xáº£y ra)
+            # Dự phòng nếu không tải được mô hình đa mô thức (hiếm khi xảy ra)
             self.xai_heatmap_generator = GradCAMExplainer(
                 model=self.classifier.model,
                 target_layer=self.classifier.model.features.denseblock4.denselayer32.conv2,
@@ -123,46 +124,60 @@ class TumorAnalysisPipeline:
         rna_gene_names: list[str] | None = None
     ) -> dict[str, Any]:
         """
-        Quy trÃ¬nh tiÃªn lÆ°á»£ng Ä‘áº§y Ä‘á»§ (Full Multimodal Prognosis).
-        Káº¿t há»£p: MRI (náº¿u cÃ³), WSI tiles (náº¿u cÃ³), RNA-seq vÃ  Dá»¯ liá»‡u lÃ¢m sÃ ng.
+        Quy trình tiên lượng đầy đủ (Full Multimodal Prognosis).
+
+        Hàm thực hiện kết hợp các nguồn dữ liệu đa mô thức bao gồm MRI, ảnh mô bệnh học WSI tiles,
+        biểu hiện gene RNA-seq và dữ liệu lâm sàng để tính toán điểm rủi ro sinh tồn của bệnh nhân.
+
+        Input:
+            mri_source: Đường dẫn hoặc dữ liệu bytes của ảnh MRI.
+            wsi_tiles: Danh sách các ảnh tile dạng bytes từ WSI.
+            rna_data: Mảng numpy chứa mức độ biểu hiện gene rna-seq.
+            clinical_data: Từ điển chứa các chỉ số lâm sàng (ki67_index, age, gender, grade...).
+            output_dir: Thư mục lưu kết quả phân tích.
+            progress_callback: Hàm callback cập nhật tiến độ (%).
+            rna_gene_names: Danh sách tên Ensembl gene ID tương ứng với rna_data.
+
+        Output:
+            Từ điển chứa kết quả phân tích đa mô thức: risk_score, risk_group, rna_xai,
+            fusion_attention, survival_curve_data, các đường dẫn ảnh nhiệt XAI và phân tích lâm sàng.
         """
         os.makedirs(output_dir, exist_ok=True)
         if self.multimodal_model is None:
             return {"status": "error", "error_msg": "Multimodal model weights not loaded."}
 
         result_dict = {"status": "success", "error_msg": ""}
-        if progress_callback: progress_callback(10, "Báº¯t Ä‘áº§u phÃ¢n tÃ­ch tá»•ng há»£p Multimodal...")
+        if progress_callback: progress_callback(10, "Bắt đầu phân tích tổng hợp Multimodal...")
         
-        # 1. Xá»­ lÃ½ MRI (náº¿u cÃ³)
+        # 1. Xử lý MRI (nếu có)
         mri_tensor = torch.zeros(1, 1, 3, 224, 224, device=self.device)
         has_mri = 0.0
         mri_res = {"status": "ready"}
         masked_roi_for_xai: np.ndarray | None = None
         
         if mri_source:
-            if progress_callback: progress_callback(50, "Äang xá»­ lÃ½ MRI Core (YOLO + U-Net)...")
+            if progress_callback: progress_callback(50, "Đang xử lý MRI Core (YOLO + U-Net)...")
             mri_res = self._run_mri_core(image_source=mri_source, output_dir=output_dir)
             if mri_res["status"] == "success" and not mri_res.get("no_tumor_detected"):
                 cropped_img = mri_res.get("_cropped_img")
-                masked_roi = mri_res.get("_masked_roi")
-                if masked_roi is not None:
-                    masked_roi_for_xai = masked_roi
                 if cropped_img is not None:
-                    if progress_callback: progress_callback(60, "Äang trÃ­ch xuáº¥t Ä‘áº·c trÆ°ng MRI...")
+                    if progress_callback: progress_callback(60, "Đang trích xuất đặc trưng MRI...")
+                    # Dùng cropped_img (ảnh khối u đã cắt) làm tham chiếu overlay heatmap
+                    masked_roi_for_xai = cropped_img
                     mri_tensor = self.preprocess_for_multimodal(cropped_img)
                     has_mri = 1.0
             result_dict.update(mri_res)
 
-        # 2. Xá»­ lÃ½ WSI Tiles (náº¿u cÃ³)
+        # 2. Xử lý WSI Tiles (nếu có)
         wsi_tensor = torch.zeros(1, 1, 3, 224, 224, device=self.device)
         has_wsi = 0.0
         if wsi_tiles:
-            if progress_callback: progress_callback(75, "Äang trÃ­ch xuáº¥t Ä‘áº·c trÆ°ng WSI Tiles...")
+            if progress_callback: progress_callback(75, "Đang trích xuất đặc trưng WSI Tiles...")
             wsi_tensor = self.preprocess_tiles_for_multimodal(wsi_tiles)
             has_wsi = 1.0
             result_dict["wsi_num_tiles"] = len(wsi_tiles)
 
-        # 3. Chuáº©n bá»‹ RNA vÃ  Clinical
+        # 3. Chuẩn bị RNA và Lâm sàng
         rna_tensor, has_rna = self.prepare_rna_tensor(rna_data)
         seg_mask_raw = mri_res.get("_seg_mask") if mri_res.get("status") == "success" else None
         clinical_tensor, has_clinical = self.prepare_clinical_tensor(
@@ -171,8 +186,13 @@ class TumorAnalysisPipeline:
             seg_mask=seg_mask_raw if seg_mask_raw is not None else np.zeros((224, 224)),
         )
 
-        # 4. Forward Multimodal
-        if progress_callback: progress_callback(90, "Äang thá»±c hiá»‡n Fusion Prediction & TiÃªn lÆ°á»£ng sinh tá»“n...")
+        # Dọn dẹp cache bộ nhớ GPU trước khi chạy mô hình Fusion
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        # 4. Truyền xuôi dữ liệu đa mô thức (Forward Multimodal)
+        if progress_callback: progress_callback(90, "Đang thực hiện Fusion Prediction & Tiên lượng sinh tồn...")
         try:
             masks = {
                 "has_mri": torch.tensor([has_mri], device=self.device),
@@ -183,17 +203,28 @@ class TumorAnalysisPipeline:
                 "wsi_mask": torch.tensor([[has_wsi]], device=self.device),
             }
 
-            # Enable gradient calculation if we want RNA XAI
+            # Đăng ký hooks và kích hoạt requires_grad cho XAI nếu có ảnh MRI
+            if has_mri and masked_roi_for_xai is not None:
+                self.xai_heatmap_generator.activations = None
+                self.xai_heatmap_generator.gradients = None
+                self.xai_heatmap_generator.remove_hooks()
+                self.xai_heatmap_generator._register_hooks()
+                
+                # Bật grad cho parameters của model để Grad-CAM hoạt động, loại trừ nhánh WSI
+                original_grad_states = []
+                for name, param in self.multimodal_model.named_parameters():
+                    original_grad_states.append((name, param.requires_grad))
+                    if "wsi_encoder" not in name:
+                        param.requires_grad = True
+
             calc_rna_xai = (has_rna == 1.0) and (rna_gene_names is not None) and (len(rna_gene_names) > 0)
-            
             if calc_rna_xai:
                 rna_tensor.requires_grad_(True)
-                self.multimodal_model.zero_grad()
-                context = torch.enable_grad()
-            else:
-                context = torch.no_grad()
 
-            with context:
+            self.multimodal_model.zero_grad()
+
+            # Chạy forward và backward trong duy nhất 1 pass (Single-Pass Optimization)
+            with torch.enable_grad():
                 risk_score, attn_weights = self.multimodal_model(
                     mri_tensor,
                     wsi_tensor,
@@ -207,23 +238,25 @@ class TumorAnalysisPipeline:
                     wsi_mask=masks["wsi_mask"],
                 )
                 
+                # Chỉ chạy MỘT backward pass duy nhất
+                risk_score.backward()
+                
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+
                 if calc_rna_xai:
-                    # Backward pass to get gradients for RNA
-                    risk_score.backward(retain_graph=True)
-                    
                     rna_grad = rna_tensor.grad[0].detach().cpu().numpy()
                     rna_input = rna_tensor[0].detach().cpu().numpy()
                     
-                    # Compute feature importance: Input * Gradient
+                    # Tính độ quan trọng đặc trưng: Input * Gradient
                     importance = rna_grad * rna_input
                     
-                    # Sort indices by absolute importance
+                    # Sắp xếp theo độ quan trọng tuyệt đối giảm dần
                     sorted_indices = np.argsort(np.abs(importance))[::-1]
                     
                     top_n = min(10, len(rna_gene_names))
                     top_indices = sorted_indices[:top_n]
                     
-                    # Import dynamically to avoid circular issues
                     from .utils.gene_mapper import gene_mapper
                     
                     top_ensg_ids = [rna_gene_names[i] for i in top_indices if i < len(rna_gene_names)]
@@ -237,7 +270,6 @@ class TumorAnalysisPipeline:
                         imp_val = float(importance[idx])
                         expr_val = float(rna_input[idx])
                         
-                        # Add only significant ones
                         if abs(imp_val) > 1e-6:
                             rna_xai.append({
                                 "gene": symbol,
@@ -258,25 +290,25 @@ class TumorAnalysisPipeline:
             result_dict["risk_group"] = self.get_risk_level(score_val)
             
             attn_list = attn_weights.squeeze(0).detach().cpu().tolist()
-            # Sanitize attention weights
             attn_list = [v if (v is not None and not np.isnan(v)) else 0.25 for v in attn_list]
             result_dict["fusion_attention"] = attn_list
             result_dict["survival_curve_data"] = self.build_survival_curve(score_val)
 
+            # Khôi phục trạng thái grad ban đầu của model
+            if has_mri and masked_roi_for_xai is not None:
+                for name, param in self.multimodal_model.named_parameters():
+                    old_state = next((state for n, state in original_grad_states if n == name), True)
+                    param.requires_grad = old_state
+
             if has_mri and masked_roi_for_xai is not None:
                 self._save_multimodal_risk_xai(
-                    mri_tensor=mri_tensor,
-                    wsi_tensor=wsi_tensor,
-                    rna_tensor=rna_tensor,
-                    clinical_tensor=clinical_tensor,
-                    masks=masks,
                     reference_image_bgr=masked_roi_for_xai,
                     output_dir=output_dir,
                     result_dict=result_dict,
                     risk_score=score_val,
                 )
             
-            # XAI Narrative â€” sinh giáº£i thÃ­ch lÃ¢m sÃ ng tá»« káº¿t quáº£ thá»±c táº¿
+            # Giải trình XAI — sinh giải thích lâm sàng từ kết quả thực tế
             multimodal_explanation = self._generate_xai_narrative(
                 result_dict=result_dict,
                 has_mri=has_mri,
@@ -296,6 +328,10 @@ class TumorAnalysisPipeline:
             result_dict.pop("_cropped_img", None)
             result_dict.pop("_seg_mask", None)
             result_dict.pop("_masked_roi", None)
+            # Dọn dẹp cache bộ nhớ GPU sau khi hoàn thành tiến trình dự báo
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         return result_dict
 
@@ -309,19 +345,33 @@ class TumorAnalysisPipeline:
         progress_callback=None,
         rna_gene_names: list[str] | None = None
     ) -> dict[str, Any]:
-        """Cháº¡y inference trÃªn toÃ n bá»™ chuá»—i áº£nh (Series) vá»›i cÆ¡ cháº¿ Ä‘á»“ng thuáº­n."""
+        """
+        Chạy chẩn đoán trên toàn bộ chuỗi ảnh MRI (Series) với cơ chế đồng thuận số đông.
+
+        Input:
+            image_bytes_list: Danh sách chứa ảnh MRI dưới dạng bytes.
+            wsi_tiles: Danh sách các ảnh tile mô bệnh học dạng bytes.
+            rna_data: Mảng biểu hiện gene rna-seq.
+            clinical_data: Dữ liệu lâm sàng của bệnh nhân.
+            output_dir: Thư mục xuất kết quả.
+            progress_callback: Callback theo dõi tiến độ.
+            rna_gene_names: Danh sách tên Ensembl gene ID tương ứng.
+
+        Output:
+            Từ điển chứa kết quả đồng thuận số đông và phân tích tiên lượng chi tiết.
+        """
         os.makedirs(output_dir, exist_ok=True)
         from collections import Counter
 
         all_slice_results = []
         total_slices = len(image_bytes_list)
-        # Tá»‘i Æ°u: Náº¿u chuá»—i áº£nh quÃ¡ dÃ i, quÃ©t cÃ¡ch quÃ£ng (step=2) Ä‘á»ƒ tÄƒng tá»‘c 2x
+        # Tối ưu: Nếu chuỗi ảnh quá dài, quét cách quãng (step=2) để tăng tốc gấp đôi
         step = 1 if total_slices < 20 else 2
         
         for i in range(0, total_slices, step):
             if progress_callback:
-                p = int((i / total_slices) * 40) # Chiáº¿m 40% tiáº¿n trÃ¬nh tá»•ng
-                progress_callback(p, f"Äang quÃ©t MRI: LÃ¡t cáº¯t {i+1}/{total_slices}...")
+                p = int((i / total_slices) * 40) # Chiếm 40% tiến trình tổng
+                progress_callback(p, f"Đang quét MRI: Lát cắt {i+1}/{total_slices}...")
                 
             img_bytes = image_bytes_list[i]
             try:
@@ -347,7 +397,7 @@ class TumorAnalysisPipeline:
         key_index = key_slice_data["index"]
 
         if progress_callback:
-            progress_callback(45, "Äang cháº¡y phÃ¢n tÃ­ch Ä‘a mÃ´ thá»©c nÃ¢ng cao...")
+            progress_callback(45, "Đang chạy phân tích đa mô thức nâng cao...")
             
         final_result = self.run_multimodal_inference(
             image_source=image_bytes_list[key_index],
@@ -553,78 +603,114 @@ class TumorAnalysisPipeline:
 
     def _save_multimodal_risk_xai(
         self,
-        mri_tensor: torch.Tensor,
-        wsi_tensor: torch.Tensor,
-        rna_tensor: torch.Tensor,
-        clinical_tensor: torch.Tensor,
-        masks: dict[str, torch.Tensor],
         reference_image_bgr: np.ndarray,
         output_dir: str,
         result_dict: dict[str, Any],
         risk_score: float,
     ) -> None:
-        """Save MRI-branch Grad-CAM for the multimodal survival risk scalar."""
+        """
+        Tính toán và lưu bộ heatmap XAI (Grad-CAM, Grad-CAM++, Layer-CAM)
+        cho nhánh MRI trong mô hình Multimodal Prognosis dựa trên activations và
+        gradients đã được bắt giữ từ backward pass duy nhất.
+        """
         try:
-            heatmap, _ = self.xai_heatmap_generator.generate_heatmap(
-                mri_tensor=mri_tensor,
-                wsi_dummy=wsi_tensor,
-                rna_dummy=rna_tensor,
-                clinical_dummy=clinical_tensor,
-                masks=masks,
-                method="gradcam",
-            )
-
-            heatmap = np.nan_to_num(heatmap, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
-            if heatmap.size == 0:
-                raise RuntimeError("Multimodal risk Grad-CAM returned an empty heatmap.")
-
-            heatmap -= float(heatmap.min())
-            max_value = float(heatmap.max())
-            if max_value > 0:
-                heatmap /= max_value
-
             h, w = reference_image_bgr.shape[:2]
-            heatmap_resized = cv2.resize(heatmap, (w, h), interpolation=cv2.INTER_CUBIC)
-            heatmap_uint8 = np.uint8(np.clip(heatmap_resized, 0.0, 1.0) * 255)
-            heatmap_color = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
-            overlay = cv2.addWeighted(reference_image_bgr, 0.60, heatmap_color, 0.40, 0)
+            xai_gen = self.xai_heatmap_generator
 
-            path = os.path.join(output_dir, "step10_multimodal_risk_gradcam.png")
-            cv2.imwrite(path, overlay)
+            # Kiểm tra hooks đã capture được activations/gradients chưa
+            if xai_gen.activations is None or xai_gen.gradients is None:
+                result_dict.setdefault("xai_warnings", {})["multimodal"] = "Hooks did not capture activations/gradients."
+                print("[Warning] Multimodal XAI: hooks returned None — skipping heatmap generation.")
+                return
 
+            # --- 1. Tính cả 3 method từ cùng 1 bộ activations/gradients ---
+            gradients_np = xai_gen.gradients.detach().cpu().numpy()[0]   # [C, H, W]
+            activations_np = xai_gen.activations.detach().cpu().numpy()[0]  # [C, H, W]
+
+            def _compute_cam(method: str) -> np.ndarray:
+                """Tính CAM map [H, W] từ numpy arrays đã thu thập."""
+                cam = np.zeros(activations_np.shape[1:], dtype=np.float32)
+                if method == "gradcam":
+                    weights = np.mean(gradients_np, axis=(1, 2))
+                    for i, w in enumerate(weights):
+                        cam += w * activations_np[i]
+                elif method == "gradcam++":
+                    grads_pos = np.maximum(gradients_np, 0)
+                    sum_g = np.sum(grads_pos, axis=(1, 2), keepdims=True)
+                    sum_g = np.where(sum_g == 0, 1e-6, sum_g)
+                    alpha = grads_pos / sum_g
+                    weights = np.sum(alpha * activations_np, axis=(1, 2))
+                    for i, w in enumerate(weights):
+                        cam += w * activations_np[i]
+                elif method == "layercam":
+                    pixel_weights = np.maximum(gradients_np, 0)
+                    cam = np.sum(pixel_weights * activations_np, axis=0)
+                # ReLU + normalize
+                cam = np.maximum(cam, 0)
+                cam = cam - np.min(cam)
+                cam_max = np.max(cam)
+                if cam_max > 0:
+                    cam = cam / cam_max
+                return np.nan_to_num(cam, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+
+            # --- 2. Tạo overlay và lưu file cho từng method ---
+            heatmap_results = {}
+            for method in ["gradcam", "gradcam++", "layercam"]:
+                try:
+                    cam = _compute_cam(method)
+                    if cam.size == 0:
+                        continue
+                    heatmap_resized = cv2.resize(cam, (w, h), interpolation=cv2.INTER_CUBIC)
+                    heatmap_uint8 = np.uint8(np.clip(heatmap_resized, 0.0, 1.0) * 255)
+                    heatmap_color = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
+                    overlay = cv2.addWeighted(reference_image_bgr, 0.60, heatmap_color, 0.40, 0)
+
+                    file_method_name = method.replace("++", "_plus")
+                    path = os.path.join(output_dir, f"step10_multimodal_risk_{file_method_name}.png")
+                    cv2.imwrite(path, overlay)
+
+                    result_key = f"multimodal_{file_method_name}_heatmap_path"
+                    result_dict[result_key] = path
+                    heatmap_results[method] = path
+
+                    # Tương thích ngược với key cũ
+                    if method == "gradcam":
+                        result_dict["multimodal_risk_xai_path"] = path
+
+                except Exception as exc:
+                    result_dict.setdefault("xai_warnings", {})[f"multimodal_{method}"] = str(exc)
+                    print(f"[Warning] Post-processing/saving for {method} failed: {exc}")
+
+            # --- 3. Lưu metadata ---
             meta = {
-                "method": "multimodal_mri_branch_gradcam",
+                "method": "multimodal_mri_branch_cam_suite",
                 "target_scalar": "risk_score",
                 "risk_score": float(risk_score),
-                "target_layer_name": self.xai_heatmap_generator.target_layer.__class__.__name__,
+                "target_layer_name": xai_gen.target_layer.__class__.__name__,
                 "input_scope": "masked_roi_after_detection_and_segmentation",
-                "modalities_available": {
-                    "mri": bool(float(masks["has_mri"].detach().cpu().item())),
-                    "wsi": bool(float(masks["has_wsi"].detach().cpu().item())),
-                    "rna": bool(float(masks["has_rna"].detach().cpu().item())),
-                    "clinical": bool(float(masks["has_clinical"].detach().cpu().item())),
-                },
-                "heatmap_shape_before_resize": list(heatmap.shape),
                 "heatmap_shape_after_resize": [int(h), int(w)],
+                "heatmaps_generated": list(heatmap_results.keys()),
                 "note": (
-                    "This heatmap explains the MRI branch contribution to the multimodal "
-                    "prognosis risk_score. Non-image modalities are represented separately "
-                    "by fusion_attention, not spatial heatmaps."
+                    "Suite Grad-CAM, Grad-CAM++, Layer-CAM computed from a single forward+backward "
+                    "pass on the MRI branch of the multimodal prognosis model."
                 ),
             }
-
             meta_path = os.path.join(output_dir, "xai_multimodal_risk_gradcam_meta.json")
             with open(meta_path, "w", encoding="utf-8") as meta_file:
                 json.dump(meta, meta_file, ensure_ascii=False, indent=2)
 
-            result_dict["multimodal_risk_xai_path"] = path
-            result_dict["gradcam_heatmap_path"] = path
             result_dict["multimodal_risk_xai_meta_path"] = meta_path
-            result_dict.setdefault("xai_methods", {})["multimodal"] = meta["method"]
+            result_dict.setdefault("xai_methods", {})["multimodal"] = "multimodal_mri_branch_cam_suite"
             result_dict.setdefault("xai_metadata", {})["multimodal"] = meta
+
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             result_dict.setdefault("xai_warnings", {})["multimodal"] = str(exc)
-            print(f"[Warning] Multimodal risk XAI failed: {exc}")
+            print(f"[Warning] Multimodal risk XAI suite failed: {exc}")
+        finally:
+            # Giải phóng hooks để tránh rò rỉ CUDA handles
+            xai_gen.remove_hooks()
 
     def crop_image(self, image_bgr: np.ndarray, bbox: list[int]) -> np.ndarray:
         x_min, y_min, x_max, y_max = map(int, bbox)
@@ -842,7 +928,25 @@ class TumorAnalysisPipeline:
         clinical_data: dict[str, Any] | None,
         num_wsi_tiles: int,
     ) -> str:
+<<<<<<< HEAD
         """Sinh giải thích XAI dựa trên kết quả thực tế của pipeline."""
+=======
+        """
+        Sinh giải thích biện giải lâm sàng XAI dựa trên kết quả thực tế của hệ thống.
+
+        Input:
+            result_dict: Từ điển chứa kết quả tính toán của pipeline.
+            has_mri: Có dữ liệu MRI hay không.
+            has_wsi: Có dữ liệu WSI hay không.
+            has_rna: Có dữ liệu RNA hay không.
+            has_clinical: Có dữ liệu lâm sàng hay không.
+            clinical_data: Từ điển chứa dữ liệu lâm sàng thô.
+            num_wsi_tiles: Số lượng tiles của ảnh WSI.
+
+        Output:
+            Chuỗi văn bản chứa lập luận phân tích lâm sàng và khuyến nghị điều trị.
+        """
+>>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         sections: list[str] = []
         risk_score = result_dict.get("risk_score", 0.0)
         risk_group = result_dict.get("risk_group", "Medium")
@@ -850,7 +954,7 @@ class TumorAnalysisPipeline:
         tumor_label = result_dict.get("tumor_label", "")
         tumor_conf = result_dict.get("classification_confidence", 0.0)
 
-        # --- LABEL_MAP -------------------------------------------------------
+        # --- BẢN ĐỒ NHÃN PHÂN LOẠI KHỐI U ---
         label_vn = {
             "class_0": "U thần kinh đệm (Glioma)",
             "class_1": "U màng não (Meningioma)",
@@ -858,6 +962,7 @@ class TumorAnalysisPipeline:
         }
         tumor_name = label_vn.get(tumor_label, tumor_label or "chưa xác định")
 
+<<<<<<< HEAD
         # --- 1. Tổng quan nhóm nguy cơ --------------------------------------
         risk_desc = {
             "Very High": "rất cao - mô hình đánh giá khối u có đặc tính xâm lấn cao, tiên lượng sống còn ngắn",
@@ -871,16 +976,39 @@ class TumorAnalysisPipeline:
         )
 
         # --- 2. Phân loại khối u (MRI) --------------------------------------
+=======
+        # --- 1. Tổng quan nhóm nguy cơ ---
+        risk_desc = {
+            "Very High": "rất cao - mô hình đánh giá khối u có đặc tính xâm lấn cực cao, tiên lượng sinh tồn rất ngắn",
+            "High": "cao - có nhiều yếu tố bất lợi, cần theo dõi sát và can thiệp điều trị tích cực",
+            "Medium": "trung bình - cân bằng giữa các yếu tố thuận lợi và bất lợi",
+            "Low": "thấp - tiên lượng tương đối tích cực, khối u ít xâm lấn",
+        }
+        sections.append(
+            f"1. Nhóm nguy cơ: {risk_group} (Risk score = {risk_score:.4f})\n"
+            f"Mô hình AI đánh giá mức nguy cơ {risk_desc.get(risk_group, risk_group)}."
+        )
+
+        # --- 2. Phân loại khối u (MRI) ---
+>>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         if has_mri and tumor_label:
             conf_pct = round(tumor_conf * 100, 1)
             conf_text = "rất cao" if conf_pct >= 90 else ("cao" if conf_pct >= 75 else ("trung bình" if conf_pct >= 50 else "thấp"))
             sections.append(
                 f"2. Phân loại MRI: {tumor_name} (độ tin cậy {conf_pct}% - {conf_text})\n"
+<<<<<<< HEAD
                 "Grad-CAM, Grad-CAM++ và Layer-CAM hiển thị vùng mô hình tập trung phân tích trên ảnh MRI."
             )
 
         # --- 3. Attention Weights (giải thích vai trò từng modality) ----------
         modality_names = ["MRI", "WSI", "RNA", "Clinical"]
+=======
+                f"Grad-CAM, Grad-CAM++ và Layer-CAM hiển thị vùng mô hình tập trung phân tích trên ảnh MRI."
+            )
+
+        # --- 3. Trọng số chú ý (Attention Weights giải thích vai trò từng modality) ---
+        modality_names = ["MRI", "WSI", "RNA", "Lâm sàng"]
+>>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         active_mods = [has_mri, has_wsi, has_rna, has_clinical]
         if attn and len(attn) >= 4:
             attn_strs = []
@@ -888,6 +1016,7 @@ class TumorAnalysisPipeline:
             for i, (name, weight) in enumerate(zip(modality_names, attn[:4])):
                 pct = round(weight * 100, 1)
                 if active_mods[i]:
+<<<<<<< HEAD
                     marker = " *" if i == dominant_idx else ""
                     attn_strs.append(f"{name}: {pct}%{marker}")
             sections.append(
@@ -910,6 +1039,31 @@ class TumorAnalysisPipeline:
             )
 
         # --- 6. Dữ liệu lâm sàng -------------------------------------------
+=======
+                    # Không sử dụng bất kỳ biểu tượng icon nào (như ★) theo đúng RULE
+                    marker = " (Chính)" if i == dominant_idx else ""
+                    attn_strs.append(f"{name}: {pct}%{marker}")
+            sections.append(
+                f"3. Trọng số Fusion Attention: {' | '.join(attn_strs)}\n"
+                f"Mô hình dựa nhiều nhất vào {modality_names[dominant_idx]} để đưa ra kết quả tiên lượng."
+            )
+
+        # --- 4. Bối cảnh mô bệnh học WSI ---
+        if has_wsi:
+            sections.append(
+                f"4. Mô bệnh học (WSI): Đã phân tích {num_wsi_tiles} mảnh (tiles).\n"
+                "Đặc trưng cấu trúc vi thể từ ảnh mô bệnh học được trích xuất để nâng cao độ chính xác tiên lượng."
+            )
+
+        # --- 5. Bối cảnh biểu hiện gene RNA ---
+        if has_rna:
+            sections.append(
+                "5. Biểu hiện gene (RNA-seq): Đã tích hợp dữ liệu giải trình tự gene.\n"
+                "Thông tin sinh học cấp độ phân tử đóng vai trò quan trọng hỗ trợ phát hiện các dấu ấn sinh học liên quan đến tiên lượng sinh tồn."
+            )
+
+        # --- 6. Chỉ số lâm sàng ---
+>>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         if has_clinical and clinical_data:
             clin_parts = []
             ki67 = clinical_data.get("ki67_index")
@@ -919,27 +1073,46 @@ class TumorAnalysisPipeline:
                 ki67_comment = "cao (tăng sinh mạnh)" if ki67_val > 20 else ("trung bình" if ki67_val > 10 else "thấp (thuận lợi)")
                 clin_parts.append(f"KI-67 = {ki67_val}% ({ki67_comment})")
             if grade:
+<<<<<<< HEAD
                 grade_map = {"2": "II (thấp)", "3": "III (trung gian)", "4": "IV - GBM (cao nhất)"}
+=======
+                grade_map = {"2": "II (Thấp)", "3": "III (Trung gian)", "4": "IV - GBM (Cao nhất)"}
+>>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
                 clin_parts.append(f"WHO Grade {grade_map.get(str(grade), grade)}")
             if clin_parts:
                 sections.append(f"6. Chỉ số lâm sàng: {', '.join(clin_parts)}.")
 
+<<<<<<< HEAD
         # --- 7. Khuyến nghị --------------------------------------------------
+=======
+        # --- 7. Khuyến nghị lâm sàng ---
+>>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         if risk_group in ("Very High", "High"):
             rec = "Khuyến nghị: Hội chẩn đa chuyên khoa sớm. Xem xét phẫu thuật, xạ trị hoặc hóa trị bổ trợ. Theo dõi MRI định kỳ mỗi 3 tháng."
         elif risk_group == "Medium":
             rec = "Khuyến nghị: Theo dõi lâm sàng sát sao, MRI kiểm tra mỗi 6 tháng. Xem xét sinh thiết lại nếu có diễn biến bất thường."
         else:
+<<<<<<< HEAD
             rec = "Khuyến nghị: Tiếp tục theo dõi định kỳ. Tiên lượng tương đối tốt, tuy nhiên vẫn cần kiểm tra MRI mỗi 6-12 tháng."
 
         # Cảnh báo nếu thiếu modality
+=======
+            rec = "Khuyến nghị: Tiếp tục theo dõi định kỳ. Tiên lượng tương đối tốt, tuy nhiên vẫn cần kiểm tra MRI định kỳ mỗi 6 đến 12 tháng."
+
+        # Cảnh báo nếu thiếu dữ liệu mô thái đầu vào
+>>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         missing = []
         if not has_mri: missing.append("MRI")
         if not has_wsi: missing.append("WSI")
         if not has_rna: missing.append("RNA")
         if not has_clinical: missing.append("Lâm sàng")
         if missing:
+<<<<<<< HEAD
             rec += f"\nLưu ý: Thiếu dữ liệu {', '.join(missing)} - kết quả tiên lượng có thể chưa đầy đủ."
+=======
+            # Không sử dụng bất kỳ biểu tượng emoji cảnh báo nào ở đây
+            rec += f"\nLưu ý: Thiếu dữ liệu nguồn {', '.join(missing)} - kết quả tiên lượng có thể chưa đầy đủ."
+>>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
 
         sections.append(rec)
 
@@ -980,7 +1153,15 @@ class TumorAnalysisPipeline:
         return curve
 
     def preprocess_tiles_for_multimodal(self, tile_bytes_list: list[bytes]) -> torch.Tensor:
-        """Chuyá»ƒn Ä‘á»•i danh sÃ¡ch bytes tiles thÃ nh tensor [1, S, 3, 224, 224]."""
+        """
+        Chuyển đổi danh sách bytes các mảnh (tiles) của WSI thành tensor chuẩn hóa [1, S, 3, 224, 224].
+
+        Input:
+            tile_bytes_list: Danh sách chứa dữ liệu bytes của các ảnh tile.
+
+        Output:
+            Tensor PyTorch đã được chuẩn hóa và xếp chiều sẵn sàng truyền qua mô hình.
+        """
         transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
