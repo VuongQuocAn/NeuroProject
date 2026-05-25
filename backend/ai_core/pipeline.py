@@ -928,9 +928,6 @@ class TumorAnalysisPipeline:
         clinical_data: dict[str, Any] | None,
         num_wsi_tiles: int,
     ) -> str:
-<<<<<<< HEAD
-        """Sinh giải thích XAI dựa trên kết quả thực tế của pipeline."""
-=======
         """
         Sinh giải thích biện giải lâm sàng XAI dựa trên kết quả thực tế của hệ thống.
 
@@ -946,7 +943,6 @@ class TumorAnalysisPipeline:
         Output:
             Chuỗi văn bản chứa lập luận phân tích lâm sàng và khuyến nghị điều trị.
         """
->>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         sections: list[str] = []
         risk_score = result_dict.get("risk_score", 0.0)
         risk_group = result_dict.get("risk_group", "Medium")
@@ -962,21 +958,6 @@ class TumorAnalysisPipeline:
         }
         tumor_name = label_vn.get(tumor_label, tumor_label or "chưa xác định")
 
-<<<<<<< HEAD
-        # --- 1. Tổng quan nhóm nguy cơ --------------------------------------
-        risk_desc = {
-            "Very High": "rất cao - mô hình đánh giá khối u có đặc tính xâm lấn cao, tiên lượng sống còn ngắn",
-            "High": "cao - có nhiều yếu tố bất lợi, cần theo dõi sát và can thiệp tích cực",
-            "Medium": "trung bình - cần cân nhắc giữa các yếu tố thuận lợi và bất lợi",
-            "Low": "thấp - tiên lượng tương đối tích cực, khối u ít xâm lấn",
-        }
-        sections.append(
-            f"1. Nhóm nguy cơ: {risk_group} (risk score = {risk_score:.4f})\n"
-            f"Mô hình AI đánh giá mức nguy cơ {risk_desc.get(risk_group, risk_group)}."
-        )
-
-        # --- 2. Phân loại khối u (MRI) --------------------------------------
-=======
         # --- 1. Tổng quan nhóm nguy cơ ---
         risk_desc = {
             "Very High": "rất cao - mô hình đánh giá khối u có đặc tính xâm lấn cực cao, tiên lượng sinh tồn rất ngắn",
@@ -990,25 +971,16 @@ class TumorAnalysisPipeline:
         )
 
         # --- 2. Phân loại khối u (MRI) ---
->>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         if has_mri and tumor_label:
             conf_pct = round(tumor_conf * 100, 1)
             conf_text = "rất cao" if conf_pct >= 90 else ("cao" if conf_pct >= 75 else ("trung bình" if conf_pct >= 50 else "thấp"))
             sections.append(
                 f"2. Phân loại MRI: {tumor_name} (độ tin cậy {conf_pct}% - {conf_text})\n"
-<<<<<<< HEAD
-                "Grad-CAM, Grad-CAM++ và Layer-CAM hiển thị vùng mô hình tập trung phân tích trên ảnh MRI."
-            )
-
-        # --- 3. Attention Weights (giải thích vai trò từng modality) ----------
-        modality_names = ["MRI", "WSI", "RNA", "Clinical"]
-=======
                 f"Grad-CAM, Grad-CAM++ và Layer-CAM hiển thị vùng mô hình tập trung phân tích trên ảnh MRI."
             )
 
         # --- 3. Trọng số chú ý (Attention Weights giải thích vai trò từng modality) ---
         modality_names = ["MRI", "WSI", "RNA", "Lâm sàng"]
->>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         active_mods = [has_mri, has_wsi, has_rna, has_clinical]
         if attn and len(attn) >= 4:
             attn_strs = []
@@ -1016,31 +988,6 @@ class TumorAnalysisPipeline:
             for i, (name, weight) in enumerate(zip(modality_names, attn[:4])):
                 pct = round(weight * 100, 1)
                 if active_mods[i]:
-<<<<<<< HEAD
-                    marker = " *" if i == dominant_idx else ""
-                    attn_strs.append(f"{name}: {pct}%{marker}")
-            sections.append(
-                f"3. Trọng số Attention Fusion: {' | '.join(attn_strs)}\n"
-                f"Mô hình dựa nhiều nhất vào {modality_names[dominant_idx]} để đưa ra tiên lượng."
-            )
-
-        # --- 4. Bối cảnh WSI -------------------------------------------------
-        if has_wsi:
-            sections.append(
-                f"4. Mô bệnh học (WSI): Đã phân tích {num_wsi_tiles} tiles.\n"
-                "Đặc trưng mô bệnh học được trích xuất và đóng góp vào tiên lượng tổng hợp."
-            )
-
-        # --- 5. Bối cảnh RNA -------------------------------------------------
-        if has_rna:
-            sections.append(
-                "5. Biểu hiện gene (RNA-seq): Có dữ liệu.\n"
-                "Biểu hiện gene giúp bổ sung thông tin ở mức phân tử, hỗ trợ phát hiện marker sinh học liên quan đến tiên lượng."
-            )
-
-        # --- 6. Dữ liệu lâm sàng -------------------------------------------
-=======
-                    # Không sử dụng bất kỳ biểu tượng icon nào (như ★) theo đúng RULE
                     marker = " (Chính)" if i == dominant_idx else ""
                     attn_strs.append(f"{name}: {pct}%{marker}")
             sections.append(
@@ -1063,7 +1010,6 @@ class TumorAnalysisPipeline:
             )
 
         # --- 6. Chỉ số lâm sàng ---
->>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         if has_clinical and clinical_data:
             clin_parts = []
             ki67 = clinical_data.get("ki67_index")
@@ -1073,46 +1019,27 @@ class TumorAnalysisPipeline:
                 ki67_comment = "cao (tăng sinh mạnh)" if ki67_val > 20 else ("trung bình" if ki67_val > 10 else "thấp (thuận lợi)")
                 clin_parts.append(f"KI-67 = {ki67_val}% ({ki67_comment})")
             if grade:
-<<<<<<< HEAD
-                grade_map = {"2": "II (thấp)", "3": "III (trung gian)", "4": "IV - GBM (cao nhất)"}
-=======
                 grade_map = {"2": "II (Thấp)", "3": "III (Trung gian)", "4": "IV - GBM (Cao nhất)"}
->>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
                 clin_parts.append(f"WHO Grade {grade_map.get(str(grade), grade)}")
             if clin_parts:
                 sections.append(f"6. Chỉ số lâm sàng: {', '.join(clin_parts)}.")
 
-<<<<<<< HEAD
-        # --- 7. Khuyến nghị --------------------------------------------------
-=======
         # --- 7. Khuyến nghị lâm sàng ---
->>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         if risk_group in ("Very High", "High"):
             rec = "Khuyến nghị: Hội chẩn đa chuyên khoa sớm. Xem xét phẫu thuật, xạ trị hoặc hóa trị bổ trợ. Theo dõi MRI định kỳ mỗi 3 tháng."
         elif risk_group == "Medium":
             rec = "Khuyến nghị: Theo dõi lâm sàng sát sao, MRI kiểm tra mỗi 6 tháng. Xem xét sinh thiết lại nếu có diễn biến bất thường."
         else:
-<<<<<<< HEAD
-            rec = "Khuyến nghị: Tiếp tục theo dõi định kỳ. Tiên lượng tương đối tốt, tuy nhiên vẫn cần kiểm tra MRI mỗi 6-12 tháng."
-
-        # Cảnh báo nếu thiếu modality
-=======
             rec = "Khuyến nghị: Tiếp tục theo dõi định kỳ. Tiên lượng tương đối tốt, tuy nhiên vẫn cần kiểm tra MRI định kỳ mỗi 6 đến 12 tháng."
 
         # Cảnh báo nếu thiếu dữ liệu mô thái đầu vào
->>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
         missing = []
         if not has_mri: missing.append("MRI")
         if not has_wsi: missing.append("WSI")
         if not has_rna: missing.append("RNA")
         if not has_clinical: missing.append("Lâm sàng")
         if missing:
-<<<<<<< HEAD
-            rec += f"\nLưu ý: Thiếu dữ liệu {', '.join(missing)} - kết quả tiên lượng có thể chưa đầy đủ."
-=======
-            # Không sử dụng bất kỳ biểu tượng emoji cảnh báo nào ở đây
             rec += f"\nLưu ý: Thiếu dữ liệu nguồn {', '.join(missing)} - kết quả tiên lượng có thể chưa đầy đủ."
->>>>>>> 7c179b7 (Fix: Multimodal XAI visualization integrations, RNA Feature Importance table, absolute attention bars, WSI CUDA optimization, and IDM download delay fix)
 
         sections.append(rec)
 
