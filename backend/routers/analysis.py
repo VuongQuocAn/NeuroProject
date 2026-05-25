@@ -3,7 +3,7 @@ import datetime
 import os
 import textwrap
 from io import BytesIO
-from typing import List
+from typing import Any, List
 
 import cv2
 import numpy as np
@@ -854,6 +854,60 @@ def _get_latest_classification_xai_task(db: Session, image: models.Image) -> mod
     )
 
 
+def _build_classification_xai_fallback(
+    tumor_label: str | None,
+    classification_confidence: float | None,
+    xai_metadata: dict[str, Any] | None,
+    technical_note: str | None = None,
+) -> str:
+    tumor_display = _display_tumor_label(tumor_label, no_tumor_detected=False) or "chưa xác định"
+    if classification_confidence is None:
+        confidence_text = "chưa có thông tin"
+    else:
+        confidence_text = f"{classification_confidence * 100:.1f}%"
+
+    metadata = xai_metadata or {}
+    method = metadata.get("method") or metadata.get("classification_method") or "Finer-CAM"
+    localization = metadata.get("localization_strength") or metadata.get("focus_level")
+    heatmap_shape = metadata.get("heatmap_shape") or metadata.get("shape")
+
+    localization_text = {
+        "strongly_focal": "tập trung khá rõ",
+        "moderately_focal": "tập trung ở mức vừa phải",
+        "diffuse": "phân bố còn lan rộng",
+    }.get(str(localization), "chưa có mô tả định lượng rõ")
+
+    shape_text = ""
+    if isinstance(heatmap_shape, (list, tuple)) and len(heatmap_shape) >= 2:
+        shape_text = f" Kích thước heatmap: {heatmap_shape[0]} x {heatmap_shape[1]}."
+
+    note = ""
+    if technical_note:
+        note = (
+            "\n\nGhi chú kỹ thuật: hệ thống chưa truy xuất được ngữ cảnh RAG/Hugging Face tại thời điểm này, "
+            f"nên phần giải thích y khoa được tạo theo cơ chế fallback an toàn. Chi tiết: {technical_note}"
+        )
+
+    return (
+        "1. Kết quả tóm tắt\n"
+        f"- Mô hình dự đoán loại u: {tumor_display}.\n"
+        f"- Độ tin cậy phân loại: {confidence_text}. Độ tin cậy này cho biết mức mô hình nghiêng về nhãn dự đoán, "
+        "không phải mức độ nguy hiểm của bệnh.\n\n"
+        "2. Giải thích AI/XAI và vùng heatmap mô hình dựa vào\n"
+        f"- Phương pháp XAI sử dụng: {method}.\n"
+        f"- Heatmap cho thấy vùng mô hình tập trung khi đưa ra dự đoán; mức tập trung hiện được ghi nhận là {localization_text}."
+        f"{shape_text}\n"
+        "- Heatmap chỉ mang tính định hướng vùng ảnh có ảnh hưởng tới mô hình, không phải bằng chứng giải phẫu bệnh.\n\n"
+        "3. Thông tin y khoa về loại u này\n"
+        "- Chưa thể tải ngữ cảnh RAG đầy đủ ở thời điểm hiện tại, nên hệ thống không bổ sung thông tin y khoa chi tiết từ nguồn ngoài.\n"
+        "- Cần đối chiếu với MRI đầy đủ, triệu chứng lâm sàng và kết luận của bác sĩ chuyên khoa.\n\n"
+        "4. Lưu ý an toàn\n"
+        "- Kết quả AI không thay thế chẩn đoán y khoa.\n"
+        "- Không dùng heatmap làm căn cứ điều trị độc lập; mọi quyết định cần dựa trên đánh giá lâm sàng toàn diện."
+        f"{note}"
+    )
+
+
 @router.get("/records/analysis/patient/{patient_id}/full", response_model=schemas.ImageAIResultResponse)
 def get_patient_full_analysis(
     patient_id: str,
@@ -1183,6 +1237,10 @@ def explain_classification_xai(
             xai_metadata=xai_metadata,
         )
 
+    contexts = []
+    rag_diagnostics = {}
+    rag_error: str | None = None
+
     try:
         rag_service = get_xai_rag_service()
         contexts, rag_diagnostics = rag_service.retrieve_classification_context(
@@ -1192,6 +1250,14 @@ def explain_classification_xai(
             top_k=3,
             candidate_k=10,
         )
+    except Exception as exc:
+        rag_error = str(exc)
+        rag_diagnostics = {
+            "retrieval_error": rag_error,
+            "fallback": "metadata_only_explanation",
+        }
+
+    try:
         gemini_service = GeminiXaiExplanationService()
         explanation_text = gemini_service.generate_classification_explanation(
             tumor_label=tumor_label,
@@ -1204,7 +1270,12 @@ def explain_classification_xai(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Khong the sinh giai thich XAI: {exc}") from exc
+        explanation_text = _build_classification_xai_fallback(
+            tumor_label=tumor_label,
+            classification_confidence=classification_confidence,
+            xai_metadata=xai_metadata,
+            technical_note=rag_error or str(exc),
+        )
 
     rag_context = {
         "diagnostics": rag_diagnostics,

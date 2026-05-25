@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { apiService } from "@/lib/api";
-import { Search, ShieldAlert, CheckCircle2, AlertTriangle, ExternalLink, FileText } from "lucide-react";
+import { Search, ShieldAlert, CheckCircle2, AlertTriangle, ExternalLink, FileText, ImageIcon } from "lucide-react";
 
 const DicomViewer = dynamic(() => import("@/components/dicom/DicomViewer"), { ssr: false });
 
@@ -75,8 +75,9 @@ export default function HistoryPage() {
              </div>
 
              {/* Study Thumbnail */}
-             <div className="w-16 h-16 rounded-xl overflow-hidden bg-black mx-6 border-2 border-slate-800 shrink-0">
-               <img src="https://images.unsplash.com/photo-1559757175-9b78a05eacbe?auto=format&fit=crop&w=150&q=80" alt="MRI Thumbnail" className="w-full h-full object-cover opacity-80 mix-blend-screen" />
+             <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-950 mx-6 border-2 border-slate-800 shrink-0 flex items-center justify-center relative">
+               <div className="absolute inset-2 rounded-full border border-slate-600/50 bg-[radial-gradient(circle_at_center,rgba(20,184,166,0.35),rgba(15,23,42,0.15)_45%,rgba(2,6,23,0.95)_72%)]" />
+               <ImageIcon className="relative h-6 w-6 text-teal-300/80" aria-hidden="true" />
              </div>
 
              {/* Patient & AI status */}

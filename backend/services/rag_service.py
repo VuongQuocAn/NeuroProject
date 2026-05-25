@@ -23,6 +23,13 @@ TUMOR_ALIASES = {
 }
 
 
+def _hf_timeout_seconds() -> int:
+    try:
+        return int(os.getenv("HF_API_TIMEOUT", "300"))
+    except ValueError:
+        return 300
+
+
 @dataclass
 class RetrievedContext:
     child_id: str
@@ -194,7 +201,7 @@ class LocalXaiRagService:
             url,
             headers={"Authorization": f"Bearer {token}"},
             json={"inputs": text, "options": {"wait_for_model": True}},
-            timeout=120,
+            timeout=_hf_timeout_seconds(),
         )
         response.raise_for_status()
         payload = response.json()
@@ -241,7 +248,7 @@ class LocalXaiRagService:
                 url,
                 headers={"Authorization": f"Bearer {token}"},
                 json={"inputs": pairs, "options": {"wait_for_model": True}},
-                timeout=120,
+                timeout=_hf_timeout_seconds(),
             )
             response.raise_for_status()
             rerank_scores = self._parse_reranker_scores(response.json(), expected=len(contexts))

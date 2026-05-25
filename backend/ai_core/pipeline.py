@@ -842,7 +842,7 @@ class TumorAnalysisPipeline:
         clinical_data: dict[str, Any] | None,
         num_wsi_tiles: int,
     ) -> str:
-        """Sinh giáº£i thÃ­ch XAI dá»±a trÃªn káº¿t quáº£ thá»±c táº¿ cá»§a pipeline."""
+        """Sinh giải thích XAI dựa trên kết quả thực tế của pipeline."""
         sections: list[str] = []
         risk_score = result_dict.get("risk_score", 0.0)
         risk_group = result_dict.get("risk_group", "Medium")
@@ -852,34 +852,34 @@ class TumorAnalysisPipeline:
 
         # --- LABEL_MAP -------------------------------------------------------
         label_vn = {
-            "class_0": "U tháº§n kinh Ä‘á»‡m (Glioma)",
-            "class_1": "U mÃ ng nÃ£o (Meningioma)",
-            "class_2": "U tuyáº¿n yÃªn (Pituitary)",
+            "class_0": "U thần kinh đệm (Glioma)",
+            "class_1": "U màng não (Meningioma)",
+            "class_2": "U tuyến yên (Pituitary)",
         }
-        tumor_name = label_vn.get(tumor_label, tumor_label or "chÆ°a xÃ¡c Ä‘á»‹nh")
+        tumor_name = label_vn.get(tumor_label, tumor_label or "chưa xác định")
 
-        # --- 1. Tá»•ng quan nhÃ³m nguy cÆ¡ --------------------------------------
+        # --- 1. Tổng quan nhóm nguy cơ --------------------------------------
         risk_desc = {
-            "Very High": "ráº¥t cao â€” mÃ´ hÃ¬nh Ä‘Ã¡nh giÃ¡ khá»‘i u cÃ³ Ä‘áº·c tÃ­nh xÃ¢m láº¥n cao, tiÃªn lÆ°á»£ng sinh tá»“n ngáº¯n",
-            "High": "cao â€” cÃ³ nhiá»u yáº¿u tá»‘ báº¥t lá»£i, cáº§n theo dÃµi sÃ¡t vÃ  can thiá»‡p tÃ­ch cá»±c",
-            "Medium": "trung bÃ¬nh â€” cÃ¢n nháº¯c giá»¯a cÃ¡c yáº¿u tá»‘ thuáº­n vÃ  báº¥t lá»£i",
-            "Low": "tháº¥p â€” tiÃªn lÆ°á»£ng tÆ°Æ¡ng Ä‘á»‘i tÃ­ch cá»±c, khá»‘i u Ã­t xÃ¢m láº¥n",
+            "Very High": "rất cao - mô hình đánh giá khối u có đặc tính xâm lấn cao, tiên lượng sống còn ngắn",
+            "High": "cao - có nhiều yếu tố bất lợi, cần theo dõi sát và can thiệp tích cực",
+            "Medium": "trung bình - cần cân nhắc giữa các yếu tố thuận lợi và bất lợi",
+            "Low": "thấp - tiên lượng tương đối tích cực, khối u ít xâm lấn",
         }
         sections.append(
-            f"1. NhÃ³m nguy cÆ¡: {risk_group} (risk score = {risk_score:.4f})\n"
-            f"MÃ´ hÃ¬nh AI Ä‘Ã¡nh giÃ¡ má»©c nguy cÆ¡ {risk_desc.get(risk_group, risk_group)}."
+            f"1. Nhóm nguy cơ: {risk_group} (risk score = {risk_score:.4f})\n"
+            f"Mô hình AI đánh giá mức nguy cơ {risk_desc.get(risk_group, risk_group)}."
         )
 
-        # --- 2. PhÃ¢n loáº¡i khá»‘i u (MRI) --------------------------------------
+        # --- 2. Phân loại khối u (MRI) --------------------------------------
         if has_mri and tumor_label:
             conf_pct = round(tumor_conf * 100, 1)
-            conf_text = "ráº¥t cao" if conf_pct >= 90 else ("cao" if conf_pct >= 75 else ("trung bÃ¬nh" if conf_pct >= 50 else "tháº¥p"))
+            conf_text = "rất cao" if conf_pct >= 90 else ("cao" if conf_pct >= 75 else ("trung bình" if conf_pct >= 50 else "thấp"))
             sections.append(
-                f"2. PhÃ¢n loáº¡i MRI: {tumor_name} (Ä‘á»™ tin cáº­y {conf_pct}% â€” {conf_text})\n"
-                f"Grad-CAM, Grad-CAM++ vÃ  Layer-CAM hiá»ƒn thá»‹ vÃ¹ng mÃ´ hÃ¬nh táº­p trung phÃ¢n tÃ­ch trÃªn áº£nh MRI."
+                f"2. Phân loại MRI: {tumor_name} (độ tin cậy {conf_pct}% - {conf_text})\n"
+                "Grad-CAM, Grad-CAM++ và Layer-CAM hiển thị vùng mô hình tập trung phân tích trên ảnh MRI."
             )
 
-        # --- 3. Attention Weights (giáº£i thÃ­ch vai trÃ² tá»«ng modality) ----------
+        # --- 3. Attention Weights (giải thích vai trò từng modality) ----------
         modality_names = ["MRI", "WSI", "RNA", "Clinical"]
         active_mods = [has_mri, has_wsi, has_rna, has_clinical]
         if attn and len(attn) >= 4:
@@ -888,58 +888,58 @@ class TumorAnalysisPipeline:
             for i, (name, weight) in enumerate(zip(modality_names, attn[:4])):
                 pct = round(weight * 100, 1)
                 if active_mods[i]:
-                    marker = " â˜…" if i == dominant_idx else ""
+                    marker = " *" if i == dominant_idx else ""
                     attn_strs.append(f"{name}: {pct}%{marker}")
             sections.append(
-                f"3. Trá»ng sá»‘ Attention Fusion: {' | '.join(attn_strs)}\n"
-                f"MÃ´ hÃ¬nh dá»±a nhiá»u nháº¥t vÃ o {modality_names[dominant_idx]} Ä‘á»ƒ Ä‘Æ°a ra tiÃªn lÆ°á»£ng."
+                f"3. Trọng số Attention Fusion: {' | '.join(attn_strs)}\n"
+                f"Mô hình dựa nhiều nhất vào {modality_names[dominant_idx]} để đưa ra tiên lượng."
             )
 
-        # --- 4. Bá»‘i cáº£nh WSI -------------------------------------------------
+        # --- 4. Bối cảnh WSI -------------------------------------------------
         if has_wsi:
             sections.append(
-                f"4. MÃ´ bá»‡nh há»c (WSI): ÄÃ£ phÃ¢n tÃ­ch {num_wsi_tiles} tiles.\n"
-                "Äáº·c trÆ°ng mÃ´ bá»‡nh há»c Ä‘Æ°á»£c trÃ­ch xuáº¥t vÃ  Ä‘Ã³ng gÃ³p vÃ o tiÃªn lÆ°á»£ng tá»•ng há»£p."
+                f"4. Mô bệnh học (WSI): Đã phân tích {num_wsi_tiles} tiles.\n"
+                "Đặc trưng mô bệnh học được trích xuất và đóng góp vào tiên lượng tổng hợp."
             )
 
-        # --- 5. Bá»‘i cáº£nh RNA -------------------------------------------------
+        # --- 5. Bối cảnh RNA -------------------------------------------------
         if has_rna:
             sections.append(
-                "5. Biá»ƒu hiá»‡n gene (RNA-seq): CÃ³ dá»¯ liá»‡u.\n"
-                "Biá»ƒu hiá»‡n gene giÃºp bá»• sung thÃ´ng tin á»Ÿ má»©c phÃ¢n tá»­, há»— trá»£ phÃ¡t hiá»‡n marker sinh há»c liÃªn quan Ä‘áº¿n tiÃªn lÆ°á»£ng."
+                "5. Biểu hiện gene (RNA-seq): Có dữ liệu.\n"
+                "Biểu hiện gene giúp bổ sung thông tin ở mức phân tử, hỗ trợ phát hiện marker sinh học liên quan đến tiên lượng."
             )
 
-        # --- 6. Dá»¯ liá»‡u lÃ¢m sÃ ng -------------------------------------------
+        # --- 6. Dữ liệu lâm sàng -------------------------------------------
         if has_clinical and clinical_data:
             clin_parts = []
             ki67 = clinical_data.get("ki67_index")
             grade = clinical_data.get("grade")
             if ki67 is not None:
                 ki67_val = float(ki67)
-                ki67_comment = "cao (tÄƒng sinh máº¡nh)" if ki67_val > 20 else ("trung bÃ¬nh" if ki67_val > 10 else "tháº¥p (thuáº­n lá»£i)")
+                ki67_comment = "cao (tăng sinh mạnh)" if ki67_val > 20 else ("trung bình" if ki67_val > 10 else "thấp (thuận lợi)")
                 clin_parts.append(f"KI-67 = {ki67_val}% ({ki67_comment})")
             if grade:
-                grade_map = {"2": "II (tháº¥p)", "3": "III (trung gian)", "4": "IV â€” GBM (cao nháº¥t)"}
+                grade_map = {"2": "II (thấp)", "3": "III (trung gian)", "4": "IV - GBM (cao nhất)"}
                 clin_parts.append(f"WHO Grade {grade_map.get(str(grade), grade)}")
             if clin_parts:
-                sections.append(f"6. Chá»‰ sá»‘ lÃ¢m sÃ ng: {', '.join(clin_parts)}.")
+                sections.append(f"6. Chỉ số lâm sàng: {', '.join(clin_parts)}.")
 
-        # --- 7. Khuyáº¿n nghá»‹ --------------------------------------------------
+        # --- 7. Khuyến nghị --------------------------------------------------
         if risk_group in ("Very High", "High"):
-            rec = "Khuyáº¿n nghá»‹: Há»™i cháº©n Ä‘a chuyÃªn khoa sá»›m. Xem xÃ©t pháº«u thuáº­t, xáº¡ trá»‹ hoáº·c hoÃ¡ trá»‹ bá»• trá»£. Theo dÃµi MRI Ä‘á»‹nh ká»³ má»—i 3 thÃ¡ng."
+            rec = "Khuyến nghị: Hội chẩn đa chuyên khoa sớm. Xem xét phẫu thuật, xạ trị hoặc hóa trị bổ trợ. Theo dõi MRI định kỳ mỗi 3 tháng."
         elif risk_group == "Medium":
-            rec = "Khuyáº¿n nghá»‹: Theo dÃµi lÃ¢m sÃ ng sÃ¡t sao, MRI kiá»ƒm tra má»—i 6 thÃ¡ng. Xem xÃ©t sinh thiáº¿t láº¡i náº¿u cÃ³ diá»…n biáº¿n báº¥t thÆ°á»ng."
+            rec = "Khuyến nghị: Theo dõi lâm sàng sát sao, MRI kiểm tra mỗi 6 tháng. Xem xét sinh thiết lại nếu có diễn biến bất thường."
         else:
-            rec = "Khuyáº¿n nghá»‹: Tiáº¿p tá»¥c theo dÃµi Ä‘á»‹nh ká»³. TiÃªn lÆ°á»£ng tÆ°Æ¡ng Ä‘á»‘i tá»‘t, tuy nhiÃªn váº«n cáº§n kiá»ƒm tra MRI má»—i 6â€“12 thÃ¡ng."
+            rec = "Khuyến nghị: Tiếp tục theo dõi định kỳ. Tiên lượng tương đối tốt, tuy nhiên vẫn cần kiểm tra MRI mỗi 6-12 tháng."
 
-        # Cáº£nh bÃ¡o náº¿u thiáº¿u modality
+        # Cảnh báo nếu thiếu modality
         missing = []
         if not has_mri: missing.append("MRI")
         if not has_wsi: missing.append("WSI")
         if not has_rna: missing.append("RNA")
-        if not has_clinical: missing.append("LÃ¢m sÃ ng")
+        if not has_clinical: missing.append("Lâm sàng")
         if missing:
-            rec += f"\nâš  LÆ°u Ã½: Thiáº¿u dá»¯ liá»‡u {', '.join(missing)} â€” káº¿t quáº£ tiÃªn lÆ°á»£ng cÃ³ thá»ƒ chÆ°a Ä‘áº§y Ä‘á»§."
+            rec += f"\nLưu ý: Thiếu dữ liệu {', '.join(missing)} - kết quả tiên lượng có thể chưa đầy đủ."
 
         sections.append(rec)
 

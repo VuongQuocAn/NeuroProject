@@ -12,12 +12,22 @@ from database import get_db
 from utils import minio_client
 
 router = APIRouter(prefix="/records", tags=["Records"])
-BUCKET_NAME = "medical-data"
+BUCKET_NAME = os.getenv("MINIO_BUCKET") or os.getenv("R2_BUCKET") or "medical-data"
 
 
 def _natural_sort_key(text: str):
     """Tach chuoi thanh so va chu de sap xep tu nhien: patch_2 < patch_10."""
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', text)]
+
+
+def _parse_storage_path(file_path: str | None) -> tuple[str, str] | None:
+    if not file_path:
+        return None
+    normalized = file_path.lstrip("/")
+    if "/" in normalized:
+        bucket_name, object_name = normalized.split("/", 1)
+        return bucket_name, object_name
+    return BUCKET_NAME, normalized
 
 LABEL_MAP = {
     "class_0": "Glioma",
@@ -230,15 +240,29 @@ def delete_image_record(image_id: int, db: Session = Depends(get_db)):
     if not image:
         raise HTTPException(status_code=404, detail="Khong tim thay hinh anh")
 
-    object_name = image.file_path.split("/")[-1]
-    try:
-        minio_client.remove_object(bucket_name=BUCKET_NAME, object_name=object_name)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Loi khi xoa file tren MinIO: {exc}")
+    storage_path = _parse_storage_path(image.file_path)
+    if storage_path:
+        bucket_name, object_name = storage_path
+        try:
+            minio_client.remove_object(bucket_name=bucket_name, object_name=object_name)
+        except Exception as exc:
+            print(f"[Warning] Could not delete object storage file {bucket_name}/{object_name}: {exc}")
 
     analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.image_id == image_id).first()
     if analysis:
         db.delete(analysis)
+
+    diagnoses = db.query(models.Diagnosis).filter(models.Diagnosis.image_id == image_id).all()
+    for diagnosis in diagnoses:
+        db.delete(diagnosis)
+
+    explanations = db.query(models.AIExplanation).filter(models.AIExplanation.image_id == image_id).all()
+    for explanation in explanations:
+        db.delete(explanation)
+
+    validations = db.query(models.ExpertValidation).filter(models.ExpertValidation.image_id == image_id).all()
+    for validation in validations:
+        db.delete(validation)
 
     tasks = db.query(models.InferenceTask).filter(
         models.InferenceTask.task_type == "mri_pipeline",

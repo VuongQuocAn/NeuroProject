@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from typing import List
 from sqlalchemy.orm import Session
 import uuid
+import os
 import crud
 
 import models
@@ -9,7 +10,7 @@ from database import get_db
 from utils import minio_client, ensure_bucket_exists, prepare_mri_upload
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
-BUCKET_NAME = "medical-data"
+BUCKET_NAME = os.getenv("MINIO_BUCKET") or os.getenv("R2_BUCKET") or "medical-data"
 
 # API NHÁP: Tải lên file DICOM MRI (với ẩn danh tự động)
 @router.post("/mri/")

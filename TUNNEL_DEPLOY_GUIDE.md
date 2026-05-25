@@ -141,3 +141,5 @@ docker compose down -v
 ```
 
 Neu khong muon xoa volume database/MinIO.
+
+cloudflared tunnel --protocol http2 --url http://localhost:8000
