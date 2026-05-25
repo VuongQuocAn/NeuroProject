@@ -105,4 +105,4 @@ services:
 
 databases:
   - name: neuroproject-postgres
-    plan: starter
+    plan: basic-256mb
