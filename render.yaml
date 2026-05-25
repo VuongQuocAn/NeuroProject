@@ -13,12 +13,12 @@ services:
           property: connectionString
       - key: CELERY_BROKER_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: neuroproject-redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
         fromService:
-          type: redis
+          type: keyvalue
           name: neuroproject-redis
           property: connectionString
       - key: MINIO_URL
@@ -56,7 +56,7 @@ services:
     plan: starter
     dockerContext: ./backend
     dockerfilePath: ./backend/Dockerfile.render
-    startCommand: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
+    dockerCommand: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -64,12 +64,12 @@ services:
           property: connectionString
       - key: CELERY_BROKER_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: neuroproject-redis
           property: connectionString
       - key: CELERY_RESULT_BACKEND
         fromService:
-          type: redis
+          type: keyvalue
           name: neuroproject-redis
           property: connectionString
       - key: MINIO_URL
@@ -97,9 +97,10 @@ services:
       - key: HF_RERANKER_API_URL
         sync: false
 
-  - type: redis
+  - type: keyvalue
     name: neuroproject-redis
     plan: starter
+    maxmemoryPolicy: noeviction
     ipAllowList: []
 
 databases:
