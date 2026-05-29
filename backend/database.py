@@ -28,7 +28,29 @@ def run_migrations():
         "ALTER TABLE analysis_results ADD COLUMN IF NOT EXISTS seg_eigen_cam_path VARCHAR;",
         "ALTER TABLE analysis_results ADD COLUMN IF NOT EXISTS odam_path VARCHAR;",
         "ALTER TABLE analysis_results ADD COLUMN IF NOT EXISTS xai_3_panel_path VARCHAR;",
-        "ALTER TABLE analysis_results ADD COLUMN IF NOT EXISTS survival_curve_data JSON;"
+        "ALTER TABLE analysis_results ADD COLUMN IF NOT EXISTS survival_curve_data JSON;",
+        """
+        CREATE TABLE IF NOT EXISTS patient_history_reports (
+            id SERIAL PRIMARY KEY,
+            patient_id INTEGER REFERENCES patients(id),
+            report_type VARCHAR DEFAULT 'diagnosis_history',
+            status VARCHAR DEFAULT 'not_created',
+            data_hash VARCHAR,
+            summary_text TEXT,
+            classification_trend_text TEXT,
+            risk_trend_text TEXT,
+            conclusion_text TEXT,
+            llm_model VARCHAR,
+            prompt_version VARCHAR,
+            source_metadata JSON,
+            error_message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_patient_history_reports_patient_id ON patient_history_reports(patient_id);",
+        "CREATE INDEX IF NOT EXISTS ix_patient_history_reports_report_type ON patient_history_reports(report_type);",
+        "CREATE INDEX IF NOT EXISTS ix_patient_history_reports_data_hash ON patient_history_reports(data_hash);"
     ]
     with engine.begin() as conn:
         for query in migrations:

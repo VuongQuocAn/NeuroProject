@@ -54,7 +54,10 @@ export const apiService = {
       return api.get("/records/patients/");
     },
     getHistory: async () => {
-      return api.get("/records/patients/"); 
+      return api.get("/records/patients/diagnosis-history");
+    },
+    getDiagnosisHistory: async (params?: Record<string, any>) => {
+      return api.get("/records/patients/diagnosis-history", { params });
     },
     getById: async (id: string) => {
       return api.get(`/records/patients/${id}`);
@@ -64,6 +67,17 @@ export const apiService = {
     },
     deleteImage: async (imageId: string | number) => {
       return api.delete(`/records/images/${imageId}`);
+    },
+    getHistoryReport: async (patientId: string | number) => {
+      return api.get(`/records/patients/${patientId}/history-report`);
+    },
+    regenerateHistoryReport: async (patientId: string | number) => {
+      return api.post(`/records/patients/${patientId}/history-report/regenerate`);
+    },
+    downloadHistoryReport: async (patientId: string | number) => {
+      return api.get(`/records/patients/${patientId}/history-report/pdf`, {
+        responseType: "blob",
+      });
     }
   },
   analysis: {

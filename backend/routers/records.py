@@ -1,8 +1,14 @@
+import hashlib
+import datetime
+import json
 import os
 import re
 import shutil
+from io import BytesIO
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
+from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy.orm import Session
 
 import crud
@@ -13,6 +19,8 @@ from utils import minio_client
 
 router = APIRouter(prefix="/records", tags=["Records"])
 BUCKET_NAME = os.getenv("MINIO_BUCKET") or os.getenv("R2_BUCKET") or "medical-data"
+REPORT_TYPE_DIAGNOSIS_HISTORY = "diagnosis_history"
+REPORT_PROMPT_VERSION = "patient-history-v1"
 
 
 def _natural_sort_key(text: str):
@@ -40,6 +48,440 @@ def _display_diagnosis(label: str | None) -> str | None:
     if not label:
         return None
     return LABEL_MAP.get(label, label)
+
+
+def _safe_float(value):
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _pct(value):
+    number = _safe_float(value)
+    if number is None:
+        return "chua co"
+    return f"{number * 100:.2f}%"
+
+
+def _risk_display(value: str | None) -> str:
+    if not value:
+        return "chua co"
+    lowered = str(value).lower()
+    if lowered == "high":
+        return "nguy co cao"
+    if lowered == "low":
+        return "nguy co thap"
+    return str(value)
+
+
+def _image_preview_url(image: models.Image) -> str | None:
+    if image.is_series:
+        return f"/records/analysis/image/{image.id}/slice/{image.key_slice_index or 0}"
+
+    storage_path = _parse_storage_path(image.file_path)
+    if not storage_path:
+        return None
+
+    bucket_name, object_name = storage_path
+    try:
+        return minio_client.presigned_get_object(bucket_name=bucket_name, object_name=object_name)
+    except Exception:
+        return None
+
+
+def _latest_mri_task(db: Session, image_id: int) -> models.InferenceTask | None:
+    return (
+        db.query(models.InferenceTask)
+        .filter(
+            models.InferenceTask.task_type == "mri_pipeline",
+            models.InferenceTask.target_id == image_id,
+        )
+        .order_by(models.InferenceTask.created_at.desc())
+        .first()
+    )
+
+
+def _report_texts_ready(report: models.PatientHistoryReport | None, data_hash: str) -> bool:
+    if not report:
+        return False
+    required = [
+        report.summary_text,
+        report.classification_trend_text,
+        report.risk_trend_text,
+        report.conclusion_text,
+    ]
+    return report.status == "ready" and report.data_hash == data_hash and all(bool((item or "").strip()) for item in required)
+
+
+def _build_patient_history_payload(db: Session, patient: models.Patient) -> dict:
+    images = (
+        db.query(models.Image)
+        .filter(
+            models.Image.patient_id == patient.id,
+            models.Image.modality.in_(["MRI", "MRI_SERIES"]),
+        )
+        .order_by(models.Image.scan_date.desc())
+        .all()
+    )
+
+    timeline = []
+    for display_idx, img in enumerate(images, start=1):
+        analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.image_id == img.id).first()
+        latest_task = _latest_mri_task(db, img.id)
+        status = "done" if analysis else "ready"
+        if latest_task:
+            status = latest_task.status
+
+        timeline.append(
+            {
+                "diagnosis_index": display_idx,
+                "image_id": img.id,
+                "modality": img.modality,
+                "scan_date": img.scan_date.isoformat() if img.scan_date else None,
+                "image_url": _image_preview_url(img),
+                "ai_status": status,
+                "tumor_label": _display_diagnosis(analysis.tumor_label) if analysis else None,
+                "classification_confidence": analysis.classification_confidence if analysis else None,
+                "risk_score": analysis.risk_score if analysis else None,
+                "risk_group": analysis.risk_group if analysis else None,
+                "is_series": bool(img.is_series),
+                "num_slices": img.num_slices or 1,
+                "key_slice_index": img.key_slice_index or 0,
+            }
+        )
+
+    chronological = list(reversed(timeline))
+    for idx, item in enumerate(chronological, start=1):
+        item["chronological_index"] = idx
+
+    risk_trend = [
+        {
+            "diagnosis_index": item["chronological_index"],
+            "risk_score": item["risk_score"],
+            "risk_group": item["risk_group"],
+            "scan_date": item["scan_date"],
+            "tumor_label": item["tumor_label"],
+            "classification_confidence": item["classification_confidence"],
+        }
+        for item in chronological
+        if item.get("risk_score") is not None
+    ]
+
+    rna_record = (
+        db.query(models.RnaData)
+        .filter(models.RnaData.patient_id == patient.id)
+        .order_by(models.RnaData.upload_date.desc())
+        .first()
+    )
+    wsi_count = (
+        db.query(models.Image)
+        .filter(models.Image.patient_id == patient.id, models.Image.modality.in_(["WSI", "WSI_SERIES"]))
+        .count()
+    )
+
+    validations = (
+        db.query(models.ExpertValidation)
+        .filter(models.ExpertValidation.image_id.in_([item["image_id"] for item in timeline] or [-1]))
+        .order_by(models.ExpertValidation.created_at.desc())
+        .all()
+    )
+
+    latest = timeline[0] if timeline else {}
+    payload = {
+        "patient": {
+            "id": patient.id,
+            "name": patient.name,
+            "external_id": patient.patient_external_id,
+            "age": patient.age,
+            "gender": patient.gender,
+        },
+        "summary": {
+            "diagnosis_count": len(timeline),
+            "latest_tumor_label": latest.get("tumor_label"),
+            "latest_classification_confidence": latest.get("classification_confidence"),
+            "latest_risk_score": latest.get("risk_score"),
+            "latest_risk_group": latest.get("risk_group"),
+            "last_diagnosis_time": latest.get("scan_date"),
+        },
+        "timeline": timeline,
+        "risk_trend": risk_trend,
+        "multimodal_data": {
+            "has_mri": len(timeline) > 0,
+            "has_wsi": wsi_count > 0,
+            "has_rna": rna_record is not None,
+            "has_clinical": patient.clinical_data is not None,
+            "rna_uploaded_at": rna_record.upload_date.isoformat() if rna_record else None,
+            "clinical_updated_at": patient.clinical_data.updated_at.isoformat()
+            if patient.clinical_data and patient.clinical_data.updated_at
+            else None,
+        },
+        "expert_validations": [
+            {
+                "image_id": item.image_id,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "rating": item.rating,
+                "comments": item.comments,
+            }
+            for item in validations
+        ],
+    }
+    return payload
+
+
+def _history_data_hash(payload: dict) -> str:
+    relevant = {
+        "patient": payload.get("patient"),
+        "summary": payload.get("summary"),
+        "timeline": [
+            {
+                "image_id": item.get("image_id"),
+                "scan_date": item.get("scan_date"),
+                "modality": item.get("modality"),
+                "ai_status": item.get("ai_status"),
+                "tumor_label": item.get("tumor_label"),
+                "classification_confidence": item.get("classification_confidence"),
+                "risk_score": item.get("risk_score"),
+                "risk_group": item.get("risk_group"),
+            }
+            for item in payload.get("timeline", [])
+        ],
+        "multimodal_data": payload.get("multimodal_data"),
+        "expert_validations": payload.get("expert_validations"),
+    }
+    raw = json.dumps(relevant, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _fallback_history_texts(payload: dict) -> dict[str, str]:
+    summary = payload.get("summary", {})
+    timeline = payload.get("timeline", [])
+    risk_trend = payload.get("risk_trend", [])
+    latest_label = summary.get("latest_tumor_label") or "chua co ket qua phan loai"
+    latest_conf = _pct(summary.get("latest_classification_confidence"))
+    latest_risk = summary.get("latest_risk_score")
+    latest_risk_text = "chua co" if latest_risk is None else f"{latest_risk:.4f}"
+    latest_group = _risk_display(summary.get("latest_risk_group"))
+
+    labels = [item.get("tumor_label") for item in reversed(timeline) if item.get("tumor_label")]
+    unique_labels = list(dict.fromkeys(labels))
+    if not labels:
+        class_trend = "Chua co du lieu phan loai du de nhan xet xu huong theo thoi gian."
+    elif len(unique_labels) == 1:
+        class_trend = f"Cac lan chan doan co ket qua phan loai on dinh voi nhan {unique_labels[0]}."
+    else:
+        class_trend = f"Nhãn phân loại thay đổi qua các lần chẩn đoán: {', '.join(unique_labels)}. Can doi chieu chat luong anh va danh gia chuyen khoa."
+
+    if len(risk_trend) >= 2:
+        first = _safe_float(risk_trend[0].get("risk_score")) or 0
+        last = _safe_float(risk_trend[-1].get("risk_score")) or 0
+        direction = "tang" if last > first else "giam" if last < first else "on dinh"
+        risk_text = f"Risk score co xu huong {direction} tu {first:.4f} den {last:.4f} qua {len(risk_trend)} lan co du lieu tien luong."
+    elif len(risk_trend) == 1:
+        risk_text = f"Hien chi co mot diem risk score ({risk_trend[0].get('risk_score'):.4f}), chua du de danh gia xu huong."
+    else:
+        risk_text = "Chua co du lieu risk score de ve va nhan xet xu huong tien luong."
+
+    return {
+        "summary_text": (
+            f"Benh nhan co {len(timeline)} lan upload/chan doan MRI trong he thong. "
+            f"Ket qua gan nhat ghi nhan {latest_label} voi do tin cay {latest_conf}; "
+            f"risk score gan nhat la {latest_risk_text}, thuoc nhom {latest_group}."
+        ),
+        "classification_trend_text": class_trend,
+        "risk_trend_text": risk_text,
+        "conclusion_text": (
+            f"Ket qua gan nhat la {latest_label}, risk group {latest_group}. "
+            "Bao cao nay tong hop lich su AI theo du lieu da luu va chi co vai tro ho tro tham khao; "
+            "can doi chieu voi danh gia lam sang cua bac si chuyen khoa."
+        ),
+    }
+
+
+def _generate_history_texts(payload: dict) -> tuple[dict[str, str], str]:
+    model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+    api_key = os.getenv("GEMINI_API_KEY")
+    fallback = _fallback_history_texts(payload)
+    if not api_key:
+        return fallback, model_name
+
+    try:
+        import google.generativeai as genai
+
+        prompt = f"""
+Ban la tro ly viet bao cao y khoa tieng Viet trong he thong NeuroDiagnosis AI.
+Chi dua tren JSON du lieu duoc cung cap, khong bia them so lieu hay chan doan.
+Viet ngan gon, than trong, tu nhien. Khong dua phac do dieu tri.
+
+Hay tra ve JSON hop le voi dung 4 key:
+summary_text, classification_trend_text, risk_trend_text, conclusion_text.
+
+Du lieu:
+{json.dumps(payload, ensure_ascii=False, indent=2, default=str)}
+""".strip()
+
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content(
+            [prompt],
+            generation_config={"temperature": 0.15, "top_p": 0.9, "max_output_tokens": 1800},
+        )
+        text = (getattr(response, "text", None) or "").strip()
+        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE | re.MULTILINE).strip()
+        parsed = json.loads(text)
+        result = {
+            "summary_text": str(parsed.get("summary_text") or fallback["summary_text"]).strip(),
+            "classification_trend_text": str(parsed.get("classification_trend_text") or fallback["classification_trend_text"]).strip(),
+            "risk_trend_text": str(parsed.get("risk_trend_text") or fallback["risk_trend_text"]).strip(),
+            "conclusion_text": str(parsed.get("conclusion_text") or fallback["conclusion_text"]).strip(),
+        }
+        return result, model_name
+    except Exception as exc:
+        print(f"[HistoryReport] LLM generation failed, using fallback: {exc}")
+        return fallback, model_name
+
+
+def _get_or_create_history_report(db: Session, patient_id: int) -> models.PatientHistoryReport:
+    report = (
+        db.query(models.PatientHistoryReport)
+        .filter(
+            models.PatientHistoryReport.patient_id == patient_id,
+            models.PatientHistoryReport.report_type == REPORT_TYPE_DIAGNOSIS_HISTORY,
+        )
+        .order_by(models.PatientHistoryReport.updated_at.desc())
+        .first()
+    )
+    if report:
+        return report
+
+    report = models.PatientHistoryReport(
+        patient_id=patient_id,
+        report_type=REPORT_TYPE_DIAGNOSIS_HISTORY,
+        status="not_created",
+    )
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+    return report
+
+
+def _history_report_status(db: Session, patient: models.Patient) -> tuple[str, str]:
+    payload = _build_patient_history_payload(db, patient)
+    data_hash = _history_data_hash(payload)
+    report = (
+        db.query(models.PatientHistoryReport)
+        .filter(
+            models.PatientHistoryReport.patient_id == patient.id,
+            models.PatientHistoryReport.report_type == REPORT_TYPE_DIAGNOSIS_HISTORY,
+        )
+        .order_by(models.PatientHistoryReport.updated_at.desc())
+        .first()
+    )
+    if _report_texts_ready(report, data_hash):
+        return "ready", data_hash
+    if report and report.status == "generating":
+        return "generating", data_hash
+    if report and report.status == "failed":
+        return "failed", data_hash
+    if report and report.data_hash and report.data_hash != data_hash:
+        return "stale", data_hash
+    return "not_created", data_hash
+
+
+def _make_history_report_response(db: Session, patient: models.Patient, generate_if_missing: bool = False) -> dict:
+    payload = _build_patient_history_payload(db, patient)
+    data_hash = _history_data_hash(payload)
+    report = _get_or_create_history_report(db, patient.id)
+
+    if generate_if_missing and not _report_texts_ready(report, data_hash):
+        report.status = "generating"
+        report.error_message = None
+        db.commit()
+        try:
+            texts, model_name = _generate_history_texts(payload)
+            report.summary_text = texts["summary_text"]
+            report.classification_trend_text = texts["classification_trend_text"]
+            report.risk_trend_text = texts["risk_trend_text"]
+            report.conclusion_text = texts["conclusion_text"]
+            report.llm_model = model_name
+            report.prompt_version = REPORT_PROMPT_VERSION
+            report.source_metadata = payload
+            report.data_hash = data_hash
+            report.status = "ready"
+            report.error_message = None
+            db.commit()
+            db.refresh(report)
+        except Exception as exc:
+            report.status = "failed"
+            report.error_message = str(exc)
+            db.commit()
+            db.refresh(report)
+
+    status = "ready" if _report_texts_ready(report, data_hash) else report.status
+    if report.data_hash and report.data_hash != data_hash and status == "ready":
+        status = "stale"
+
+    return {
+        **payload,
+        "report_status": status,
+        "data_hash": data_hash,
+        "texts": {
+            "summary_text": report.summary_text,
+            "classification_trend_text": report.classification_trend_text,
+            "risk_trend_text": report.risk_trend_text,
+            "conclusion_text": report.conclusion_text,
+        },
+        "error_message": report.error_message,
+    }
+
+
+def _build_history_pdf(report: dict) -> bytes:
+    page = Image.new("RGB", (1240, 1754), "white")
+    draw = ImageDraw.Draw(page)
+    font_title = ImageFont.load_default()
+    font = ImageFont.load_default()
+
+    y = 60
+    patient = report["patient"]
+    draw.text((60, y), "BAO CAO LICH SU CHAN DOAN BENH NHAN", fill=(15, 23, 42), font=font_title)
+    y += 45
+    draw.text((60, y), f"Benh nhan: {patient.get('name') or '-'} | Ma: {patient.get('external_id') or patient.get('id')}", fill=(30, 41, 59), font=font)
+    y += 45
+
+    sections = [
+        ("1. Thong tin tom tat", report["texts"].get("summary_text")),
+        ("2. Dien tien phan loai u", report["texts"].get("classification_trend_text")),
+        ("3. Dien tien risk score", report["texts"].get("risk_trend_text")),
+        ("4. Ket luan tong hop", report["texts"].get("conclusion_text")),
+    ]
+    for title, text in sections:
+        draw.text((60, y), title, fill=(14, 116, 144), font=font_title)
+        y += 28
+        for line in re.findall(".{1,120}(?:\\s+|$)", text or "Chua co du lieu."):
+            draw.text((80, y), line.strip(), fill=(30, 41, 59), font=font)
+            y += 22
+        y += 18
+
+    draw.text((60, y), "Timeline chan doan", fill=(14, 116, 144), font=font_title)
+    y += 32
+    for item in report.get("timeline", [])[:12]:
+        row = (
+            f"Lan {item.get('diagnosis_index')}: {item.get('scan_date') or '-'} | "
+            f"{item.get('modality') or '-'} | {item.get('tumor_label') or '-'} | "
+            f"conf={_pct(item.get('classification_confidence'))} | "
+            f"risk={item.get('risk_score') if item.get('risk_score') is not None else '-'} | "
+            f"group={item.get('risk_group') or '-'}"
+        )
+        draw.text((80, y), row[:160], fill=(30, 41, 59), font=font)
+        y += 22
+        if y > 1660:
+            break
+
+    buffer = BytesIO()
+    page.save(buffer, format="PDF", resolution=150)
+    return buffer.getvalue()
 
 
 @router.post("/patients/", status_code=201)
@@ -97,13 +539,151 @@ def get_all_patients(db: Session = Depends(get_db)):
     return response
 
 
+@router.get("/patients/diagnosis-history", response_model=schemas.DiagnosisHistoryListResponse)
+def get_diagnosis_history_patients(
+    search: str | None = None,
+    risk_group: str | None = None,
+    sort: str = "latest_desc",
+    page: int = 1,
+    page_size: int = 10,
+    db: Session = Depends(get_db),
+):
+    patients = db.query(models.Patient).all()
+    items = []
+    query_text = (search or "").strip().lower()
+    risk_filter = (risk_group or "").strip().lower()
+
+    for patient in patients:
+        mri_count = (
+            db.query(models.Image)
+            .filter(
+                models.Image.patient_id == patient.id,
+                models.Image.modality.in_(["MRI", "MRI_SERIES"]),
+            )
+            .count()
+        )
+        if mri_count == 0:
+            continue
+
+        latest_image = (
+            db.query(models.Image)
+            .filter(
+                models.Image.patient_id == patient.id,
+                models.Image.modality.in_(["MRI", "MRI_SERIES"]),
+            )
+            .order_by(models.Image.scan_date.desc())
+            .first()
+        )
+        latest_analysis = (
+            db.query(models.AnalysisResult)
+            .filter(models.AnalysisResult.patient_id == patient.id)
+            .order_by(models.AnalysisResult.created_at.desc())
+            .first()
+        )
+
+        if query_text:
+            haystack = " ".join(
+                [
+                    str(patient.id),
+                    patient.name or "",
+                    patient.patient_external_id or "",
+                ]
+            ).lower()
+            if query_text not in haystack:
+                continue
+
+        latest_risk_group = latest_analysis.risk_group if latest_analysis else None
+        if risk_filter and risk_filter not in {"all", "tat_ca"}:
+            if risk_filter == "na":
+                if latest_risk_group:
+                    continue
+            elif (latest_risk_group or "").lower() != risk_filter:
+                continue
+
+        status, _data_hash = _history_report_status(db, patient)
+        items.append(
+            {
+                "patient_id": patient.id,
+                "patient_external_id": patient.patient_external_id,
+                "patient_name": patient.name,
+                "last_diagnosis_time": latest_image.scan_date if latest_image else None,
+                "latest_tumor_label": _display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None,
+                "latest_classification_confidence": latest_analysis.classification_confidence if latest_analysis else None,
+                "latest_risk_score": latest_analysis.risk_score if latest_analysis else None,
+                "latest_risk_group": latest_risk_group,
+                "diagnosis_count": mri_count,
+                "history_report_status": status,
+            }
+        )
+
+    reverse = sort not in {"latest_asc", "risk_asc", "name_asc"}
+    if sort in {"risk_desc", "risk_asc"}:
+        items.sort(key=lambda item: item["latest_risk_score"] if item["latest_risk_score"] is not None else -999999, reverse=reverse)
+    elif sort in {"name_desc", "name_asc"}:
+        items.sort(key=lambda item: (item["patient_name"] or "").lower(), reverse=reverse)
+    else:
+        items.sort(key=lambda item: item["last_diagnosis_time"] or datetime.datetime.min, reverse=reverse)
+
+    safe_page = max(1, page)
+    safe_size = min(max(1, page_size), 100)
+    total = len(items)
+    start = (safe_page - 1) * safe_size
+    end = start + safe_size
+    return {
+        "items": items[start:end],
+        "page": safe_page,
+        "page_size": safe_size,
+        "total": total,
+    }
+
+
+@router.get("/patients/{patient_id}/history-report", response_model=schemas.PatientHistoryReportResponse)
+def get_patient_history_report(patient_id: str, db: Session = Depends(get_db)):
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
+    return _make_history_report_response(db, patient, generate_if_missing=False)
+
+
+@router.post("/patients/{patient_id}/history-report/regenerate", response_model=schemas.PatientHistoryReportResponse)
+def regenerate_patient_history_report(patient_id: str, db: Session = Depends(get_db)):
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
+    return _make_history_report_response(db, patient, generate_if_missing=True)
+
+
+@router.get("/patients/{patient_id}/history-report/pdf")
+def download_patient_history_report_pdf(patient_id: str, db: Session = Depends(get_db)):
+    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
+
+    report = _make_history_report_response(db, patient, generate_if_missing=False)
+    if report["report_status"] != "ready":
+        raise HTTPException(status_code=409, detail="Bao cao lich su chua san sang. Hay sinh nhan xet AI truoc.")
+
+    pdf_bytes = _build_history_pdf(report)
+    filename = f"patient_history_report_{patient.id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/patients/{patient_id}")
 def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
     patient = crud.get_patient_by_id_or_external(db, patient_id)
     if not patient:
         raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
 
-    images = db.query(models.Image).filter(models.Image.patient_id == patient.id).all()
+    images = (
+        db.query(models.Image)
+        .filter(models.Image.patient_id == patient.id)
+        .order_by(models.Image.scan_date.desc())
+        .all()
+    )
     image_list = []
 
     for img in images:
@@ -142,6 +722,10 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
                 "latest_task_id": latest_task_id,
                 "latest_error_message": latest_error_message,
                 "has_analysis": image_analysis is not None,
+                "tumor_label": _display_diagnosis(image_analysis.tumor_label) if image_analysis else None,
+                "classification_confidence": image_analysis.classification_confidence if image_analysis else None,
+                "risk_score": image_analysis.risk_score if image_analysis else None,
+                "risk_group": image_analysis.risk_group if image_analysis else None,
                 "is_series": img.is_series,
                 "num_slices": img.num_slices,
                 "key_slice_index": img.key_slice_index,

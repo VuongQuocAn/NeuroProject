@@ -164,6 +164,31 @@ class AIExplanation(Base):
     patient = relationship("Patient")
 
 
+class PatientHistoryReport(Base):
+    """Cached narrative text for a patient's longitudinal diagnosis report."""
+    __tablename__ = "patient_history_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
+    report_type = Column(String, default="diagnosis_history", index=True)
+    status = Column(String, default="not_created")  # not_created | generating | ready | stale | failed
+    data_hash = Column(String, index=True, nullable=True)
+
+    summary_text = Column(Text, nullable=True)
+    classification_trend_text = Column(Text, nullable=True)
+    risk_trend_text = Column(Text, nullable=True)
+    conclusion_text = Column(Text, nullable=True)
+
+    llm_model = Column(String, nullable=True)
+    prompt_version = Column(String, nullable=True)
+    source_metadata = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    patient = relationship("Patient")
+
+
 class ExpertValidation(Base):
     """Lưu trữ điểm đánh giá tính hợp lý lâm sàng (Sanity Check) từ chuyên gia/bác sĩ."""
     __tablename__ = "expert_validations"

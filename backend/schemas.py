@@ -222,6 +222,62 @@ class ExpertValidationResponse(ExpertValidationCreate):
         from_attributes = True
 
 
+class DiagnosisHistoryPatientItem(BaseModel):
+    patient_id: int
+    patient_external_id: Optional[str] = None
+    patient_name: Optional[str] = None
+    last_diagnosis_time: Optional[datetime] = None
+    latest_tumor_label: Optional[str] = None
+    latest_classification_confidence: Optional[float] = None
+    latest_risk_score: Optional[float] = None
+    latest_risk_group: Optional[str] = None
+    diagnosis_count: int = 0
+    history_report_status: str = "not_created"
+
+
+class DiagnosisHistoryListResponse(BaseModel):
+    items: List[DiagnosisHistoryPatientItem]
+    page: int
+    page_size: int
+    total: int
+
+
+class PatientHistoryTimelineItem(BaseModel):
+    diagnosis_index: int
+    image_id: int
+    modality: Optional[str] = None
+    scan_date: Optional[datetime] = None
+    image_url: Optional[str] = None
+    ai_status: str = "ready"
+    tumor_label: Optional[str] = None
+    classification_confidence: Optional[float] = None
+    risk_score: Optional[float] = None
+    risk_group: Optional[str] = None
+    is_series: bool = False
+    num_slices: int = 1
+    key_slice_index: int = 0
+
+
+class PatientHistoryReportTexts(BaseModel):
+    summary_text: Optional[str] = None
+    classification_trend_text: Optional[str] = None
+    risk_trend_text: Optional[str] = None
+    conclusion_text: Optional[str] = None
+
+
+class PatientHistoryReportResponse(BaseModel):
+    patient: dict
+    summary: dict
+    timeline: List[PatientHistoryTimelineItem]
+    risk_trend: List[dict]
+    multimodal_data: dict
+    expert_validations: List[dict]
+    report_status: str
+    data_hash: Optional[str] = None
+    texts: PatientHistoryReportTexts
+    error_message: Optional[str] = None
+
+
 # ============================================================
 # AUTH SCHEMAS
 # ============================================================

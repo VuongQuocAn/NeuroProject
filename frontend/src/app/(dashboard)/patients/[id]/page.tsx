@@ -75,6 +75,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
     data: null,
   });
   const [reportLoadingId, setReportLoadingId] = useState<string | number | null>(null);
+  const [imagePage, setImagePage] = useState(1);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; imageId: string | number | null }>({
     open: false,
     imageId: null,
@@ -227,20 +228,14 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
 
   const { patient, images: rawImages = [], rna_uploaded, clinical_data } = data;
 
-  // Dedup và Lọc: Chỉ giữ MRI (MRI hoặc MRI_SERIES), lấy bản mới nhất
-  const images = Object.values(
-    rawImages
-      .filter((img: any) => img.modality.includes("MRI"))
-      .reduce((acc: Record<string, any>, img: any) => {
-        const key = img.modality;
-        if (!acc[key] || new Date(img.scan_date) > new Date(acc[key].scan_date)) {
-          acc[key] = img;
-        }
-        return acc;
-      }, {} as Record<string, any>)
-  ) as any[];
+  const images = rawImages
+    .filter((img: any) => img.modality === "MRI" || img.modality === "MRI_SERIES")
+    .sort((a: any, b: any) => new Date(b.scan_date).getTime() - new Date(a.scan_date).getTime());
+  const imagePageSize = 5;
+  const totalImagePages = Math.max(1, Math.ceil(images.length / imagePageSize));
+  const paginatedImages = images.slice((imagePage - 1) * imagePageSize, imagePage * imagePageSize);
 
-  const mriImages = rawImages.filter((img: any) => img.modality === "MRI" || img.modality === "MRI_SERIES");
+  const mriImages = images;
   const wsiImages = rawImages.filter((img: any) => img.modality === "WSI_SERIES");
 
   const totalMriFiles = mriImages.reduce((sum: number, img: any) => sum + (img.num_slices || 1), 0);
@@ -311,18 +306,21 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                     <th className="px-6 py-4">Mô thức chụp</th>
                     <th className="px-6 py-4">Thời gian</th>
                     <th className="px-6 py-4">Trạng thái AI</th>
+                    <th className="px-6 py-4">Loại u</th>
+                    <th className="px-6 py-4">Confidence</th>
+                    <th className="px-6 py-4">Risk</th>
                     <th className="px-6 py-4 text-right">Hành động</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/40">
                   {images.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-6 py-16 text-center text-slate-500">
+                      <td colSpan={7} className="px-6 py-16 text-center text-slate-500">
                         Chưa có tệp hình ảnh nào cho bệnh nhân này.
                       </td>
                     </tr>
                   ) : (
-                    images.map((img: any) => {
+                    paginatedImages.map((img: any) => {
                       const backendStatus = String(img.ai_status || "ready").toLowerCase();
                       const isBusy =
                         backendStatus === "pending" ||
@@ -366,6 +364,14 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                               {statusLabel}
                             </span>
                           </td>
+                          <td className="px-6 py-5 text-slate-300">{img.tumor_label || "—"}</td>
+                          <td className="px-6 py-5 text-slate-300">
+                            {img.classification_confidence != null ? `${(img.classification_confidence * 100).toFixed(2)}%` : "—"}
+                          </td>
+                          <td className="px-6 py-5 text-slate-300">
+                            <div>{img.risk_score != null ? Number(img.risk_score).toFixed(4) : "—"}</div>
+                            <div className="text-[10px] uppercase text-slate-500">{img.risk_group || "N/A"}</div>
+                          </td>
                           <td className="px-6 py-5 text-right">
                             <div className="flex items-center justify-end gap-3">
                               <button
@@ -388,7 +394,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                               <button
                                 onClick={() =>
                                   backendStatus === "done" || backendStatus === "failed"
-                                    ? router.push(`/results/${patient.external_id || patient.id}`)
+                                    ? handleOpenResult(img.image_id)
                                     : handleAnalyze(img)
                                 }
                                 disabled={isBusy}
@@ -406,6 +412,28 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                 </tbody>
               </table>
             </div>
+            {images.length > imagePageSize && (
+              <div className="flex items-center justify-between border-t border-slate-800 px-6 py-4">
+                <span className="text-xs text-slate-500">
+                  Hiển thị {paginatedImages.length} trong số {images.length} lần upload
+                </span>
+                <div className="flex items-center gap-2">
+                  {Array.from({ length: totalImagePages }, (_, index) => index + 1).map((pageNumber) => (
+                    <button
+                      key={pageNumber}
+                      onClick={() => setImagePage(pageNumber)}
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium ${
+                        imagePage === pageNumber
+                          ? "bg-teal-600 text-white"
+                          : "text-slate-400 hover:bg-slate-800"
+                      }`}
+                    >
+                      {pageNumber}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-xl">
