@@ -385,7 +385,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                             {img.classification_confidence != null ? `${(img.classification_confidence * 100).toFixed(2)}%` : "—"}
                           </td>
                           <td className="px-6 py-5">
-                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${img.review_status === "needs_review" ? "bg-amber-500/10 text-amber-300" : img.review_status === "corrected" ? "bg-violet-500/10 text-violet-300" : img.review_status === "confirmed" ? "bg-blue-500/10 text-blue-300" : "bg-slate-800 text-slate-400"}`}>
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold whitespace-nowrap ${img.review_status === "needs_review" ? "bg-amber-500/10 text-amber-300" : img.review_status === "corrected" ? "bg-violet-500/10 text-violet-300" : img.review_status === "confirmed" ? "bg-blue-500/10 text-blue-300" : "bg-slate-800 text-slate-400"}`}>
                               {reviewStatusText(img.review_status)}
                             </span>
                           </td>
