@@ -39,28 +39,30 @@ function formatScore(value?: number | null) {
 function statusLabel(status?: string) {
   switch (status) {
     case "ready":
-      return "Xem bÃ¡o cÃ¡o";
+      return "Xem báo cáo";
     case "generating":
-      return "Äang chuáº©n bá»‹";
+      return "Đang chuẩn bị";
     case "stale":
-      return "Cáº§n cáº­p nháº­t";
+      return "Cần cập nhật";
     case "failed":
-      return "Lá»—i bÃ¡o cÃ¡o";
+      return "Lỗi báo cáo";
     default:
-      return "ChÆ°a sáºµn sÃ ng";
+      return "Chưa sẵn sàng";
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function reviewLabel(item: any) {
-  if (item.review_required_count > 0) return `Cáº§n xem xÃ©t: ${item.review_required_count}`;
-  if (item.review_corrected_count > 0) return `ÄÃ£ chá»‰nh: ${item.review_corrected_count}`;
-  if (item.review_confirmed_count > 0) return "ÄÃ£ xÃ¡c nháº­n";
-  if (item.latest_review_status === "not_required") return "KhÃ´ng cáº§n review";
-  return "ChÆ°a cÃ³";
+  if (item.review_required_count > 0) return `Cần xem xét: ${item.review_required_count}`;
+  if (item.review_corrected_count > 0) return `Đã chỉnh: ${item.review_corrected_count}`;
+  if (item.review_confirmed_count > 0) return "Đã xác nhận";
+  if (item.latest_review_status === "not_required") return "Không cần review";
+  return "Chưa có";
 }
 
 export default function HistoryPage() {
   const router = useRouter();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -81,8 +83,9 @@ export default function HistoryPage() {
         sort,
       });
       setItems(res.data?.items || []);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || "KhÃ´ng thá»ƒ táº£i lá»‹ch sá»­ cháº©n Ä‘oÃ¡n.");
+      setError(err.response?.data?.detail || err.message || "Không thể tải lịch sử chẩn đoán.");
       setItems([]);
     } finally {
       setLoading(false);
@@ -91,6 +94,7 @@ export default function HistoryPage() {
 
   useEffect(() => {
     fetchHistory();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);
 
   useEffect(() => {
@@ -130,8 +134,9 @@ export default function HistoryPage() {
     try {
       await apiService.patients.regenerateHistoryReport(patientId);
       await fetchHistory();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || "KhÃ´ng thá»ƒ sinh bÃ¡o cÃ¡o lá»‹ch sá»­.");
+      setError(err.response?.data?.detail || err.message || "Không thể sinh báo cáo lịch sử.");
     } finally {
       setGeneratingId(null);
     }
@@ -140,9 +145,9 @@ export default function HistoryPage() {
   return (
     <div className="flex flex-col h-full space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white mb-2">Lá»‹ch sá»­ cháº©n Ä‘oÃ¡n bá»‡nh nhÃ¢n</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">Lịch sử chẩn đoán bệnh nhân</h1>
         <p className="text-sm text-slate-400">
-          Theo dÃµi káº¿t quáº£ gáº§n nháº¥t vÃ  má»Ÿ bÃ¡o cÃ¡o lá»‹ch sá»­ chi tiáº¿t cho tá»«ng bá»‡nh nhÃ¢n.
+          Theo dõi kết quả gần nhất và mở báo cáo lịch sử chi tiết cho từng bệnh nhân.
         </p>
       </div>
 
@@ -159,7 +164,7 @@ export default function HistoryPage() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="TÃ¬m theo tÃªn hoáº·c mÃ£ bá»‡nh nhÃ¢n..."
+              placeholder="Tìm theo tên hoặc mã bệnh nhân..."
               className="w-full rounded-xl border border-slate-700 bg-slate-950/60 py-2.5 pl-10 pr-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-500 focus:border-teal-500"
             />
           </div>
@@ -170,10 +175,10 @@ export default function HistoryPage() {
               onChange={(event) => setRiskGroup(event.target.value)}
               className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-teal-500"
             >
-              <option value="all">Táº¥t cáº£ nguy cÆ¡</option>
-              <option value="high">Nguy cÆ¡ cao</option>
-              <option value="low">Nguy cÆ¡ tháº¥p</option>
-              <option value="na">ChÆ°a cÃ³ tiÃªn lÆ°á»£ng</option>
+              <option value="all">Tất cả nguy cơ</option>
+              <option value="high">Nguy cơ cao</option>
+              <option value="low">Nguy cơ thấp</option>
+              <option value="na">Chưa có tiên lượng</option>
             </select>
 
             <select
@@ -181,11 +186,11 @@ export default function HistoryPage() {
               onChange={(event) => setReviewFilter(event.target.value)}
               className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-teal-500"
             >
-              <option value="all">Táº¥t cáº£ review</option>
-              <option value="needs_review">Cáº§n chuyÃªn gia</option>
-              <option value="confirmed">ÄÃ£ xÃ¡c nháº­n</option>
-              <option value="corrected">ÄÃ£ chá»‰nh nhÃ£n</option>
-              <option value="not_required">KhÃ´ng cáº§n review</option>
+              <option value="all">Tất cả review</option>
+              <option value="needs_review">Cần chuyên gia</option>
+              <option value="confirmed">Đã xác nhận</option>
+              <option value="corrected">Đã chỉnh nhãn</option>
+              <option value="not_required">Không cần review</option>
             </select>
 
             <select
@@ -193,12 +198,12 @@ export default function HistoryPage() {
               onChange={(event) => setSort(event.target.value)}
               className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-teal-500"
             >
-              <option value="latest_desc">Cháº©n Ä‘oÃ¡n má»›i nháº¥t</option>
-              <option value="latest_asc">Cháº©n Ä‘oÃ¡n cÅ© nháº¥t</option>
-              <option value="risk_desc">Risk score cao nháº¥t</option>
-              <option value="risk_asc">Risk score tháº¥p nháº¥t</option>
-              <option value="name_asc">TÃªn A-Z</option>
-              <option value="name_desc">TÃªn Z-A</option>
+              <option value="latest_desc">Chẩn đoán mới nhất</option>
+              <option value="latest_asc">Chẩn đoán cũ nhất</option>
+              <option value="risk_desc">Risk score cao nhất</option>
+              <option value="risk_asc">Risk score thấp nhất</option>
+              <option value="name_asc">Tên A-Z</option>
+              <option value="name_desc">Tên Z-A</option>
             </select>
 
             <button
@@ -206,7 +211,7 @@ export default function HistoryPage() {
               className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-800"
             >
               <RefreshCw className="h-4 w-4" />
-              LÃ m má»›i
+              Làm mới
             </button>
           </div>
         </div>
@@ -217,16 +222,16 @@ export default function HistoryPage() {
           <table className="w-full min-w-[1080px] text-left text-sm">
             <thead className="border-b border-slate-800 bg-slate-950/40 text-xs uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="px-5 py-4">MÃ£ bá»‡nh nhÃ¢n</th>
-                <th className="px-5 py-4">TÃªn bá»‡nh nhÃ¢n</th>
-                <th className="px-5 py-4">Cháº©n Ä‘oÃ¡n cuá»‘i</th>
-                <th className="px-5 py-4">NhÃ£n phÃ¢n loáº¡i</th>
+                <th className="px-5 py-4">Mã bệnh nhân</th>
+                <th className="px-5 py-4">Tên bệnh nhân</th>
+                <th className="px-5 py-4">Chẩn đoán cuối</th>
+                <th className="px-5 py-4">Nhãn phân loại</th>
                 <th className="px-5 py-4">Confidence</th>
                 <th className="px-5 py-4">Risk score</th>
                 <th className="px-5 py-4">Risk group</th>
                 <th className="px-5 py-4">Review</th>
-                <th className="px-5 py-4">Sá»‘ láº§n</th>
-                <th className="px-5 py-4 text-right">Thao tÃ¡c</th>
+                <th className="px-5 py-4">Số lần</th>
+                <th className="px-5 py-4 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
@@ -239,7 +244,7 @@ export default function HistoryPage() {
               ) : visibleItems.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-5 py-16 text-center text-slate-500">
-                    KhÃ´ng tÃ¬m tháº¥y bá»‡nh nhÃ¢n phÃ¹ há»£p.
+                    Không tìm thấy bệnh nhân phù hợp.
                   </td>
                 </tr>
               ) : (
@@ -252,7 +257,7 @@ export default function HistoryPage() {
                         {item.patient_external_id || item.patient_id}
                       </td>
                       <td className="px-5 py-4 font-semibold text-white">
-                        {item.patient_name || `Bá»‡nh nhÃ¢n ${item.patient_id}`}
+                        {item.patient_name || `Bệnh nhân ${item.patient_id}`}
                       </td>
                       <td className="px-5 py-4 text-slate-400">{formatDate(item.last_diagnosis_time)}</td>
                       <td className="px-5 py-4">{item.latest_final_tumor_label || item.latest_tumor_label || "--"}</td>
@@ -286,7 +291,7 @@ export default function HistoryPage() {
                               className="inline-flex items-center gap-2 rounded-xl border border-teal-500/30 px-3 py-2 text-xs font-bold text-teal-300 transition-colors hover:bg-teal-500/10 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
-                              {generating ? "Äang sinh" : "Sinh bÃ¡o cÃ¡o"}
+                              {generating ? "Đang sinh" : "Sinh báo cáo"}
                             </button>
                           )}
                           <button
@@ -318,8 +323,8 @@ export default function HistoryPage() {
 
       <div className="flex items-center justify-between border-t border-slate-800 pt-4">
         <span className="text-sm text-slate-500">
-          Hiá»ƒn thá»‹ <span className="font-semibold text-slate-300">{visibleItems.length}</span> trong sá»‘{" "}
-          <span className="font-semibold text-slate-300">{filteredItems.length}</span> bá»‡nh nhÃ¢n
+          Hiển thị <span className="font-semibold text-slate-300">{visibleItems.length}</span> trong số{" "}
+          <span className="font-semibold text-slate-300">{filteredItems.length}</span> bệnh nhân
         </span>
         <div className="flex items-center gap-2">
           {Array.from({ length: Math.min(totalPages, 6) }, (_, index) => index + 1).map((pageNumber) => (
@@ -340,4 +345,3 @@ export default function HistoryPage() {
     </div>
   );
 }
-
