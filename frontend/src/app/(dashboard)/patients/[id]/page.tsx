@@ -30,7 +30,7 @@ const LABEL_MAP: Record<string, string> = {
 };
 
 function displayTumorLabel(label?: string | null) {
-  if (!label) return "Chưa xác định";
+  if (!label) return "ChÆ°a xÃ¡c Ä‘á»‹nh";
   return LABEL_MAP[label] || label;
 }
 
@@ -40,12 +40,20 @@ function resolveImageUrl(url?: string | null) {
   return `${api.defaults.baseURL}${url}`;
 }
 
+function reviewStatusText(status?: string | null) {
+  if (status === "needs_review") return "Cáº§n xem xÃ©t";
+  if (status === "confirmed") return "ÄÃ£ xÃ¡c nháº­n";
+  if (status === "corrected") return "ÄÃ£ chá»‰nh nhÃ£n";
+  if (status === "not_required") return "KhÃ´ng báº¯t buá»™c";
+  return "ChÆ°a cÃ³";
+}
+
 function ClientDate({ date }: { date: string }) {
-  const [formatted, setFormatted] = useState<string>("—");
+  const [formatted, setFormatted] = useState<string>("â€”");
 
   useEffect(() => {
     if (date) {
-      // Backend stores UTC but may omit the 'Z' suffix — normalize
+      // Backend stores UTC but may omit the 'Z' suffix â€” normalize
       let isoDate = date;
       if (!isoDate.endsWith("Z") && !isoDate.includes("+") && !isoDate.includes("T00:00:00")) {
         isoDate = isoDate.endsWith("T") ? isoDate + "Z" : isoDate.includes("T") ? isoDate + "Z" : isoDate;
@@ -118,7 +126,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
       await fetchPatientData();
       router.push(`/results/${id}?imageId=${img.image_id}`);
     } catch (err: any) {
-      setActionError(err.message || "Không thể chạy pipeline MRI.");
+      setActionError(err.message || "KhÃ´ng thá»ƒ cháº¡y pipeline MRI.");
     } finally {
       setAnalyzingId(null);
     }
@@ -131,7 +139,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
       setDeleteDialog({ open: false, imageId: null });
       await fetchPatientData();
     } catch (err: any) {
-      setActionError(err.message || "Không thể xóa dòng kết quả MRI.");
+      setActionError(err.message || "KhÃ´ng thá»ƒ xÃ³a dÃ²ng káº¿t quáº£ MRI.");
     }
   };
 
@@ -151,7 +159,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
       }, 60000);
     } catch (err: any) {
       console.error("PDF Download Error:", err);
-      setActionError(err.response?.data?.detail || err.message || "Không thể tải báo cáo PDF.");
+      setActionError(err.response?.data?.detail || err.message || "KhÃ´ng thá»ƒ táº£i bÃ¡o cÃ¡o PDF.");
     } finally {
       setReportLoadingId(null);
     }
@@ -169,7 +177,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
       }
       await fetchPatientData();
     } catch (err: any) {
-      setActionError(err.message || "Không thể chạy multimodal prognosis.");
+      setActionError(err.message || "KhÃ´ng thá»ƒ cháº¡y multimodal prognosis.");
     } finally {
       setPrognosisLoading(false);
     }
@@ -180,7 +188,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
       <div className="flex items-center justify-center h-[calc(100vh-6rem)]">
         <div className="animate-pulse flex flex-col items-center">
           <div className="h-12 w-12 rounded-full border-4 border-t-teal-500 border-slate-700 animate-spin mb-4" />
-          <p className="text-slate-400">Đang tải hồ sơ bệnh nhân...</p>
+          <p className="text-slate-400">Äang táº£i há»“ sÆ¡ bá»‡nh nhÃ¢n...</p>
         </div>
       </div>
     );
@@ -189,9 +197,9 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
   if (!data || !data.patient) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-6rem)] gap-4">
-        <p className="text-slate-400 text-lg">Không tìm thấy hồ sơ cho bệnh nhân ID: {id}</p>
+        <p className="text-slate-400 text-lg">KhÃ´ng tÃ¬m tháº¥y há»“ sÆ¡ cho bá»‡nh nhÃ¢n ID: {id}</p>
         <button onClick={() => router.push("/patients")} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all">
-          Quay lại danh sách
+          Quay láº¡i danh sÃ¡ch
         </button>
       </div>
     );
@@ -218,7 +226,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
   return (
     <div className="flex flex-col space-y-6 pb-10">
       <button onClick={() => router.push("/patients")} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors w-fit group">
-        <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Quay lại danh sách
+        <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Quay láº¡i danh sÃ¡ch
       </button>
 
       {actionError && (
@@ -233,10 +241,10 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
             <User className="h-8 w-8" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white mb-1">{patient.name || `Bệnh nhân ${patient.external_id || patient.id}`}</h1>
+            <h1 className="text-2xl font-bold text-white mb-1">{patient.name || `Bá»‡nh nhÃ¢n ${patient.external_id || patient.id}`}</h1>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-slate-400 text-sm">
-              <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4 text-teal-500/70" /> {patient.age || "—"} tuổi</span>
-              <span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-teal-500/70" /> {patient.gender === "M" ? "Nam" : patient.gender === "F" ? "Nữ" : patient.gender || "—"}</span>
+              <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4 text-teal-500/70" /> {patient.age || "â€”"} tuá»•i</span>
+              <span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-teal-500/70" /> {patient.gender === "M" ? "Nam" : patient.gender === "F" ? "Ná»¯" : patient.gender || "â€”"}</span>
               <span className="bg-slate-800 px-3 py-1 rounded-full text-xs border border-slate-700 font-mono">ID: {patient.external_id || patient.id}</span>
             </div>
           </div>
@@ -244,18 +252,18 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => alert("Chức năng sửa thông tin đang được phát triển.")}
+            onClick={() => alert("Chá»©c nÄƒng sá»­a thÃ´ng tin Ä‘ang Ä‘Æ°á»£c phÃ¡t triá»ƒn.")}
             className="px-5 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-sm font-medium text-slate-200 transition-all active:scale-95 flex items-center gap-2"
           >
             <Edit3 className="h-4 w-4" />
-            Sửa thông tin
+            Sá»­a thÃ´ng tin
           </button>
           <button
             onClick={() => router.push(uploadHref("dicom"))}
             className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold shadow-lg shadow-teal-500/20 transition-all active:scale-95 flex items-center gap-2"
           >
             <PlusCircle className="h-4 w-4" />
-            Tải dữ liệu mới
+            Táº£i dá»¯ liá»‡u má»›i
           </button>
         </div>
       </div>
@@ -265,29 +273,31 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
             <div className="p-5 border-b border-slate-800 bg-[#151f32]/50 flex items-center justify-between">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-                <ImageIcon className="h-5 w-5 text-teal-500" /> Hồ sơ dữ liệu hình ảnh
+                <ImageIcon className="h-5 w-5 text-teal-500" /> Há»“ sÆ¡ dá»¯ liá»‡u hÃ¬nh áº£nh
               </h3>
-              <span className="text-xs font-bold text-slate-500 bg-slate-800 px-2.5 py-1 rounded-full">{images.length} tệp</span>
+              <span className="text-xs font-bold text-slate-500 bg-slate-800 px-2.5 py-1 rounded-full">{images.length} tá»‡p</span>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-400">
                 <thead className="bg-[#151f32]/30 text-xs font-semibold text-slate-500 border-b border-slate-800 uppercase tracking-tight">
                   <tr>
-                    <th className="px-6 py-4">Mô thức chụp</th>
-                    <th className="px-6 py-4">Thời gian</th>
-                    <th className="px-6 py-4">Trạng thái AI</th>
-                    <th className="px-6 py-4">Loại u</th>
+                    <th className="px-6 py-4">MÃ´ thá»©c chá»¥p</th>
+                    <th className="px-6 py-4">Thá»i gian</th>
+                    <th className="px-6 py-4">Tráº¡ng thÃ¡i AI</th>
+                    <th className="px-6 py-4">Phân lo?i AI</th>
                     <th className="px-6 py-4">Confidence</th>
+                    <th className="px-6 py-4">Review</th>
+                    <th className="px-6 py-4">K?t qu? cu?i</th>
                     <th className="px-6 py-4">Risk</th>
-                    <th className="px-6 py-4 text-right">Hành động</th>
+                    <th className="px-6 py-4 text-right">HÃ nh Ä‘á»™ng</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/40">
                   {images.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-16 text-center text-slate-500">
-                        Chưa có tệp hình ảnh nào cho bệnh nhân này.
+                      <td colSpan={9} className="px-6 py-16 text-center text-slate-500">
+                        ChÆ°a cÃ³ tá»‡p hÃ¬nh áº£nh nÃ o cho bá»‡nh nhÃ¢n nÃ y.
                       </td>
                     </tr>
                   ) : (
@@ -300,10 +310,10 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
 
                       const primaryLabel =
                         backendStatus === "done"
-                          ? "KẾT QUẢ"
+                          ? "Káº¾T QUáº¢"
                           : backendStatus === "failed"
-                            ? "XEM LỖI"
-                            : "PHÂN TÍCH MRI";
+                            ? "XEM Lá»–I"
+                            : "PHÃ‚N TÃCH MRI";
 
                       const statusLabel =
                         backendStatus === "done"
@@ -328,7 +338,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                                     })
                                   }
                                   className="h-9 w-9 overflow-hidden rounded-lg border border-teal-500/20 bg-teal-500/10"
-                                  title="Phóng to ảnh"
+                                  title="PhÃ³ng to áº£nh"
                                 >
                                   <img
                                     src={resolveImageUrl(img.image_url)}
@@ -355,12 +365,18 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                               {statusLabel}
                             </span>
                           </td>
-                          <td className="px-6 py-5 text-slate-300">{img.tumor_label || "—"}</td>
+                          <td className="px-6 py-5 text-slate-300">{img.ai_tumor_label || img.tumor_label || "â€”"}</td>
                           <td className="px-6 py-5 text-slate-300">
-                            {img.classification_confidence != null ? `${(img.classification_confidence * 100).toFixed(2)}%` : "—"}
+                            {img.classification_confidence != null ? `${(img.classification_confidence * 100).toFixed(2)}%` : "â€”"}
                           </td>
+                          <td className="px-6 py-5">
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${img.review_status === "needs_review" ? "bg-amber-500/10 text-amber-300" : img.review_status === "corrected" ? "bg-violet-500/10 text-violet-300" : img.review_status === "confirmed" ? "bg-blue-500/10 text-blue-300" : "bg-slate-800 text-slate-400"}`}>
+                              {reviewStatusText(img.review_status)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-5 text-slate-300">{img.final_tumor_label || img.tumor_label || "â€”"}</td>
                           <td className="px-6 py-5 text-slate-300">
-                            <div>{img.risk_score != null ? Number(img.risk_score).toFixed(4) : "—"}</div>
+                            <div>{img.risk_score != null ? Number(img.risk_score).toFixed(4) : "â€”"}</div>
                             <div className="text-[10px] uppercase text-slate-500">{img.risk_group || "N/A"}</div>
                           </td>
                           <td className="px-6 py-5 text-right">
@@ -369,7 +385,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                                 onClick={() => handleDownloadReport(img.image_id)}
                                 disabled={isBusy || backendStatus !== "done"}
                                 className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                title="Tải báo cáo PDF"
+                                title="Táº£i bÃ¡o cÃ¡o PDF"
                               >
                                 <Download className="h-4 w-4" />
                               </button>
@@ -377,7 +393,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                                 <button
                                   onClick={() => setDeleteDialog({ open: true, imageId: img.image_id })}
                                   className="p-2 rounded-lg border border-red-500/20 text-red-300 hover:bg-red-500/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                title="Xóa dòng kết quả"
+                                title="XÃ³a dÃ²ng káº¿t quáº£"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -406,7 +422,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
             {images.length > imagePageSize && (
               <div className="flex items-center justify-between border-t border-slate-800 px-6 py-4">
                 <span className="text-xs text-slate-500">
-                  Hiển thị {paginatedImages.length} trong số {images.length} lần upload
+                  Hiá»ƒn thá»‹ {paginatedImages.length} trong sá»‘ {images.length} láº§n upload
                 </span>
                 <div className="flex items-center gap-2">
                   {Array.from({ length: totalImagePages }, (_, index) => index + 1).map((pageNumber) => (
@@ -430,46 +446,46 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-xl">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-                <Activity className="h-5 w-5 text-emerald-500" /> Kết quả AI mới nhất
+                <Activity className="h-5 w-5 text-emerald-500" /> Káº¿t quáº£ AI má»›i nháº¥t
               </h3>
               <span className="text-xs text-slate-500">
-                {latestAnalysis?.created_at ? <ClientDate date={latestAnalysis.created_at} /> : "Chưa có"}
+                {latestAnalysis?.created_at ? <ClientDate date={latestAnalysis.created_at} /> : "ChÆ°a cÃ³"}
               </span>
             </div>
 
             {!latestAnalysis ? (
               <div className="rounded-2xl border border-slate-800 bg-slate-950/40 px-5 py-8 text-center text-slate-500">
-                Chưa có kết quả phân tích nào được lưu cho bệnh nhân này.
+                ChÆ°a cÃ³ káº¿t quáº£ phÃ¢n tÃ­ch nÃ o Ä‘Æ°á»£c lÆ°u cho bá»‡nh nhÃ¢n nÃ y.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
-                  <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Loại u</div>
+                  <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Loáº¡i u</div>
                   <div className="text-lg font-bold text-white">
                     {displayTumorLabel(latestAnalysis.tumor_label)}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
-                  <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Độ tin cậy</div>
+                  <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Äá»™ tin cáº­y</div>
                   <div className="text-lg font-bold text-white">
                     {latestAnalysis.classification_confidence != null
                       ? `${(latestAnalysis.classification_confidence * 100).toFixed(2)}%`
-                      : "—"}
+                      : "â€”"}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Risk score</div>
                   <div className="text-lg font-bold text-white">
-                    {latestAnalysis.risk_score != null ? latestAnalysis.risk_score.toFixed(4) : "—"}
+                    {latestAnalysis.risk_score != null ? latestAnalysis.risk_score.toFixed(4) : "â€”"}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Risk group</div>
                   <div className="text-lg font-bold text-white">
-                    {latestAnalysis.risk_group || "—"}
+                    {latestAnalysis.risk_group || "â€”"}
                   </div>
                 </div>
               </div>
@@ -481,19 +497,19 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
           {/* --- MRI Data Tab --- */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-5">
-              <ImageIcon className="h-5 w-5 text-teal-500" /> Dữ liệu MRI
+              <ImageIcon className="h-5 w-5 text-teal-500" /> Dá»¯ liá»‡u MRI
             </h3>
             <div className="p-5 rounded-2xl bg-teal-500/5 border border-teal-500/10 text-center">
               <p className="text-xs text-slate-400 mb-4 leading-relaxed">
                 {totalMriFiles > 0
-                  ? `MRI đã được upload: ${totalMriFiles} tệp MRI, sẵn sàng cho phân tích AI.`
-                  : "Chưa có dữ liệu MRI cho bệnh nhân này."}
+                  ? `MRI Ä‘Ã£ Ä‘Æ°á»£c upload: ${totalMriFiles} tá»‡p MRI, sáºµn sÃ ng cho phÃ¢n tÃ­ch AI.`
+                  : "ChÆ°a cÃ³ dá»¯ liá»‡u MRI cho bá»‡nh nhÃ¢n nÃ y."}
               </p>
               <button
                 onClick={() => router.push(uploadHref("dicom"))}
                 className="w-full py-2.5 rounded-xl bg-teal-600/20 hover:bg-teal-600 text-teal-400 hover:text-white text-xs font-bold transition-all border border-teal-600/30 flex items-center justify-center gap-2"
               >
-                {mriImages.length > 0 ? "CẬP NHẬT MRI" : "UPLOAD MRI"} <ExternalLink className="h-3.5 w-3.5" />
+                {mriImages.length > 0 ? "Cáº¬P NHáº¬T MRI" : "UPLOAD MRI"} <ExternalLink className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
@@ -501,19 +517,19 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
           {/* --- WSI Data Tab --- */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-5">
-              <ImageIcon className="h-5 w-5 text-amber-500" /> Dữ liệu WSI
+              <ImageIcon className="h-5 w-5 text-amber-500" /> Dá»¯ liá»‡u WSI
             </h3>
             <div className="p-5 rounded-2xl bg-amber-500/5 border border-amber-500/10 text-center">
               <p className="text-xs text-slate-400 mb-4 leading-relaxed">
                 {totalWsiFiles > 0
-                  ? `WSI đã được upload: ${totalWsiFiles} tệp WSI (mô bệnh học).`
-                  : "Chưa có dữ liệu WSI cho bệnh nhân này."}
+                  ? `WSI Ä‘Ã£ Ä‘Æ°á»£c upload: ${totalWsiFiles} tá»‡p WSI (mÃ´ bá»‡nh há»c).`
+                  : "ChÆ°a cÃ³ dá»¯ liá»‡u WSI cho bá»‡nh nhÃ¢n nÃ y."}
               </p>
               <button
                 onClick={() => router.push(uploadHref("wsi"))}
                 className="w-full py-2.5 rounded-xl bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white text-xs font-bold transition-all border border-amber-600/30 flex items-center justify-center gap-2"
               >
-                {wsiImages.length > 0 ? "CẬP NHẬT WSI" : "UPLOAD WSI"} <ExternalLink className="h-3.5 w-3.5" />
+                {wsiImages.length > 0 ? "Cáº¬P NHáº¬T WSI" : "UPLOAD WSI"} <ExternalLink className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
@@ -521,68 +537,68 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
           {/* --- RNA Data Tab --- */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-5">
-              <Dna className="h-5 w-5 text-indigo-500" /> Dữ liệu RNA
+              <Dna className="h-5 w-5 text-indigo-500" /> Dá»¯ liá»‡u RNA
             </h3>
             <div className="p-5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 text-center">
               <p className="text-xs text-slate-400 mb-4 leading-relaxed">
                 {rna_uploaded 
-                  ? `RNA đã được upload: ${data.rna_info?.filename || "Sẵn sàng"} và sẵn sàng cho multimodal prognosis.` 
-                  : "Chưa có RNA cho bệnh nhân này."}
+                  ? `RNA Ä‘Ã£ Ä‘Æ°á»£c upload: ${data.rna_info?.filename || "Sáºµn sÃ ng"} vÃ  sáºµn sÃ ng cho multimodal prognosis.` 
+                  : "ChÆ°a cÃ³ RNA cho bá»‡nh nhÃ¢n nÃ y."}
               </p>
               <button
                 onClick={() => router.push(uploadHref("rna"))}
                 className="w-full py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white text-xs font-bold transition-all border border-indigo-600/30 flex items-center justify-center gap-2"
               >
-                {rna_uploaded ? "CẬP NHẬT RNA" : "UPLOAD RNA"} <ExternalLink className="h-3.5 w-3.5" />
+                {rna_uploaded ? "Cáº¬P NHáº¬T RNA" : "UPLOAD RNA"} <ExternalLink className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-6">
-              <FileText className="h-5 w-5 text-amber-500" /> Chỉ số lâm sàng
+              <FileText className="h-5 w-5 text-amber-500" /> Chá»‰ sá»‘ lÃ¢m sÃ ng
             </h2>
             <div className="space-y-5">
               <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500">Chỉ số KI-67</span>
+                <span className="text-slate-500">Chá»‰ sá»‘ KI-67</span>
                 <span className="text-slate-200 font-bold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
                   {clinical_data?.ki67_index ?? "--"} %
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500">Bậc u (Grade)</span>
+                <span className="text-slate-500">Báº­c u (Grade)</span>
                 <span className="text-slate-200 font-bold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
                   WHO {clinical_data?.grade ?? "--"}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500">Đột biến IDH</span>
+                <span className="text-slate-500">Äá»™t biáº¿n IDH</span>
                 <span className={`font-bold px-2 py-0.5 rounded border ${clinical_data?.idh_mutation === "1" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : clinical_data?.idh_mutation === "0" ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-slate-800 text-slate-400 border-slate-700"}`}>
-                  {clinical_data?.idh_mutation === "1" ? "CÓ" : clinical_data?.idh_mutation === "0" ? "KHÔNG" : "—"}
+                  {clinical_data?.idh_mutation === "1" ? "CÃ“" : clinical_data?.idh_mutation === "0" ? "KHÃ”NG" : "â€”"}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-slate-500">MGMT Methylation</span>
                 <span className={`font-bold px-2 py-0.5 rounded border ${clinical_data?.mgmt_methylation === "1" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : clinical_data?.mgmt_methylation === "0" ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-slate-800 text-slate-400 border-slate-700"}`}>
-                  {clinical_data?.mgmt_methylation === "1" ? "CÓ" : clinical_data?.mgmt_methylation === "0" ? "KHÔNG" : "—"}
+                  {clinical_data?.mgmt_methylation === "1" ? "CÃ“" : clinical_data?.mgmt_methylation === "0" ? "KHÃ”NG" : "â€”"}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500">Ngày cập nhật</span>
-                <span className="text-slate-400">{clinical_data?.updated_at ? <ClientDate date={clinical_data.updated_at} /> : "Chưa có"}</span>
+                <span className="text-slate-500">NgÃ y cáº­p nháº­t</span>
+                <span className="text-slate-400">{clinical_data?.updated_at ? <ClientDate date={clinical_data.updated_at} /> : "ChÆ°a cÃ³"}</span>
               </div>
               <hr className="border-slate-800" />
               <button
                 onClick={() => router.push(uploadHref("clinical"))}
                 className="w-full py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold transition-all"
               >
-                CẬP NHẬT LÂM SÀNG
+                Cáº¬P NHáº¬T LÃ‚M SÃ€NG
               </button>
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-200 mb-4">Tiên lượng multimodal</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-200 mb-4">TiÃªn lÆ°á»£ng multimodal</h2>
             <div className="space-y-3">
               <button
                 onClick={handleRunPrognosis}
@@ -590,14 +606,14 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                 className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center justify-center gap-2"
               >
                 {prognosisLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                CHẠY MULTIMODAL PROGNOSIS
+                CHáº Y MULTIMODAL PROGNOSIS
               </button>
               <button
                 onClick={() => latestAnalysis?.image_id && handleDownloadReport(latestAnalysis.image_id)}
                 disabled={!latestAnalysis?.image_id}
                 className="w-full py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 disabled:opacity-50 text-slate-300 text-xs font-bold transition-all flex items-center justify-center gap-2"
               >
-                <FileText className="h-3.5 w-3.5" /> XUẤT BÁO CÁO PDF
+                <FileText className="h-3.5 w-3.5" /> XUáº¤T BÃO CÃO PDF
               </button>
             </div>
           </div>
@@ -609,23 +625,23 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
           <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl p-6">
             <div className="flex items-center gap-3 text-red-300 mb-4">
               <AlertTriangle className="h-5 w-5" />
-              <h3 className="text-lg font-bold">Xác nhận xóa</h3>
+              <h3 className="text-lg font-bold">XÃ¡c nháº­n xÃ³a</h3>
             </div>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Bạn có chắc muốn xóa dòng kết quả MRI này không? Thao tác này sẽ xóa ảnh MRI, kết quả AI và báo cáo liên quan khỏi hệ thống.
+              Báº¡n cÃ³ cháº¯c muá»‘n xÃ³a dÃ²ng káº¿t quáº£ MRI nÃ y khÃ´ng? Thao tÃ¡c nÃ y sáº½ xÃ³a áº£nh MRI, káº¿t quáº£ AI vÃ  bÃ¡o cÃ¡o liÃªn quan khá»i há»‡ thá»‘ng.
             </p>
             <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => setDeleteDialog({ open: false, imageId: null })}
                 className="px-4 py-2 rounded-xl border border-slate-700 text-slate-200 hover:bg-slate-800"
               >
-                Hủy
+                Há»§y
               </button>
               <button
                 onClick={() => deleteDialog.imageId != null && handleDeleteImage(deleteDialog.imageId)}
                 className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold"
               >
-                Xóa thật
+                XÃ³a tháº­t
               </button>
             </div>
           </div>
@@ -639,9 +655,9 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
               <div className="absolute inset-0 bg-teal-500/20 blur-xl rounded-full animate-pulse" />
               <Loader2 className="h-16 w-16 text-teal-400 animate-spin relative z-10" />
             </div>
-            <h3 className="text-xl font-bold mb-2">Đang khởi tạo báo cáo...</h3>
+            <h3 className="text-xl font-bold mb-2">Äang khá»Ÿi táº¡o bÃ¡o cÃ¡o...</h3>
             {/* <p className="text-slate-400 text-center text-sm leading-relaxed">
-              NeuroDiagnosis AI đang tổng hợp dữ liệu đa mô thức và kết xuất bản báo cáo độ phân giải cao. Quá trình này có thể mất vài giây.
+              NeuroDiagnosis AI Ä‘ang tá»•ng há»£p dá»¯ liá»‡u Ä‘a mÃ´ thá»©c vÃ  káº¿t xuáº¥t báº£n bÃ¡o cÃ¡o Ä‘á»™ phÃ¢n giáº£i cao. QuÃ¡ trÃ¬nh nÃ y cÃ³ thá»ƒ máº¥t vÃ i giÃ¢y.
             </p> */}
             <div className="mt-8 w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
               <div className="bg-teal-500 h-full w-full animate-progress-indefinite origin-left" />
@@ -653,5 +669,6 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
     </div>
   );
 }
+
 
 

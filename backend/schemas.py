@@ -108,6 +108,8 @@ class AnalysisResultResponse(BaseModel):
     # Phân loại u
     tumor_label: Optional[str]
     classification_confidence: Optional[float]
+    review_action: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
 
     # Hiệu suất phân đoạn (U-Net)
     dice_score: Optional[float]
@@ -222,6 +224,30 @@ class ExpertValidationResponse(ExpertValidationCreate):
         from_attributes = True
 
 
+class ClassificationReviewCreate(BaseModel):
+    expert_tumor_label: str
+    expert_comment: Optional[str] = None
+
+
+class ClassificationReviewResponse(BaseModel):
+    id: int
+    image_id: int
+    patient_id: int
+    user_id: Optional[int] = None
+    ai_tumor_label: Optional[str] = None
+    ai_confidence: Optional[float] = None
+    expert_tumor_label: str
+    expert_comment: Optional[str] = None
+    final_tumor_label: str
+    review_action: str
+    review_status: str
+    review_required: bool = False
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class DiagnosisHistoryPatientItem(BaseModel):
     patient_id: int
     patient_external_id: Optional[str] = None
@@ -229,6 +255,13 @@ class DiagnosisHistoryPatientItem(BaseModel):
     last_diagnosis_time: Optional[datetime] = None
     latest_tumor_label: Optional[str] = None
     latest_classification_confidence: Optional[float] = None
+    latest_ai_tumor_label: Optional[str] = None
+    latest_final_tumor_label: Optional[str] = None
+    latest_review_status: str = "not_available"
+    latest_review_required: bool = False
+    review_required_count: int = 0
+    review_corrected_count: int = 0
+    review_confirmed_count: int = 0
     latest_risk_score: Optional[float] = None
     latest_risk_group: Optional[str] = None
     diagnosis_count: int = 0
@@ -251,6 +284,21 @@ class PatientHistoryTimelineItem(BaseModel):
     ai_status: str = "ready"
     tumor_label: Optional[str] = None
     classification_confidence: Optional[float] = None
+    ai_tumor_label: Optional[str] = None
+    final_tumor_label: Optional[str] = None
+    expert_tumor_label: Optional[str] = None
+    review_status: str = "not_available"
+    review_required: bool = False
+    expert_comment: Optional[str] = None
+    ai_tumor_label: Optional[str] = None
+    ai_confidence: Optional[float] = None
+    final_tumor_label: Optional[str] = None
+    expert_tumor_label: Optional[str] = None
+    expert_comment: Optional[str] = None
+    review_required: bool = False
+    review_status: str = "not_available"
+    review_action: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
     risk_score: Optional[float] = None
     risk_group: Optional[str] = None
     is_series: bool = False

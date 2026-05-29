@@ -50,7 +50,24 @@ def run_migrations():
         """,
         "CREATE INDEX IF NOT EXISTS ix_patient_history_reports_patient_id ON patient_history_reports(patient_id);",
         "CREATE INDEX IF NOT EXISTS ix_patient_history_reports_report_type ON patient_history_reports(report_type);",
-        "CREATE INDEX IF NOT EXISTS ix_patient_history_reports_data_hash ON patient_history_reports(data_hash);"
+        "CREATE INDEX IF NOT EXISTS ix_patient_history_reports_data_hash ON patient_history_reports(data_hash);",
+        """
+        CREATE TABLE IF NOT EXISTS classification_reviews (
+            id SERIAL PRIMARY KEY,
+            image_id INTEGER REFERENCES images(id),
+            patient_id INTEGER REFERENCES patients(id),
+            user_id INTEGER REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            ai_tumor_label VARCHAR,
+            ai_confidence FLOAT,
+            expert_tumor_label VARCHAR NOT NULL,
+            expert_comment TEXT,
+            review_action VARCHAR NOT NULL
+        );
+        """,
+        "CREATE INDEX IF NOT EXISTS ix_classification_reviews_image_id ON classification_reviews(image_id);",
+        "CREATE INDEX IF NOT EXISTS ix_classification_reviews_patient_id ON classification_reviews(patient_id);",
+        "CREATE INDEX IF NOT EXISTS ix_classification_reviews_user_id ON classification_reviews(user_id);",
     ]
     with engine.begin() as conn:
         for query in migrations:

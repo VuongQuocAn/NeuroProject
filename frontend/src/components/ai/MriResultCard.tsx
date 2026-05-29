@@ -24,6 +24,15 @@ type MriResult = {
   bbox_confidence?: number | null;
   tumor_label?: string | null;
   classification_confidence?: number | null;
+  ai_tumor_label?: string | null;
+  ai_confidence?: number | null;
+  final_tumor_label?: string | null;
+  expert_tumor_label?: string | null;
+  expert_comment?: string | null;
+  review_required?: boolean;
+  review_status?: "not_available" | "not_required" | "needs_review" | "confirmed" | "corrected" | string;
+  review_action?: string | null;
+  reviewed_at?: string | null;
   class_probabilities?: number[] | null;
   bbox_overlay_data_url?: string | null;
   mask_data_url?: string | null;
@@ -81,9 +90,17 @@ function formatList(values?: number[] | null) {
   return values.map((value) => `${(value * 100).toFixed(2)}%`).join(", ");
 }
 
+function reviewStatusText(status?: string | null) {
+  if (status === "needs_review") return "Cáº§n chuyÃªn gia xem xÃ©t";
+  if (status === "confirmed") return "ÄÃ£ chuyÃªn gia xÃ¡c nháº­n";
+  if (status === "corrected") return "ÄÃ£ chuyÃªn gia chá»‰nh nhÃ£n";
+  if (status === "not_required") return "AI tin cáº­y cao";
+  return "ChÆ°a cÃ³ káº¿t quáº£ review";
+}
+
 
 export default function MriResultCard({
-  title = "Kết quả MRI AI",
+  title = "Káº¿t quáº£ MRI AI",
   result,
   loading = false,
   onClose,
@@ -103,6 +120,18 @@ export default function MriResultCard({
   const [explainingXai, setExplainingXai] = useState(false);
   const [explanationError, setExplanationError] = useState<string | null>(null);
   const explanationRequestRef = useRef<string | number | null>(null);
+  const [expertLabel, setExpertLabel] = useState(result?.final_tumor_label || result?.tumor_label || "Glioma");
+  const [expertComment, setExpertComment] = useState(result?.expert_comment || "");
+  const [reviewSaving, setReviewSaving] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewState, setReviewState] = useState({
+    final_tumor_label: result?.final_tumor_label,
+    expert_tumor_label: result?.expert_tumor_label,
+    expert_comment: result?.expert_comment,
+    review_required: result?.review_required,
+    review_status: result?.review_status,
+    review_action: result?.review_action,
+  });
 
   const getSliceUrl = (index: number) => {
     if (!result?.image_id) return "";
@@ -121,7 +150,7 @@ export default function MriResultCard({
     } catch (error: unknown) {
       const err = error as { response?: { data?: { detail?: string } }; message?: string };
       console.error("Failed to submit rating:", err.response?.data || err.message);
-      const detail = err.response?.data?.detail || "Lỗi khi lưu đánh giá. Vui lòng thử lại.";
+      const detail = err.response?.data?.detail || "Lá»—i khi lÆ°u Ä‘Ã¡nh giÃ¡. Vui lÃ²ng thá»­ láº¡i.";
       alert(detail);
     } finally {
       setSubmittingRating(false);
@@ -154,6 +183,53 @@ export default function MriResultCard({
         setExplainingXai(false);
       });
   }, [result?.image_id, result?.classification_xai_data_url, result?.classification_xai_explanation]);
+
+  useEffect(() => {
+    setExpertLabel(result?.final_tumor_label || result?.tumor_label || "Glioma");
+    setExpertComment(result?.expert_comment || "");
+    setReviewState({
+      final_tumor_label: result?.final_tumor_label,
+      expert_tumor_label: result?.expert_tumor_label,
+      expert_comment: result?.expert_comment,
+      review_required: result?.review_required,
+      review_status: result?.review_status,
+      review_action: result?.review_action,
+    });
+  }, [
+    result?.image_id,
+    result?.final_tumor_label,
+    result?.expert_tumor_label,
+    result?.expert_comment,
+    result?.review_required,
+    result?.review_status,
+    result?.review_action,
+    result?.tumor_label,
+  ]);
+
+  const submitClassificationReview = async () => {
+    if (!result?.image_id || reviewSaving) return;
+    setReviewSaving(true);
+    setReviewError(null);
+    try {
+      const response = await api.post(`/records/analysis/image/${result.image_id}/classification-review`, {
+        expert_tumor_label: expertLabel,
+        expert_comment: expertComment,
+      });
+      setReviewState({
+        final_tumor_label: response.data.final_tumor_label,
+        expert_tumor_label: response.data.expert_tumor_label,
+        expert_comment: response.data.expert_comment,
+        review_required: false,
+        review_status: response.data.review_status,
+        review_action: response.data.review_action,
+      });
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } }; message?: string };
+      setReviewError(err.response?.data?.detail || err.message || "KhÃ´ng thá»ƒ lÆ°u xÃ¡c nháº­n chuyÃªn gia.");
+    } finally {
+      setReviewSaving(false);
+    }
+  };
 
   const isFailed = result?.status === "failed";
   const isDone = result?.status === "done" || result?.status === "completed";
@@ -189,12 +265,12 @@ export default function MriResultCard({
             <h3 className="text-base font-bold text-white">{title}</h3>
             <p className="text-xs text-slate-400">
               {loading
-                ? "Đang tải kết quả từ backend..."
+                ? "Äang táº£i káº¿t quáº£ tá»« backend..."
                 : isFailed
-                  ? "Pipeline MRI đã trả về lỗi."
+                  ? "Pipeline MRI Ä‘Ã£ tráº£ vá» lá»—i."
                   : isDone
-                    ? "Pipeline MRI đã chạy xong và đã lưu kết quả."
-                    : "Trạng thái hiện tại của ảnh MRI."}
+                    ? "Pipeline MRI Ä‘Ã£ cháº¡y xong vÃ  Ä‘Ã£ lÆ°u káº¿t quáº£."
+                    : "Tráº¡ng thÃ¡i hiá»‡n táº¡i cá»§a áº£nh MRI."}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -202,7 +278,7 @@ export default function MriResultCard({
               <button
                 onClick={onClose}
                 className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
-                title="Đóng"
+                title="ÄÃ³ng"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -213,16 +289,16 @@ export default function MriResultCard({
         <div className={`p-5 ${compact ? "space-y-4" : "space-y-5"}`}>
           {loading ? (
             <div className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-8 text-center text-slate-400">
-              Đang tải kết quả...
+              Äang táº£i káº¿t quáº£...
             </div>
           ) : isFailed ? (
             <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-5">
               <div className="flex items-center gap-3 text-red-300 mb-3">
                 <AlertTriangle className="h-5 w-5" />
-                <span className="font-semibold">Pipeline MRI thất bại</span>
+                <span className="font-semibold">Pipeline MRI tháº¥t báº¡i</span>
               </div>
               <p className="text-sm text-red-200 whitespace-pre-wrap">
-                {result?.error_message || "Không có thông điệp lỗi chi tiết."}
+                {result?.error_message || "KhÃ´ng cÃ³ thÃ´ng Ä‘iá»‡p lá»—i chi tiáº¿t."}
               </p>
             </div>
           ) : (
@@ -231,7 +307,7 @@ export default function MriResultCard({
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 flex items-center gap-3 text-amber-200">
                   <Search className="h-5 w-5" />
                   <span className="text-sm font-medium">
-                    Không phát hiện khối u rõ ràng trên chuỗi MRI này. Kết luận dựa trên phân tích đa số.
+                    KhÃ´ng phÃ¡t hiá»‡n khá»‘i u rÃµ rÃ ng trÃªn chuá»—i MRI nÃ y. Káº¿t luáº­n dá»±a trÃªn phÃ¢n tÃ­ch Ä‘a sá»‘.
                   </span>
                 </div>
               )}
@@ -240,10 +316,10 @@ export default function MriResultCard({
                 <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="text-[11px] uppercase tracking-widest text-slate-500">
-                      Chuỗi ảnh MRI (Series Viewer) - {result.num_slices} lát cắt
+                      Chuá»—i áº£nh MRI (Series Viewer) - {result.num_slices} lÃ¡t cáº¯t
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400">Lát cắt: {currentSlice + 1} / {result.num_slices}</span>
+                      <span className="text-xs text-slate-400">LÃ¡t cáº¯t: {currentSlice + 1} / {result.num_slices}</span>
                       {currentSlice === result.key_slice_index && (
                         <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-400 text-[10px] font-bold border border-teal-500/30 uppercase">Key Slice</span>
                       )}
@@ -283,7 +359,7 @@ export default function MriResultCard({
                       onClick={() => setCurrentSlice(result.key_slice_index || 0)}
                       className="text-[11px] font-bold text-teal-500 hover:text-teal-400 disabled:opacity-30 flex items-center gap-1 uppercase"
                     >
-                      <RefreshCw className="h-3 w-3" /> Về lát cắt chính (Key Slice)
+                      <RefreshCw className="h-3 w-3" /> Vá» lÃ¡t cáº¯t chÃ­nh (Key Slice)
                     </button>
                   </div>
                 </div>
@@ -306,13 +382,13 @@ export default function MriResultCard({
                         alt={panel.alt}
                         className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950"
                       />
-                      <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                      <div className="mt-3 text-xs text-teal-400">Nháº¥n Ä‘á»ƒ xem áº£nh lá»›n hÆ¡n</div>
                     </button>
                   ))}
                 </div>
               ) : (
                 <div className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-8 text-center text-slate-500">
-                  Chưa có ảnh kết quả overlay để hiển thị.
+                  ChÆ°a cÃ³ áº£nh káº¿t quáº£ overlay Ä‘á»ƒ hiá»ƒn thá»‹.
                 </div>
               )}
 
@@ -359,6 +435,65 @@ export default function MriResultCard({
                 </div>
               </div>
 
+              {result?.tumor_label && (
+                <div
+                  className={`rounded-xl border p-5 ${
+                    reviewState.review_status === "needs_review"
+                      ? "border-amber-500/30 bg-amber-500/10"
+                      : reviewState.review_status === "corrected"
+                        ? "border-violet-500/30 bg-violet-500/10"
+                        : "border-slate-800 bg-slate-950/50"
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-widest text-slate-500">Review phÃ¢n loáº¡i</div>
+                      <div className="mt-2 text-sm text-slate-300">
+                        AI ban Ä‘áº§u: <span className="font-semibold text-white">{result.ai_tumor_label || result.tumor_label}</span>
+                        {" "}({formatConfidence(result.ai_confidence ?? result.classification_confidence)})
+                      </div>
+                      <div className="mt-1 text-sm text-slate-300">
+                        Káº¿t quáº£ cuá»‘i: <span className="font-semibold text-white">{reviewState.final_tumor_label || result.final_tumor_label || result.tumor_label}</span>
+                      </div>
+                      {reviewState.expert_comment && (
+                        <div className="mt-2 text-sm text-slate-400">Ghi chÃº chuyÃªn gia: {reviewState.expert_comment}</div>
+                      )}
+                    </div>
+                    <span className="w-fit rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200">
+                      {reviewStatusText(reviewState.review_status)}
+                    </span>
+                  </div>
+
+                  {(reviewState.review_status === "needs_review" || reviewState.review_status === "corrected" || reviewState.review_status === "confirmed") && (
+                    <div className="mt-5 grid gap-3 md:grid-cols-[220px_1fr_auto]">
+                      <select
+                        value={expertLabel}
+                        onChange={(event) => setExpertLabel(event.target.value)}
+                        className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-teal-500"
+                      >
+                        <option value="Glioma">Glioma</option>
+                        <option value="Meningioma">Meningioma</option>
+                        <option value="Pituitary tumor">Pituitary tumor</option>
+                      </select>
+                      <input
+                        value={expertComment}
+                        onChange={(event) => setExpertComment(event.target.value)}
+                        placeholder="Ghi chÃº chuyÃªn gia..."
+                        className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-teal-500"
+                      />
+                      <button
+                        onClick={submitClassificationReview}
+                        disabled={reviewSaving}
+                        className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-50"
+                      >
+                        {reviewSaving ? "Äang lÆ°u..." : "XÃ¡c nháº­n"}
+                      </button>
+                    </div>
+                  )}
+                  {reviewError && <div className="mt-3 text-sm text-red-300">{reviewError}</div>}
+                </div>
+              )}
+
               {(result?.detection_xai_data_url || result?.segmentation_xai_data_url || result?.classification_xai_data_url || explainingXai || explanationError || aiExplanation) && (
                 <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5 space-y-5">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 flex items-center gap-2">
@@ -403,11 +538,11 @@ export default function MriResultCard({
 
                   {(explainingXai || explanationError || aiExplanation) && (
                     <div className="p-4 bg-teal-500/10 rounded-lg border border-teal-500/20">
-                      <div className="text-[11px] uppercase tracking-widest text-teal-500 font-bold mb-2">Giải thích</div>
+                      <div className="text-[11px] uppercase tracking-widest text-teal-500 font-bold mb-2">Giáº£i thÃ­ch</div>
                       {explainingXai ? (
                         <div className="flex items-center gap-2 text-sm text-slate-200">
                           <Loader2 className="h-4 w-4 animate-spin text-teal-400" />
-                          Đang sinh giải thích từ heatmap Finer-CAM, metadata và RAG...
+                          Äang sinh giáº£i thÃ­ch tá»« heatmap Finer-CAM, metadata vÃ  RAG...
                         </div>
                       ) : explanationError ? (
                         <p className="text-sm text-amber-200 leading-relaxed whitespace-pre-wrap">{explanationError}</p>
@@ -459,7 +594,7 @@ export default function MriResultCard({
                           >
                             <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM</div>
                             <img src={result.multimodal_gradcam_heatmap_data_url || multimodalRiskXaiUrl || undefined} alt="Multimodal Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
-                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                            <div className="mt-3 text-xs text-teal-400">Nháº¥n Ä‘á»ƒ xem áº£nh lá»›n hÆ¡n</div>
                           </button>
                         )}
                         {result.multimodal_gradcam_plus_heatmap_data_url && (
@@ -470,7 +605,7 @@ export default function MriResultCard({
                           >
                             <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM++</div>
                             <img src={result.multimodal_gradcam_plus_heatmap_data_url} alt="Multimodal Grad-CAM++" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
-                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                            <div className="mt-3 text-xs text-teal-400">Nháº¥n Ä‘á»ƒ xem áº£nh lá»›n hÆ¡n</div>
                           </button>
                         )}
                         {result.multimodal_layercam_heatmap_data_url && (
@@ -481,7 +616,7 @@ export default function MriResultCard({
                           >
                             <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Layer-CAM</div>
                             <img src={result.multimodal_layercam_heatmap_data_url} alt="Multimodal Layer-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
-                            <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                            <div className="mt-3 text-xs text-teal-400">Nháº¥n Ä‘á»ƒ xem áº£nh lá»›n hÆ¡n</div>
                           </button>
                         )}
                       </div>
@@ -490,16 +625,16 @@ export default function MriResultCard({
 
                   {multimodalExplanation && (
                     <div className="p-4 bg-teal-500/10 rounded-lg border border-teal-500/20 mb-6">
-                      <div className="text-[11px] uppercase tracking-widest text-teal-500 font-bold mb-2">Giải thích lâm sàng từ Multimodal Prognosis</div>
+                      <div className="text-[11px] uppercase tracking-widest text-teal-500 font-bold mb-2">Giáº£i thÃ­ch lÃ¢m sÃ ng tá»« Multimodal Prognosis</div>
                       <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{multimodalExplanation}</p>
                     </div>
                   )}
 
-                  {/* XAI Heatmaps — hiển thị cả 3 loại CAM cho MRI Classification */}
+                  {/* XAI Heatmaps â€” hiá»ƒn thá»‹ cáº£ 3 loáº¡i CAM cho MRI Classification */}
                   {(result.gradcam_heatmap_data_url || result.gradcam_plus_heatmap_data_url || result.layercam_heatmap_data_url) && (
                     <div className="space-y-4">
                       <div>
-                        <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Bản đồ nhiệt XAI Phân loại (Heatmap)</div>
+                        <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Báº£n Ä‘á»“ nhiá»‡t XAI PhÃ¢n loáº¡i (Heatmap)</div>
                         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
                           {result.gradcam_heatmap_data_url && (
                             <button
@@ -509,7 +644,7 @@ export default function MriResultCard({
                             >
                               <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM</div>
                               <img src={result.gradcam_heatmap_data_url} alt="Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
-                              <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                              <div className="mt-3 text-xs text-teal-400">Nháº¥n Ä‘á»ƒ xem áº£nh lá»›n hÆ¡n</div>
                             </button>
                           )}
                           {result.gradcam_plus_heatmap_data_url && (
@@ -520,7 +655,7 @@ export default function MriResultCard({
                             >
                               <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM++</div>
                               <img src={result.gradcam_plus_heatmap_data_url} alt="Grad-CAM++" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
-                              <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                              <div className="mt-3 text-xs text-teal-400">Nháº¥n Ä‘á»ƒ xem áº£nh lá»›n hÆ¡n</div>
                             </button>
                           )}
                           {result.layercam_heatmap_data_url && (
@@ -531,7 +666,7 @@ export default function MriResultCard({
                             >
                               <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Layer-CAM</div>
                               <img src={result.layercam_heatmap_data_url} alt="Layer-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
-                              <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
+                              <div className="mt-3 text-xs text-teal-400">Nháº¥n Ä‘á»ƒ xem áº£nh lá»›n hÆ¡n</div>
                             </button>
                           )}
                         </div>
@@ -539,7 +674,7 @@ export default function MriResultCard({
                       
                       {/* Clinical Plausibility Score */}
                       <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                        <div className="text-[11px] text-slate-400 mb-1">Đánh giá tính hợp lý lâm sàng (Sanity Check):</div>
+                        <div className="text-[11px] text-slate-400 mb-1">ÄÃ¡nh giÃ¡ tÃ­nh há»£p lÃ½ lÃ¢m sÃ ng (Sanity Check):</div>
                         <div className="flex gap-1 items-center">
                           {[1, 2, 3, 4, 5].map((star) => (
                             <button
@@ -552,10 +687,10 @@ export default function MriResultCard({
                                   : "bg-slate-700 text-slate-400 hover:bg-slate-600"
                               }`}
                             >
-                              ★
+                              â˜…
                             </button>
                           ))}
-                          <span className="text-xs text-slate-500 ml-2">{rating ? "Đã ghi nhận" : "Chưa đánh giá"}</span>
+                          <span className="text-xs text-slate-500 ml-2">{rating ? "ÄÃ£ ghi nháº­n" : "ChÆ°a Ä‘Ã¡nh giÃ¡"}</span>
                         </div>
                       </div>
                     </div>
@@ -564,7 +699,7 @@ export default function MriResultCard({
                   {/* Survival Curve (inline SVG) */}
                   {result.survival_curve_data && result.survival_curve_data.length > 1 && (
                     <div>
-                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Đường cong sống sót (Kaplan-Meier)</div>
+                      <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">ÄÆ°á»ng cong sá»‘ng sÃ³t (Kaplan-Meier)</div>
                       <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-800">
                         <svg viewBox="0 0 320 180" className="w-full h-auto">
                           {/* Grid */}
@@ -655,8 +790,8 @@ export default function MriResultCard({
                   <CheckCircle2 className="h-5 w-5" />
                   <span className="text-sm font-medium">
                     {result?.risk_score != null
-                      ? "Kết quả MRI & Multimodal Prognosis đã sẵn sàng."
-                      : "Kết quả MRI đã sẵn sàng để xem, tải báo cáo hoặc xóa."}
+                      ? "Káº¿t quáº£ MRI & Multimodal Prognosis Ä‘Ã£ sáºµn sÃ ng."
+                      : "Káº¿t quáº£ MRI Ä‘Ã£ sáºµn sÃ ng Ä‘á»ƒ xem, táº£i bÃ¡o cÃ¡o hoáº·c xÃ³a."}
                   </span>
                 </div>
               )}
@@ -669,7 +804,7 @@ export default function MriResultCard({
                 onClick={onRetry}
                 className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-teal-600 text-white text-sm font-semibold transition-all flex items-center gap-2"
               >
-                <RefreshCw className="h-4 w-4" /> Chạy lại MRI
+                <RefreshCw className="h-4 w-4" /> Cháº¡y láº¡i MRI
               </button>
             )}
             {onDownload && !isFailed && (
@@ -677,7 +812,7 @@ export default function MriResultCard({
                 onClick={onDownload}
                 className="px-4 py-2 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-200 text-sm font-semibold transition-all flex items-center gap-2"
               >
-                <Download className="h-4 w-4" /> Tải báo cáo PDF
+                <Download className="h-4 w-4" /> Táº£i bÃ¡o cÃ¡o PDF
               </button>
             )}
             {onExtraAction && extraActionLabel && (
@@ -693,7 +828,7 @@ export default function MriResultCard({
                 onClick={onDelete}
                 className="px-4 py-2 rounded-xl border border-red-500/20 hover:bg-red-500/10 text-red-300 text-sm font-semibold transition-all flex items-center gap-2"
               >
-                <Trash2 className="h-4 w-4" /> Xóa dòng kết quả
+                <Trash2 className="h-4 w-4" /> XÃ³a dÃ²ng káº¿t quáº£
               </button>
             )}
           </div>

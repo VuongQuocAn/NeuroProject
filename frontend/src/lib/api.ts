@@ -99,6 +99,12 @@ export const apiService = {
     explainClassificationXai: async (imageId: string | number) => {
       return api.post(`/records/analysis/image/${imageId}/explain/classification`);
     },
+    submitClassificationReview: async (
+      imageId: string | number,
+      payload: { expert_tumor_label: string; expert_comment?: string }
+    ) => {
+      return api.post(`/records/analysis/image/${imageId}/classification-review`, payload);
+    },
     downloadReport: async (imageId: string | number) => {
       return api.get(`/records/analysis/image/${imageId}/report`, {
         responseType: "blob",

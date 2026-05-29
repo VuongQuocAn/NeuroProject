@@ -18,6 +18,7 @@ import schemas
 from database import get_db
 from services.gemini_service import GeminiXaiExplanationService
 from services.rag_service import get_xai_rag_service
+from review_utils import classification_review_state
 from utils import get_current_user, minio_client
 
 router = APIRouter(tags=["Analysis & XAI"])
@@ -1083,6 +1084,14 @@ def get_patient_full_analysis(
         result_payload.get("classification_xai_explanation") or ""
     ) or None
     xai_metadata = result_payload.get("xai_metadata") or {}
+    ai_tumor_label = _display_tumor_label(
+        result_payload.get("tumor_label") or (analysis.tumor_label if analysis else None),
+        no_tumor_detected=no_tumor_detected,
+    )
+    ai_confidence = result_payload.get("classification_confidence")
+    if ai_confidence is None and analysis:
+        ai_confidence = analysis.classification_confidence
+    review_state = classification_review_state(db, image_id, ai_tumor_label, ai_confidence)
 
     return schemas.ImageAIResultResponse(
         image_id=image_id,
@@ -1093,13 +1102,17 @@ def get_patient_full_analysis(
         error_message=error_message,
         bbox=bbox,
         bbox_confidence=result_payload.get("bbox_confidence"),
-        tumor_label=_display_tumor_label(
-            result_payload.get("tumor_label") or (analysis.tumor_label if analysis else None),
-            no_tumor_detected=no_tumor_detected,
-        ),
-        classification_confidence=result_payload.get("classification_confidence")
-            if result_payload.get("classification_confidence") is not None
-            else (analysis.classification_confidence if analysis else None),
+        tumor_label=ai_tumor_label,
+        classification_confidence=ai_confidence,
+        ai_tumor_label=review_state["ai_tumor_label"],
+        ai_confidence=review_state["ai_confidence"],
+        final_tumor_label=review_state["final_tumor_label"],
+        expert_tumor_label=review_state["expert_tumor_label"],
+        expert_comment=review_state["expert_comment"],
+        review_required=review_state["review_required"],
+        review_status=review_state["review_status"],
+        review_action=review_state["review_action"],
+        reviewed_at=review_state["reviewed_at"],
         class_probabilities=result_payload.get("class_probabilities"),
         bbox_overlay_data_url=_stored_image_to_data_url(result_payload.get("bbox_image_path")),
         mask_data_url=_stored_image_to_data_url(result_payload.get("seg_mask_path")),
@@ -1205,6 +1218,14 @@ def get_image_analysis_detail(
         result_payload.get("classification_xai_explanation") or ""
     ) or None
     xai_metadata = result_payload.get("xai_metadata") or {}
+    ai_tumor_label = _display_tumor_label(
+        result_payload.get("tumor_label") or (analysis.tumor_label if analysis else None),
+        no_tumor_detected=no_tumor_detected,
+    )
+    ai_confidence = result_payload.get("classification_confidence")
+    if ai_confidence is None and analysis:
+        ai_confidence = analysis.classification_confidence
+    review_state = classification_review_state(db, image_id, ai_tumor_label, ai_confidence)
 
     return schemas.ImageAIResultResponse(
         image_id=image_id,
@@ -1215,13 +1236,17 @@ def get_image_analysis_detail(
         error_message=error_message,
         bbox=bbox,
         bbox_confidence=result_payload.get("bbox_confidence"),
-        tumor_label=_display_tumor_label(
-            result_payload.get("tumor_label") or (analysis.tumor_label if analysis else None),
-            no_tumor_detected=no_tumor_detected,
-        ),
-        classification_confidence=result_payload.get("classification_confidence")
-        if result_payload.get("classification_confidence") is not None
-        else (analysis.classification_confidence if analysis else None),
+        tumor_label=ai_tumor_label,
+        classification_confidence=ai_confidence,
+        ai_tumor_label=review_state["ai_tumor_label"],
+        ai_confidence=review_state["ai_confidence"],
+        final_tumor_label=review_state["final_tumor_label"],
+        expert_tumor_label=review_state["expert_tumor_label"],
+        expert_comment=review_state["expert_comment"],
+        review_required=review_state["review_required"],
+        review_status=review_state["review_status"],
+        review_action=review_state["review_action"],
+        reviewed_at=review_state["reviewed_at"],
         class_probabilities=result_payload.get("class_probabilities"),
         bbox_overlay_data_url=_stored_image_to_data_url(result_payload.get("bbox_image_path")),
         mask_data_url=_stored_image_to_data_url(result_payload.get("seg_mask_path")),
@@ -1652,6 +1677,70 @@ def submit_expert_validation(
     db.commit()
     db.refresh(validation)
     return validation
+
+
+@router.post("/records/analysis/image/{image_id}/classification-review", response_model=schemas.ClassificationReviewResponse)
+def submit_classification_review(
+    image_id: int,
+    payload: schemas.ClassificationReviewCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    if not image:
+        raise HTTPException(status_code=404, detail="Khong tim thay anh MRI")
+
+    analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.image_id == image_id).first()
+    latest_task = _get_latest_mri_task(db, image_id)
+    result_payload = latest_task.result if latest_task and latest_task.result else {}
+    ai_label = _display_tumor_label(
+        result_payload.get("tumor_label") or (analysis.tumor_label if analysis else None),
+        no_tumor_detected=bool(result_payload.get("no_tumor_detected")),
+    )
+    ai_confidence = result_payload.get("classification_confidence")
+    if ai_confidence is None and analysis:
+        ai_confidence = analysis.classification_confidence
+
+    expert_label = (payload.expert_tumor_label or "").strip()
+    if not expert_label:
+        raise HTTPException(status_code=400, detail="Nhan chuyen gia khong duoc de trong")
+
+    review_action = "confirmed" if ai_label and expert_label.lower() == ai_label.lower() else "corrected"
+    user_id = None
+    try:
+        user_id = int(current_user.get("sub"))
+    except Exception:
+        user_id = None
+
+    review = models.ClassificationReview(
+        image_id=image_id,
+        patient_id=image.patient_id,
+        user_id=user_id,
+        ai_tumor_label=ai_label,
+        ai_confidence=ai_confidence,
+        expert_tumor_label=expert_label,
+        expert_comment=payload.expert_comment,
+        review_action=review_action,
+    )
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+
+    return {
+        "id": review.id,
+        "image_id": review.image_id,
+        "patient_id": review.patient_id,
+        "user_id": review.user_id,
+        "ai_tumor_label": review.ai_tumor_label,
+        "ai_confidence": review.ai_confidence,
+        "expert_tumor_label": review.expert_tumor_label,
+        "expert_comment": review.expert_comment,
+        "final_tumor_label": review.expert_tumor_label,
+        "review_action": review.review_action,
+        "review_status": review.review_action,
+        "review_required": False,
+        "created_at": review.created_at,
+    }
 
 
 @router.get("/records/dashboard/stats")

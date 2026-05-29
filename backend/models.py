@@ -209,6 +209,27 @@ class ExpertValidation(Base):
     user = relationship("User")
 
 
+class ClassificationReview(Base):
+    """Stores expert confirmation/correction for low-confidence classification results."""
+    __tablename__ = "classification_reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    image_id = Column(Integer, ForeignKey("images.id"), index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    ai_tumor_label = Column(String, nullable=True)
+    ai_confidence = Column(Float, nullable=True)
+    expert_tumor_label = Column(String, nullable=False)
+    expert_comment = Column(Text, nullable=True)
+    review_action = Column(String, nullable=False)  # confirmed | corrected
+
+    image = relationship("Image")
+    patient = relationship("Patient")
+    user = relationship("User")
+
+
 # --- NHÓM AUTH & ADMIN ---
 
 class User(Base):

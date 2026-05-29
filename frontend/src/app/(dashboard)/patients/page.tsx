@@ -252,6 +252,14 @@ export default function PatientsPage() {
     );
   };
 
+  const reviewText = (status?: string) => {
+    if (status === "needs_review") return "Cần chuyên gia xem xét";
+    if (status === "confirmed") return "Đã chuyên gia xác nhận";
+    if (status === "corrected") return "Đã chỉnh nhãn";
+    if (status === "not_required") return "AI tin cậy cao";
+    return "Chưa chẩn đoán";
+  };
+
   return (
     <div className="flex flex-col h-full space-y-6">
       
@@ -328,7 +336,20 @@ export default function PatientsPage() {
                   <td className="px-6 py-4 text-slate-300">{p.age ?? '—'} / {p.gender ?? '—'}</td>
                   <td className="px-6 py-4 text-slate-400">{p.lastVisit ? (() => { let d = p.lastVisit; if (d && !d.endsWith("Z") && !d.includes("+") && d.includes("T")) d += "Z"; return new Date(d).toLocaleDateString("vi-VN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }); })() : '—'}</td>
                   <td className="px-6 py-4">
-                    {renderStatusBadge(p.diagnosis)}
+                    <div className="flex flex-col items-start gap-1">
+                      {renderStatusBadge(p.diagnosis)}
+                      <span
+                        className={`text-[11px] font-semibold ${
+                          p.reviewStatus === "needs_review"
+                            ? "text-amber-300"
+                            : p.reviewStatus === "corrected"
+                              ? "text-violet-300"
+                              : "text-slate-500"
+                        }`}
+                      >
+                        {reviewText(p.reviewStatus)}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     {renderRiskBar(p.riskScore ?? 0)}

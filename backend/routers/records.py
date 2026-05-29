@@ -15,6 +15,7 @@ import crud
 import models
 import schemas
 from database import get_db
+from review_utils import classification_review_state
 from utils import minio_client
 
 router = APIRouter(prefix="/records", tags=["Records"])
@@ -134,6 +135,9 @@ def _build_patient_history_payload(db: Session, patient: models.Patient) -> dict
         status = "done" if analysis else "ready"
         if latest_task:
             status = latest_task.status
+        ai_label = _display_diagnosis(analysis.tumor_label) if analysis else None
+        ai_confidence = analysis.classification_confidence if analysis else None
+        review_state = classification_review_state(db, img.id, ai_label, ai_confidence)
 
         timeline.append(
             {
@@ -143,8 +147,14 @@ def _build_patient_history_payload(db: Session, patient: models.Patient) -> dict
                 "scan_date": img.scan_date.isoformat() if img.scan_date else None,
                 "image_url": _image_preview_url(img),
                 "ai_status": status,
-                "tumor_label": _display_diagnosis(analysis.tumor_label) if analysis else None,
-                "classification_confidence": analysis.classification_confidence if analysis else None,
+                "tumor_label": ai_label,
+                "classification_confidence": ai_confidence,
+                "ai_tumor_label": review_state["ai_tumor_label"],
+                "final_tumor_label": review_state["final_tumor_label"],
+                "expert_tumor_label": review_state["expert_tumor_label"],
+                "review_status": review_state["review_status"],
+                "review_required": review_state["review_required"],
+                "expert_comment": review_state["expert_comment"],
                 "risk_score": analysis.risk_score if analysis else None,
                 "risk_group": analysis.risk_group if analysis else None,
                 "is_series": bool(img.is_series),
@@ -201,6 +211,12 @@ def _build_patient_history_payload(db: Session, patient: models.Patient) -> dict
         "summary": {
             "diagnosis_count": len(timeline),
             "latest_tumor_label": latest.get("tumor_label"),
+            "latest_final_tumor_label": latest.get("final_tumor_label"),
+            "latest_review_status": latest.get("review_status"),
+            "latest_review_required": latest.get("review_required"),
+            "review_required_count": len([item for item in timeline if item.get("review_required")]),
+            "review_corrected_count": len([item for item in timeline if item.get("review_status") == "corrected"]),
+            "review_confirmed_count": len([item for item in timeline if item.get("review_status") == "confirmed"]),
             "latest_classification_confidence": latest.get("classification_confidence"),
             "latest_risk_score": latest.get("risk_score"),
             "latest_risk_group": latest.get("risk_group"),
@@ -243,6 +259,9 @@ def _history_data_hash(payload: dict) -> str:
                 "ai_status": item.get("ai_status"),
                 "tumor_label": item.get("tumor_label"),
                 "classification_confidence": item.get("classification_confidence"),
+                "final_tumor_label": item.get("final_tumor_label"),
+                "review_status": item.get("review_status"),
+                "expert_comment": item.get("expert_comment"),
                 "risk_score": item.get("risk_score"),
                 "risk_group": item.get("risk_group"),
             }
@@ -522,6 +541,12 @@ def get_all_patients(db: Session = Depends(get_db)):
             .order_by(models.AnalysisResult.created_at.desc())
             .first()
         )
+        review_state = classification_review_state(
+            db,
+            latest_analysis.image_id if latest_analysis else None,
+            _display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None,
+            latest_analysis.classification_confidence if latest_analysis else None,
+        )
 
         response.append(
             {
@@ -531,7 +556,10 @@ def get_all_patients(db: Session = Depends(get_db)):
                 "age": patient.age,
                 "gender": patient.gender,
                 "lastVisit": latest_image.scan_date.isoformat() if latest_image and latest_image.scan_date else None,
-                "diagnosis": _display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None,
+                "diagnosis": review_state["final_tumor_label"],
+                "aiDiagnosis": review_state["ai_tumor_label"],
+                "reviewStatus": review_state["review_status"],
+                "reviewRequired": review_state["review_required"],
                 "riskScore": latest_analysis.risk_score if latest_analysis and latest_analysis.risk_score is not None else None,
             }
         )
@@ -601,6 +629,26 @@ def get_diagnosis_history_patients(
                 continue
 
         status, _data_hash = _history_report_status(db, patient)
+        patient_analyses = (
+            db.query(models.AnalysisResult)
+            .filter(models.AnalysisResult.patient_id == patient.id)
+            .all()
+        )
+        review_states = [
+            classification_review_state(
+                db,
+                analysis.image_id,
+                _display_diagnosis(analysis.tumor_label),
+                analysis.classification_confidence,
+            )
+            for analysis in patient_analyses
+        ]
+        latest_review = classification_review_state(
+            db,
+            latest_analysis.image_id if latest_analysis else None,
+            _display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None,
+            latest_analysis.classification_confidence if latest_analysis else None,
+        )
         items.append(
             {
                 "patient_id": patient.id,
@@ -609,6 +657,13 @@ def get_diagnosis_history_patients(
                 "last_diagnosis_time": latest_image.scan_date if latest_image else None,
                 "latest_tumor_label": _display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None,
                 "latest_classification_confidence": latest_analysis.classification_confidence if latest_analysis else None,
+                "latest_ai_tumor_label": latest_review["ai_tumor_label"],
+                "latest_final_tumor_label": latest_review["final_tumor_label"],
+                "latest_review_status": latest_review["review_status"],
+                "latest_review_required": latest_review["review_required"],
+                "review_required_count": len([item for item in review_states if item["review_required"]]),
+                "review_corrected_count": len([item for item in review_states if item["review_status"] == "corrected"]),
+                "review_confirmed_count": len([item for item in review_states if item["review_status"] == "confirmed"]),
                 "latest_risk_score": latest_analysis.risk_score if latest_analysis else None,
                 "latest_risk_group": latest_risk_group,
                 "diagnosis_count": mri_count,
@@ -703,6 +758,12 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
             .first()
         )
         image_analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.image_id == img.id).first()
+        review_state = classification_review_state(
+            db,
+            img.id,
+            _display_diagnosis(image_analysis.tumor_label) if image_analysis else None,
+            image_analysis.classification_confidence if image_analysis else None,
+        )
 
         ai_status = "done" if image_analysis else "ready"
         latest_task_id = None
@@ -724,6 +785,14 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
                 "has_analysis": image_analysis is not None,
                 "tumor_label": _display_diagnosis(image_analysis.tumor_label) if image_analysis else None,
                 "classification_confidence": image_analysis.classification_confidence if image_analysis else None,
+                "ai_tumor_label": review_state["ai_tumor_label"],
+                "final_tumor_label": review_state["final_tumor_label"],
+                "expert_tumor_label": review_state["expert_tumor_label"],
+                "expert_comment": review_state["expert_comment"],
+                "review_required": review_state["review_required"],
+                "review_status": review_state["review_status"],
+                "review_action": review_state["review_action"],
+                "reviewed_at": review_state["reviewed_at"],
                 "risk_score": image_analysis.risk_score if image_analysis else None,
                 "risk_group": image_analysis.risk_group if image_analysis else None,
                 "is_series": img.is_series,
@@ -847,6 +916,10 @@ def delete_image_record(image_id: int, db: Session = Depends(get_db)):
     validations = db.query(models.ExpertValidation).filter(models.ExpertValidation.image_id == image_id).all()
     for validation in validations:
         db.delete(validation)
+
+    classification_reviews = db.query(models.ClassificationReview).filter(models.ClassificationReview.image_id == image_id).all()
+    for review in classification_reviews:
+        db.delete(review)
 
     tasks = db.query(models.InferenceTask).filter(
         models.InferenceTask.task_type == "mri_pipeline",
