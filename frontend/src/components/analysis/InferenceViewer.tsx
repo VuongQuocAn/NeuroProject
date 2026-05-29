@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Eye, EyeOff, Layers, Activity } from "lucide-react";
+import { ImagePreviewModal, ImagePreviewState } from "@/components/ui/ImagePreviewModal";
 
 interface InferenceViewerProps {
   mriUrl?: string;
@@ -23,6 +24,7 @@ export function InferenceViewer({
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showMask, setShowMask] = useState(true);
   const [opacity, setOpacity] = useState(60);
+  const [previewImage, setPreviewImage] = useState<ImagePreviewState | null>(null);
 
   // Fallback images if not provided
   const baseImage = mriUrl || "https://images.unsplash.com/photo-1559757175-9b78a05eacbe?auto=format&fit=crop&q=80&w=800";
@@ -82,6 +84,7 @@ export function InferenceViewer({
           <img 
             src={baseImage} 
             alt="MRI Scan Base" 
+            onClick={() => setPreviewImage({ title: "MRI Scan Base", src: baseImage })}
             className="absolute inset-0 object-cover w-full h-full opacity-80 mix-blend-screen filter contrast-125 transition-all duration-300"
           />
           
@@ -90,6 +93,7 @@ export function InferenceViewer({
             <img 
               src={heatmapUrl} 
               alt="Grad-CAM Heatmap" 
+              onClick={() => setPreviewImage({ title: "Grad-CAM Heatmap", src: heatmapUrl })}
               className="absolute inset-0 object-cover w-full h-full mix-blend-screen transition-opacity duration-300"
               style={{ opacity: opacity / 100 }}
             />
@@ -100,6 +104,7 @@ export function InferenceViewer({
             <img 
               src={maskUrl} 
               alt="Segmentation Mask" 
+              onClick={() => setPreviewImage({ title: "Segmentation Mask", src: maskUrl })}
               className="absolute inset-0 object-cover w-full h-full mix-blend-screen filter hue-rotate-180 brightness-150 transition-opacity duration-300"
               style={{ opacity: opacity / 100 }}
             />
@@ -131,6 +136,7 @@ export function InferenceViewer({
           <span className="font-bold text-slate-300">{(confidence * 100).toFixed(1)}% CONFIDENCE</span>
         </div>
       </div>
+      {previewImage && <ImagePreviewModal preview={previewImage} onClose={() => setPreviewImage(null)} />}
     </div>
   );
 }

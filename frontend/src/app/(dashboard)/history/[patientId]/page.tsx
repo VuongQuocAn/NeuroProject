@@ -4,6 +4,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, apiService } from "@/lib/api";
 import { ArrowLeft, Download, Loader2, RefreshCw, Wand2 } from "lucide-react";
+import { ImagePreviewModal, ImagePreviewState } from "@/components/ui/ImagePreviewModal";
 
 function formatDate(value?: string | null) {
   if (!value) return "--";
@@ -106,6 +107,7 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
   const [generating, setGenerating] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
+  const [previewImage, setPreviewImage] = useState<ImagePreviewState | null>(null);
 
   const loadReport = async () => {
     setLoading(true);
@@ -275,11 +277,23 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
                   <td className="px-3 py-4 text-slate-400">{formatDate(item.scan_date)}</td>
                   <td className="px-3 py-4">
                     {item.image_url ? (
-                      <img
-                        src={resolveImageUrl(item.image_url)}
-                        alt={`MRI ${item.image_id}`}
-                        className="h-16 w-16 rounded-lg border border-slate-700 object-cover"
-                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewImage({
+                            title: `MRI lần ${index + 1} - ảnh #${item.image_id}`,
+                            src: resolveImageUrl(item.image_url),
+                          })
+                        }
+                        className="group relative h-16 w-16 overflow-hidden rounded-lg border border-slate-700"
+                        title="Phóng to ảnh MRI"
+                      >
+                        <img
+                          src={resolveImageUrl(item.image_url)}
+                          alt={`MRI ${item.image_id}`}
+                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                        />
+                      </button>
                     ) : (
                       <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-slate-700 text-xs text-slate-500">
                         N/A
@@ -355,6 +369,8 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
         <h2 className="mb-3 text-lg font-bold text-white">7. Kết luận tổng hợp</h2>
         <p className="leading-relaxed text-slate-300">{texts.conclusion_text || "Chưa có nhận xét AI."}</p>
       </section>
+
+      {previewImage && <ImagePreviewModal preview={previewImage} onClose={() => setPreviewImage(null)} />}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { apiService } from "@/lib/api";
+import { api, apiService } from "@/lib/api";
 import {
   ArrowLeft,
   User,
@@ -21,6 +21,7 @@ import {
   Eye,
   AlertTriangle,
 } from "lucide-react";
+import { ImagePreviewModal, ImagePreviewState } from "@/components/ui/ImagePreviewModal";
 
 const LABEL_MAP: Record<string, string> = {
   class_0: "Glioma",
@@ -31,6 +32,12 @@ const LABEL_MAP: Record<string, string> = {
 function displayTumorLabel(label?: string | null) {
   if (!label) return "Chưa xác định";
   return LABEL_MAP[label] || label;
+}
+
+function resolveImageUrl(url?: string | null) {
+  if (!url) return "";
+  if (url.startsWith("http") || url.startsWith("data:")) return url;
+  return `${api.defaults.baseURL}${url}`;
 }
 
 function ClientDate({ date }: { date: string }) {
@@ -69,6 +76,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
   const [actionError, setActionError] = useState("");
   const [reportLoadingId, setReportLoadingId] = useState<string | number | null>(null);
   const [imagePage, setImagePage] = useState(1);
+  const [previewImage, setPreviewImage] = useState<ImagePreviewState | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; imageId: string | number | null }>({
     open: false,
     imageId: null,
@@ -310,9 +318,29 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                         <tr key={img.image_id} className="hover:bg-slate-800/30 transition-colors group">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="h-9 w-9 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-500 border border-teal-500/20">
-                                <ImageIcon className="h-4 w-4" />
-                              </div>
+                              {img.image_url ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPreviewImage({
+                                      title: `${img.modality} #${img.image_id}`,
+                                      src: resolveImageUrl(img.image_url),
+                                    })
+                                  }
+                                  className="h-9 w-9 overflow-hidden rounded-lg border border-teal-500/20 bg-teal-500/10"
+                                  title="Phóng to ảnh"
+                                >
+                                  <img
+                                    src={resolveImageUrl(img.image_url)}
+                                    alt={`${img.modality} ${img.image_id}`}
+                                    className="h-full w-full object-cover transition-transform hover:scale-105"
+                                  />
+                                </button>
+                              ) : (
+                                <div className="h-9 w-9 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-500 border border-teal-500/20">
+                                  <ImageIcon className="h-4 w-4" />
+                                </div>
+                              )}
                               <div>
                                 <div className="font-bold text-slate-200">{img.modality}</div>
                                 <div className="text-[10px] text-slate-500 uppercase font-mono">#{img.image_id}</div>
@@ -621,6 +649,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
       )}
+      {previewImage && <ImagePreviewModal preview={previewImage} onClose={() => setPreviewImage(null)} />}
     </div>
   );
 }

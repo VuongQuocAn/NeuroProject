@@ -5,10 +5,14 @@ import { Printer, Download, Share2, CheckCircle2, AlertOctagon, FileText, Beaker
 import { GaugeChart } from "@/components/ui/GaugeChart";
 import { SurvivalCurve } from "@/components/ui/SurvivalCurve";
 import { apiService } from "@/lib/api";
+import { ImagePreviewModal, ImagePreviewState } from "@/components/ui/ImagePreviewModal";
+
+const DEMO_MRI_IMAGE = "https://images.unsplash.com/photo-1559757175-9b78a05eacbe?auto=format&fit=crop&w=400&q=80";
 
 export default function ReportPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [previewImage, setPreviewImage] = useState<ImagePreviewState | null>(null);
 
   useEffect(() => {
     // Trong thực tế, ID bệnh nhân sẽ lấy từ URL hoặc state quản lý
@@ -200,14 +204,26 @@ export default function ReportPage() {
                    <div className="flex flex-col gap-4 flex-1">
                       
                       <div className="flex flex-col bg-slate-50 p-2 rounded border border-slate-200 relative overflow-hidden group">
-                        <img src="https://images.unsplash.com/photo-1559757175-9b78a05eacbe?auto=format&fit=crop&w=400&q=80" alt="Axial view" className="w-full h-40 object-cover rounded filter contrast-125 mb-2 mix-blend-multiply opacity-90" />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-12 border-2 border-red-500 rounded bg-red-500/20 mix-blend-multiply"></div>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage({ title: "T2 Axial (Lớp cắt #42)", src: DEMO_MRI_IMAGE })}
+                          className="mb-2 block w-full overflow-hidden rounded"
+                        >
+                          <img src={DEMO_MRI_IMAGE} alt="Axial view" className="h-40 w-full object-cover filter contrast-125 mix-blend-multiply opacity-90" />
+                        </button>
+                        <div className="pointer-events-none absolute top-1/2 left-1/2 h-12 w-16 -translate-x-1/2 -translate-y-1/2 rounded border-2 border-red-500 bg-red-500/20 mix-blend-multiply"></div>
                         <span className="text-xs font-bold text-center text-slate-600 block">T2 Axial (Lớp cắt #42)</span>
                       </div>
 
                       <div className="flex flex-col bg-slate-50 p-2 rounded border border-slate-200 relative overflow-hidden group">
-                        <img src="https://images.unsplash.com/photo-1559757175-9b78a05eacbe?auto=format&fit=crop&w=400&q=80" alt="heatmap" className="w-full h-40 object-cover rounded filter grayscale mb-2 mix-blend-multiply opacity-90" />
-                        <div className="absolute inset-2 top-10 bg-gradient-to-tr from-transparent via-red-500/40 to-yellow-500/40 mix-blend-multiply rounded-full blur-xl w-3/4 h-3/4 left-1/2 -translate-x-1/2"></div>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage({ title: "Bản đồ nhiệt XAI (Grad-CAM)", src: DEMO_MRI_IMAGE })}
+                          className="mb-2 block w-full overflow-hidden rounded"
+                        >
+                          <img src={DEMO_MRI_IMAGE} alt="heatmap" className="h-40 w-full object-cover filter grayscale mix-blend-multiply opacity-90" />
+                        </button>
+                        <div className="pointer-events-none absolute inset-2 left-1/2 top-10 h-3/4 w-3/4 -translate-x-1/2 rounded-full bg-gradient-to-tr from-transparent via-red-500/40 to-yellow-500/40 mix-blend-multiply blur-xl"></div>
                         <span className="text-xs font-bold text-center text-slate-600 block">Bản đồ nhiệt XAI (Grad-CAM)</span>
                       </div>
 
@@ -237,6 +253,7 @@ export default function ReportPage() {
            
         </div>
       </div>
+      {previewImage && <ImagePreviewModal preview={previewImage} onClose={() => setPreviewImage(null)} />}
     </div>
   );
 }

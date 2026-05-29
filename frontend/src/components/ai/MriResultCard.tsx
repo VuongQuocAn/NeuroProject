@@ -11,10 +11,9 @@ import {
   Search,
   Trash2,
   X,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react";
 import RnaXaiChart from "./RnaXaiChart";
+import { ImagePreviewModal, ImagePreviewState } from "@/components/ui/ImagePreviewModal";
 
 type MriResult = {
   image_id?: number | string;
@@ -72,11 +71,6 @@ type Props = {
   compact?: boolean;
 };
 
-type PreviewState = {
-  title: string;
-  src: string;
-};
-
 function formatConfidence(value?: number | null) {
   if (value == null) return "--";
   return `${(value * 100).toFixed(2)}%`;
@@ -87,109 +81,6 @@ function formatList(values?: number[] | null) {
   return values.map((value) => `${(value * 100).toFixed(2)}%`).join(", ");
 }
 
-function PreviewModal({
-  preview,
-  onClose,
-}: {
-  preview: PreviewState;
-  onClose: () => void;
-}) {
-  const [scale, setScale] = useState(1);
-  const [translate, setTranslate] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
-  const dragStartRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
-
-  const clampScale = (value: number) => Math.min(6, Math.max(1, value));
-
-  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const delta = event.deltaY > 0 ? -0.15 : 0.15;
-    setScale((current) => clampScale(Number((current + delta).toFixed(2))));
-  };
-
-  const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
-    setDragging(true);
-    dragStartRef.current = {
-      x: event.clientX,
-      y: event.clientY,
-      startX: translate.x,
-      startY: translate.y,
-    };
-  };
-
-  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!dragging || !dragStartRef.current) return;
-    const deltaX = event.clientX - dragStartRef.current.x;
-    const deltaY = event.clientY - dragStartRef.current.y;
-    setTranslate({
-      x: dragStartRef.current.startX + deltaX,
-      y: dragStartRef.current.startY + deltaY,
-    });
-  };
-
-  const stopDragging = () => {
-    setDragging(false);
-    dragStartRef.current = null;
-  };
-
-  const zoomIn = () => setScale((current) => clampScale(Number((current + 0.2).toFixed(2))));
-  const zoomOut = () => setScale((current) => clampScale(Number((current - 0.2).toFixed(2))));
-  const resetView = () => {
-    setScale(1);
-    setTranslate({ x: 0, y: 0 });
-  };
-
-  return (
-    <div className="fixed inset-0 z-[70] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-6">
-      <div className="w-full max-w-6xl">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h4 className="text-lg font-bold text-white">{preview.title}</h4>
-            <p className="text-sm text-slate-400">
-              Cuộn để phóng to, kéo để di chuyển, nhấn reset để về mặc định.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={zoomOut} className="p-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">
-              <ZoomOut className="h-4 w-4" />
-            </button>
-            <button onClick={zoomIn} className="p-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">
-              <ZoomIn className="h-4 w-4" />
-            </button>
-            <button onClick={resetView} className="px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 text-sm">
-              Reset
-            </button>
-            <button onClick={onClose} className="p-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-        <div
-          className="rounded-2xl border border-slate-800 bg-slate-900 p-4 overflow-hidden cursor-grab active:cursor-grabbing"
-          onWheel={handleWheel}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={stopDragging}
-          onMouseLeave={stopDragging}
-        >
-          <div className="w-full h-[78vh] overflow-hidden flex items-center justify-center rounded-xl bg-slate-950">
-            <img
-              src={preview.src}
-              alt={preview.title}
-              draggable={false}
-              className="max-w-none select-none"
-              style={{
-                transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
-                transformOrigin: "center center",
-                maxHeight: "72vh",
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function MriResultCard({
   title = "Kết quả MRI AI",
@@ -203,7 +94,7 @@ export default function MriResultCard({
   extraActionLabel,
   compact = false,
 }: Props) {
-  const [previewImage, setPreviewImage] = useState<PreviewState | null>(null);
+  const [previewImage, setPreviewImage] = useState<ImagePreviewState | null>(null);
   const [activeHeatmap, setActiveHeatmap] = useState<"gradcam" | "gradcam++" | "layercam">("gradcam");
   const [rating, setRating] = useState<number | null>(null);
   const [submittingRating, setSubmittingRating] = useState(false);
@@ -809,7 +700,8 @@ export default function MriResultCard({
         </div>
       </div>
 
-      {previewImage && <PreviewModal preview={previewImage} onClose={() => setPreviewImage(null)} />}
+      {previewImage && <ImagePreviewModal preview={previewImage} onClose={() => setPreviewImage(null)} />}
     </>
   );
 }
+
