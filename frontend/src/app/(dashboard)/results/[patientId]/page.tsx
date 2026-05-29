@@ -21,8 +21,10 @@ export default function ResultsPage({ params }: { params: Promise<{ patientId: s
         const patientRes = await apiService.patients.getById(patientId);
         setPatientInfo(patientRes.data?.patient);
 
-        // Fetch full analysis result
-        const res = await apiService.analysis.getFullResult(patientId);
+        const imageId = new URLSearchParams(window.location.search).get("imageId");
+        const res = imageId
+          ? await apiService.analysis.getImageResult(imageId)
+          : await apiService.analysis.getFullResult(patientId);
         setResult(res.data);
       } catch (err: any) {
         setError(err.response?.data?.detail || err.message || "Không thể tải kết quả.");

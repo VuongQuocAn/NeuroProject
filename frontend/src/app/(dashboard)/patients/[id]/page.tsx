@@ -20,9 +20,7 @@ import {
   Trash2,
   Eye,
   AlertTriangle,
-  X,
 } from "lucide-react";
-import MriResultCard from "@/components/ai/MriResultCard";
 
 const LABEL_MAP: Record<string, string> = {
   class_0: "Glioma",
@@ -69,11 +67,6 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [prognosisLoading, setPrognosisLoading] = useState(false);
   const [actionError, setActionError] = useState("");
-  const [resultModal, setResultModal] = useState<{ open: boolean; loading: boolean; data: any | null }>({
-    open: false,
-    loading: false,
-    data: null,
-  });
   const [reportLoadingId, setReportLoadingId] = useState<string | number | null>(null);
   const [imagePage, setImagePage] = useState(1);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; imageId: string | number | null }>({
@@ -115,38 +108,11 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
       }
 
       await fetchPatientData();
-      await handleOpenResult(img.image_id);
+      router.push(`/results/${id}?imageId=${img.image_id}`);
     } catch (err: any) {
       setActionError(err.message || "Không thể chạy pipeline MRI.");
-      setResultModal({
-        open: true,
-        loading: false,
-        data: {
-          status: "failed",
-          error_message: err.message || "Không thể chạy pipeline MRI.",
-        },
-      });
     } finally {
       setAnalyzingId(null);
-    }
-  };
-
-  const handleOpenResult = async (imageId: string | number) => {
-    setActionError("");
-    setResultModal({ open: true, loading: true, data: null });
-
-    try {
-      const response = await apiService.analysis.getImageResult(imageId);
-      setResultModal({ open: true, loading: false, data: response.data });
-    } catch (err: any) {
-      setResultModal({
-        open: true,
-        loading: false,
-        data: {
-          status: "failed",
-          error_message: err.message || "Không thể tải kết quả MRI.",
-        },
-      });
     }
   };
 
@@ -154,9 +120,6 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
     setActionError("");
     try {
       await apiService.patients.deleteImage(imageId);
-      if (resultModal.data?.image_id === imageId) {
-        setResultModal({ open: false, loading: false, data: null });
-      }
       setDeleteDialog({ open: false, imageId: null });
       await fetchPatientData();
     } catch (err: any) {
@@ -394,7 +357,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                               <button
                                 onClick={() =>
                                   backendStatus === "done" || backendStatus === "failed"
-                                    ? handleOpenResult(img.image_id)
+                                    ? router.push(`/results/${id}?imageId=${img.image_id}`)
                                     : handleAnalyze(img)
                                 }
                                 disabled={isBusy}
@@ -613,46 +576,6 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      {resultModal.open && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-end mb-3">
-              <button
-                onClick={() => setResultModal({ open: false, loading: false, data: null })}
-                className="p-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <MriResultCard
-              title="Kết quả MRI"
-              result={resultModal.data}
-              loading={resultModal.loading}
-              onRetry={
-                resultModal.data?.image_id
-                  ? () => {
-                      setResultModal({ open: false, loading: false, data: null });
-                      const image = images.find((item: any) => String(item.image_id) === String(resultModal.data?.image_id));
-                      if (image) handleAnalyze(image);
-                    }
-                  : undefined
-              }
-              onDelete={
-                resultModal.data?.image_id
-                  ? () => setDeleteDialog({ open: true, imageId: resultModal.data.image_id })
-                  : undefined
-              }
-              onDownload={
-                resultModal.data?.image_id &&
-                (resultModal.data.status === "done" || resultModal.data.status === "completed")
-                  ? () => handleDownloadReport(resultModal.data.image_id)
-                  : undefined
-              }
-            />
-          </div>
-        </div>
-      )}
-
       {deleteDialog.open && (
         <div className="fixed inset-0 z-[60] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl p-6">
@@ -701,3 +624,5 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
     </div>
   );
 }
+
+
