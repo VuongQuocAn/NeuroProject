@@ -253,10 +253,10 @@ export default function PatientsPage() {
   };
 
   const reviewText = (status?: string) => {
-    if (status === "needs_review") return "Cần chuyên gia xem xét";
-    if (status === "confirmed") return "Đã chuyên gia xác nhận";
-    if (status === "corrected") return "Đã chỉnh nhãn";
-    if (status === "not_required") return "AI tin cậy cao";
+    if (status === "needs_review") return "Cần xem xét";
+    if (status === "confirmed") return "Đã xác nhận";
+    if (status === "corrected") return "Đã chỉnh";
+    if (status === "not_required") return "Tin cậy cao";
     return "Chưa chẩn đoán";
   };
 

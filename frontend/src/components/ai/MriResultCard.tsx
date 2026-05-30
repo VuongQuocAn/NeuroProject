@@ -91,11 +91,11 @@ function formatList(values?: number[] | null) {
 }
 
 function reviewStatusText(status?: string | null) {
-  if (status === "needs_review") return "Cần chuyên gia xem xét";
-  if (status === "confirmed") return "Đã chuyên gia xác nhận";
-  if (status === "corrected") return "Đã chuyên gia chỉnh nhãn";
-  if (status === "not_required") return "AI tin cậy cao";
-  return "Chưa có kết quả review";
+  if (status === "needs_review") return "Cần xem xét";
+  if (status === "confirmed") return "Đã xác nhận";
+  if (status === "corrected") return "Đã chỉnh";
+  if (status === "not_required") return "Tin cậy cao";
+  return "Chưa có review";
 }
 
 export default function MriResultCard({
@@ -123,6 +123,7 @@ export default function MriResultCard({
   const [expertComment, setExpertComment] = useState(result?.expert_comment || "");
   const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [showReviewForm, setShowReviewForm] = useState(result?.review_status === "needs_review");
   const [reviewState, setReviewState] = useState({
     final_tumor_label: result?.final_tumor_label,
     expert_tumor_label: result?.expert_tumor_label,
@@ -197,6 +198,7 @@ export default function MriResultCard({
       review_status: result?.review_status,
       review_action: result?.review_action,
     });
+    setShowReviewForm(result?.review_status === "needs_review");
   }, [
     result?.image_id,
     result?.final_tumor_label,
@@ -225,6 +227,7 @@ export default function MriResultCard({
         review_status: response.data.review_status,
         review_action: response.data.review_action,
       });
+      setShowReviewForm(false);
     } catch (error: unknown) {
       const err = error as { response?: { data?: { detail?: string } }; message?: string };
       setReviewError(err.response?.data?.detail || err.message || "Không thể lưu xác nhận chuyên gia.");
@@ -236,6 +239,14 @@ export default function MriResultCard({
   const isFailed = result?.status === "failed";
   const isDone = result?.status === "done" || result?.status === "completed";
   const noTumorDetected = Boolean(result?.no_tumor_detected);
+  const classificationConfidence = result?.ai_confidence ?? result?.classification_confidence ?? null;
+  const hasCompletedClassificationReview =
+    reviewState.review_status === "confirmed" || reviewState.review_status === "corrected";
+  const isLowClassificationConfidence =
+    classificationConfidence != null && classificationConfidence < 0.95;
+  const shouldWarnClassificationReview =
+    reviewState.review_status === "needs_review" || (isLowClassificationConfidence && !hasCompletedClassificationReview);
+  const shouldShowClassificationReviewForm = showReviewForm || shouldWarnClassificationReview;
   const multimodalRiskXaiUrl = result?.multimodal_risk_xai_data_url || result?.gradcam_heatmap_data_url || null;
   const multimodalExplanation = result?.multimodal_xai_explanation || result?.xai_explanation || null;
   const imagePanels = [
@@ -437,13 +448,25 @@ export default function MriResultCard({
                 </div>
               </div>
 
-              {result?.tumor_label && (
+              {result?.tumor_label && !shouldWarnClassificationReview && !hasCompletedClassificationReview && !showReviewForm && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowReviewForm(true)}
+                    className="rounded-xl border border-teal-500/30 px-4 py-2 text-sm font-semibold text-teal-200 hover:bg-teal-500/10"
+                  >
+                    Xác nhận phân loại
+                  </button>
+                </div>
+              )}
+
+              {result?.tumor_label && (shouldWarnClassificationReview || hasCompletedClassificationReview || showReviewForm) && (
                 <div
                   className={`rounded-xl border p-5 ${
-                    reviewState.review_status === "needs_review"
-                      ? "border-amber-500/30 bg-amber-500/10"
-                      : reviewState.review_status === "corrected"
-                        ? "border-violet-500/30 bg-violet-500/10"
+                    shouldWarnClassificationReview
+                      ? "border-red-500/30 bg-red-500/10"
+                      : hasCompletedClassificationReview
+                        ? "border-emerald-500/30 bg-emerald-500/10"
                         : "border-slate-800 bg-slate-950/50"
                   }`}
                 >
@@ -452,21 +475,47 @@ export default function MriResultCard({
                       <div className="text-[11px] uppercase tracking-widest text-slate-500">Review phân loại</div>
                       <div className="mt-2 text-sm text-slate-300">
                         AI ban đầu: <span className="font-semibold text-white">{result.ai_tumor_label || result.tumor_label}</span>
-                        {" "}({formatConfidence(result.ai_confidence ?? result.classification_confidence)})
+                        {" "}({formatConfidence(classificationConfidence)})
                       </div>
                       <div className="mt-1 text-sm text-slate-300">
                         Kết quả cuối: <span className="font-semibold text-white">{reviewState.final_tumor_label || result.final_tumor_label || result.tumor_label}</span>
                       </div>
+                      {shouldWarnClassificationReview && (
+                        <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200">
+                          Kết quả của model không chắc chắn, cần chuyên gia xem xét lại.
+                        </div>
+                      )}
+                      {hasCompletedClassificationReview && isLowClassificationConfidence && (
+                        <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200">
+                          Mặc dù độ tin cậy &lt; 0.95 nhưng đã được chuyên gia xác nhận.
+                        </div>
+                      )}
+                      {reviewState.review_status === "corrected" && (
+                        <div className="mt-2 text-sm text-emerald-200">
+                          Chuyên gia đã chỉnh nhãn sang <span className="font-semibold">{reviewState.final_tumor_label}</span>.
+                        </div>
+                      )}
                       {reviewState.expert_comment && (
                         <div className="mt-2 text-sm text-slate-400">Ghi chú chuyên gia: {reviewState.expert_comment}</div>
                       )}
                     </div>
-                    <span className="w-fit rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200">
-                      {reviewStatusText(reviewState.review_status)}
-                    </span>
+                    <div className="flex flex-col items-start gap-2 lg:items-end">
+                      <span className="w-fit rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200">
+                        {reviewStatusText(reviewState.review_status)}
+                      </span>
+                      {!shouldShowClassificationReviewForm && (
+                        <button
+                          type="button"
+                          onClick={() => setShowReviewForm(true)}
+                          className="rounded-xl border border-teal-500/30 px-4 py-2 text-sm font-semibold text-teal-200 hover:bg-teal-500/10"
+                        >
+                          {hasCompletedClassificationReview ? "Xác nhận lại" : "Xác nhận phân loại"}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {(reviewState.review_status === "needs_review" || reviewState.review_status === "corrected" || reviewState.review_status === "confirmed") && (
+                  {shouldShowClassificationReviewForm && (
                     <div className="mt-5 grid gap-3 md:grid-cols-[220px_1fr_auto]">
                       <select
                         value={expertLabel}

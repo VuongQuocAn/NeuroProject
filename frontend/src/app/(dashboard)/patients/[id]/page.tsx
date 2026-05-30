@@ -43,9 +43,9 @@ function resolveImageUrl(url?: string | null) {
 function reviewStatusText(status?: string | null) {
   if (status === "needs_review") return "Cần xem xét";
   if (status === "confirmed") return "Đã xác nhận";
-  if (status === "corrected") return "Đã chỉnh nhãn";
-  if (status === "not_required") return "Không bắt buộc";
-  return "Chưa có";
+  if (status === "corrected") return "Đã chỉnh";
+  if (status === "not_required") return "Tin cậy cao";
+  return "Chưa review";
 }
 
 function ClientDate({ date }: { date: string }) {
@@ -299,10 +299,8 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                     <th className="px-6 py-4">Mô thức chụp</th>
                     <th className="px-6 py-4">Thời gian</th>
                     <th className="px-6 py-4">Trạng thái AI</th>
-                    <th className="px-6 py-4">Phân loại AI</th>
+                    <th className="px-6 py-4">Loại u</th>
                     <th className="px-6 py-4">Confidence</th>
-                    <th className="px-6 py-4">Review</th>
-                    <th className="px-6 py-4">Kết quả cuối</th>
                     <th className="px-6 py-4">Risk</th>
                     <th className="px-6 py-4 text-right">Hành động</th>
                   </tr>
@@ -310,7 +308,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                 <tbody className="divide-y divide-slate-800/40">
                   {images.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-6 py-16 text-center text-slate-500">
+                      <td colSpan={7} className="px-6 py-16 text-center text-slate-500">
                         Chưa có tệp hình ảnh nào cho bệnh nhân này.
                       </td>
                     </tr>
@@ -380,16 +378,17 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                               {statusLabel}
                             </span>
                           </td>
-                          <td className="px-6 py-5 text-slate-300">{img.ai_tumor_label || img.tumor_label || "—"}</td>
+                          <td className="px-6 py-5 text-slate-300">
+                            <div>{img.final_tumor_label || img.tumor_label || "—"}</div>
+                            {img.review_status && img.review_status !== "not_required" && img.review_status !== "not_available" && (
+                              <div className={`mt-1 w-fit rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap ${img.review_status === "needs_review" ? "bg-red-500/10 text-red-300" : img.review_status === "corrected" ? "bg-violet-500/10 text-violet-300" : "bg-emerald-500/10 text-emerald-300"}`}>
+                                {reviewStatusText(img.review_status)}
+                              </div>
+                            )}
+                          </td>
                           <td className="px-6 py-5 text-slate-300">
                             {img.classification_confidence != null ? `${(img.classification_confidence * 100).toFixed(2)}%` : "—"}
                           </td>
-                          <td className="px-6 py-5">
-                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold whitespace-nowrap ${img.review_status === "needs_review" ? "bg-amber-500/10 text-amber-300" : img.review_status === "corrected" ? "bg-violet-500/10 text-violet-300" : img.review_status === "confirmed" ? "bg-blue-500/10 text-blue-300" : "bg-slate-800 text-slate-400"}`}>
-                              {reviewStatusText(img.review_status)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-5 text-slate-300">{img.final_tumor_label || img.tumor_label || "—"}</td>
                           <td className="px-6 py-5 text-slate-300">
                             <div>{img.risk_score != null ? Number(img.risk_score).toFixed(4) : "—"}</div>
                             <div className="text-[10px] uppercase text-slate-500">{img.risk_group || "N/A"}</div>
