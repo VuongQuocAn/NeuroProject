@@ -30,6 +30,21 @@ LABEL_MAP = {
     "class_2": "Pituitary tumor",
 }
 
+PROGNOSIS_ONLY_KEYS = {
+    "risk_score",
+    "risk_group",
+    "survival_curve_data",
+    "fusion_attention",
+    "rna_xai",
+    "multimodal_xai_explanation",
+    "xai_explanation",
+    "multimodal_risk_xai_path",
+    "multimodal_risk_xai_meta_path",
+    "multimodal_gradcam_heatmap_path",
+    "multimodal_gradcam_plus_heatmap_path",
+    "multimodal_layercam_heatmap_path",
+}
+
 NAVY = (18, 42, 66)
 TEAL = (38, 120, 133)
 RED = (177, 58, 58)
@@ -46,6 +61,17 @@ SLATE_500 = (100, 116, 139)
 SLATE_800 = (30, 41, 59)
 SLATE_900 = (15, 23, 42)
 RED_500 = (239, 68, 68)
+
+
+def _merge_prognosis_only(base_payload: dict, prognosis_payload: dict | None) -> dict:
+    """Add prognosis outputs without overwriting MRI core detection/seg/class fields."""
+    merged = dict(base_payload or {})
+    if not prognosis_payload:
+        return merged
+    for key in PROGNOSIS_ONLY_KEYS:
+        if key in prognosis_payload and prognosis_payload.get(key) is not None:
+            merged[key] = prognosis_payload.get(key)
+    return merged
 
 
 def _get_presigned_url(file_path: str | None) -> str | None:
@@ -1029,7 +1055,7 @@ def get_patient_full_analysis(
     if mri_task and mri_task.result:
         result_payload.update(mri_task.result)
     if prognosis_task and prognosis_task.result:
-        result_payload.update(prognosis_task.result)
+        result_payload = _merge_prognosis_only(result_payload, prognosis_task.result)
 
     # Xác định image_id và metadata
     image_id = mri_image.id if mri_image else (analysis.image_id if analysis else 0)
@@ -1480,7 +1506,7 @@ def download_image_report(
     if latest_task and latest_task.result:
         result_payload.update(latest_task.result)
     if prognosis_task and prognosis_task.result:
-        result_payload.update(prognosis_task.result)
+        result_payload = _merge_prognosis_only(result_payload, prognosis_task.result)
     no_tumor_detected = bool(result_payload.get("no_tumor_detected"))
     tumor_label = _display_tumor_label(
         result_payload.get("tumor_label") or (analysis.tumor_label if analysis else None),
