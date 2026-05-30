@@ -1055,7 +1055,10 @@ def get_patient_full_analysis(
     if mri_task and mri_task.result:
         result_payload.update(mri_task.result)
     if prognosis_task and prognosis_task.result:
-        result_payload = _merge_prognosis_only(result_payload, prognosis_task.result)
+        if result_payload:
+            result_payload = _merge_prognosis_only(result_payload, prognosis_task.result)
+        else:
+            result_payload.update(prognosis_task.result)
 
     # Xác định image_id và metadata
     image_id = mri_image.id if mri_image else (analysis.image_id if analysis else 0)
@@ -1506,7 +1509,10 @@ def download_image_report(
     if latest_task and latest_task.result:
         result_payload.update(latest_task.result)
     if prognosis_task and prognosis_task.result:
-        result_payload = _merge_prognosis_only(result_payload, prognosis_task.result)
+        if result_payload:
+            result_payload = _merge_prognosis_only(result_payload, prognosis_task.result)
+        else:
+            result_payload.update(prognosis_task.result)
     no_tumor_detected = bool(result_payload.get("no_tumor_detected"))
     tumor_label = _display_tumor_label(
         result_payload.get("tumor_label") or (analysis.tumor_label if analysis else None),
