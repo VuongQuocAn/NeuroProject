@@ -16,6 +16,12 @@ function displayDiagnosis(label?: string | null) {
   return LABEL_MAP[label] || label;
 }
 
+function hasPatientTumorDiagnosis(patient: any) {
+  if (!patient) return false;
+  if (patient.no_tumor_detected === true) return false;
+  return Boolean(patient.diagnosis || patient.aiDiagnosis || patient.classificationConfidence != null);
+}
+
 // ---------------------------------------------------------------------------
 // Create Patient Modal
 // ---------------------------------------------------------------------------
@@ -329,7 +335,9 @@ export default function PatientsPage() {
                     {searchQuery ? `Không tìm thấy bệnh nhân nào khớp với "${searchQuery}"` : "Chưa có dữ liệu bệnh nhân."}
                   </td>
                 </tr>
-              ) : currentPatients.map((p, idx) => (
+              ) : currentPatients.map((p, idx) => {
+                const hasTumorDiagnosis = hasPatientTumorDiagnosis(p);
+                return (
                 <tr key={p.id || idx} className="hover:bg-slate-800/20 transition-colors group cursor-pointer">
                   <td className="px-6 py-4 font-mono text-slate-500">{p.external_id || p.id}</td>
                   <td className="px-6 py-4 font-medium text-slate-200">{p.name || `Bệnh nhân #${p.id}`}</td>
@@ -337,7 +345,7 @@ export default function PatientsPage() {
                   <td className="px-6 py-4 text-slate-400">{p.lastVisit ? (() => { let d = p.lastVisit; if (d && !d.endsWith("Z") && !d.includes("+") && d.includes("T")) d += "Z"; return new Date(d).toLocaleDateString("vi-VN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }); })() : '—'}</td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col items-start gap-1">
-                      {renderStatusBadge(p.diagnosis)}
+                      {renderStatusBadge(hasTumorDiagnosis ? p.diagnosis : undefined)}
                       <span
                         className={`text-[11px] font-semibold ${
                           p.reviewStatus === "needs_review"
@@ -347,12 +355,12 @@ export default function PatientsPage() {
                               : "text-slate-500"
                         }`}
                       >
-                        {reviewText(p.reviewStatus)}
+                        {hasTumorDiagnosis ? reviewText(p.reviewStatus) : "Chưa chẩn đoán"}
                       </span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    {renderRiskBar(p.riskScore ?? 0)}
+                    {hasTumorDiagnosis && p.riskScore != null ? renderRiskBar(p.riskScore) : <span className="text-slate-500">—</span>}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <button 
@@ -363,7 +371,8 @@ export default function PatientsPage() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
