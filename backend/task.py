@@ -230,22 +230,24 @@ def run_mri_pipeline(self, task_id: int, image_id: int):
             )
             db.add(analysis)
 
-        analysis.tumor_label = result.get("tumor_label")
-        analysis.classification_confidence = result.get("classification_confidence")
-        analysis.mask_path = result.get("seg_mask_path") or None
+        no_tumor_detected = bool(result.get("no_tumor_detected"))
+        analysis.no_tumor_detected = no_tumor_detected
+        analysis.tumor_label = None if no_tumor_detected else result.get("tumor_label")
+        analysis.classification_confidence = None if no_tumor_detected else result.get("classification_confidence")
+        analysis.mask_path = None if no_tumor_detected else (result.get("seg_mask_path") or None)
         
         # Cập nhật metadata cho series nếu có
         if image_record.is_series:
             image_record.key_slice_index = result.get("key_slice_index", 0)
             image_record.num_slices = result.get("num_slices", image_record.num_slices)
 
-        analysis.risk_score = result.get("risk_score")
-        analysis.risk_group = result.get("risk_group")
-        analysis.survival_curve_data = result.get("survival_curve_data")
-        analysis.finer_cam_path = result.get("classification_xai_path") or result.get("finer_cam_path")
-        analysis.seg_eigen_cam_path = result.get("segmentation_xai_path") or result.get("seg_eigen_cam_path")
+        analysis.risk_score = None if no_tumor_detected else result.get("risk_score")
+        analysis.risk_group = None if no_tumor_detected else result.get("risk_group")
+        analysis.survival_curve_data = None if no_tumor_detected else result.get("survival_curve_data")
+        analysis.finer_cam_path = None if no_tumor_detected else (result.get("classification_xai_path") or result.get("finer_cam_path"))
+        analysis.seg_eigen_cam_path = None if no_tumor_detected else (result.get("segmentation_xai_path") or result.get("seg_eigen_cam_path"))
         analysis.odam_path = result.get("detection_xai_path") or result.get("odam_path")
-        analysis.xai_3_panel_path = result.get("xai_3_panel_path")
+        analysis.xai_3_panel_path = None if no_tumor_detected else result.get("xai_3_panel_path")
 
         db.commit()
 
@@ -468,10 +470,16 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
         task_record.status = "done"
         task_record.result = clean_result
 
-        # Prognosis process: find or create analysis for the patient
-        analysis = db.query(models.AnalysisResult).filter(
-            models.AnalysisResult.patient_id == patient_id
-        ).first()
+        # Prognosis process: attach prognosis to the latest MRI analysis row.
+        analysis = None
+        if mri_record:
+            analysis = db.query(models.AnalysisResult).filter(
+                models.AnalysisResult.image_id == mri_record.id
+            ).first()
+        if not analysis:
+            analysis = db.query(models.AnalysisResult).filter(
+                models.AnalysisResult.patient_id == patient_id
+            ).order_by(models.AnalysisResult.created_at.desc()).first()
 
         if not analysis:
             analysis = models.AnalysisResult(
@@ -480,15 +488,17 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
             )
             db.add(analysis)
 
-        analysis.tumor_label = clean_result.get("tumor_label")
-        analysis.classification_confidence = clean_result.get("classification_confidence")
-        analysis.risk_score = clean_result.get("risk_score")
-        analysis.risk_group = clean_result.get("risk_group")
-        analysis.survival_curve_data = clean_result.get("survival_curve_data")
-        analysis.finer_cam_path = clean_result.get("classification_xai_path") or clean_result.get("finer_cam_path")
-        analysis.seg_eigen_cam_path = clean_result.get("segmentation_xai_path") or clean_result.get("seg_eigen_cam_path")
+        no_tumor_detected = bool(clean_result.get("no_tumor_detected"))
+        analysis.no_tumor_detected = no_tumor_detected
+        analysis.tumor_label = None if no_tumor_detected else clean_result.get("tumor_label")
+        analysis.classification_confidence = None if no_tumor_detected else clean_result.get("classification_confidence")
+        analysis.risk_score = None if no_tumor_detected else clean_result.get("risk_score")
+        analysis.risk_group = None if no_tumor_detected else clean_result.get("risk_group")
+        analysis.survival_curve_data = None if no_tumor_detected else clean_result.get("survival_curve_data")
+        analysis.finer_cam_path = None if no_tumor_detected else (clean_result.get("classification_xai_path") or clean_result.get("finer_cam_path"))
+        analysis.seg_eigen_cam_path = None if no_tumor_detected else (clean_result.get("segmentation_xai_path") or clean_result.get("seg_eigen_cam_path"))
         analysis.odam_path = clean_result.get("detection_xai_path") or clean_result.get("odam_path")
-        analysis.xai_3_panel_path = clean_result.get("xai_3_panel_path")
+        analysis.xai_3_panel_path = None if no_tumor_detected else clean_result.get("xai_3_panel_path")
 
         db.commit()
         return {"status": "done", "patient_id": patient_id}

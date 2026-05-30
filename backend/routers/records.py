@@ -541,11 +541,12 @@ def get_all_patients(db: Session = Depends(get_db)):
             .order_by(models.AnalysisResult.created_at.desc())
             .first()
         )
+        no_tumor_detected = bool(latest_analysis and getattr(latest_analysis, "no_tumor_detected", False))
         review_state = classification_review_state(
             db,
             latest_analysis.image_id if latest_analysis else None,
-            _display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None,
-            latest_analysis.classification_confidence if latest_analysis else None,
+            None if no_tumor_detected else (_display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None),
+            None if no_tumor_detected else (latest_analysis.classification_confidence if latest_analysis else None),
         )
 
         response.append(
@@ -556,11 +557,12 @@ def get_all_patients(db: Session = Depends(get_db)):
                 "age": patient.age,
                 "gender": patient.gender,
                 "lastVisit": latest_image.scan_date.isoformat() if latest_image and latest_image.scan_date else None,
-                "diagnosis": review_state["final_tumor_label"],
-                "aiDiagnosis": review_state["ai_tumor_label"],
+                "no_tumor_detected": no_tumor_detected,
+                "diagnosis": None if no_tumor_detected else review_state["final_tumor_label"],
+                "aiDiagnosis": None if no_tumor_detected else review_state["ai_tumor_label"],
                 "reviewStatus": review_state["review_status"],
                 "reviewRequired": review_state["review_required"],
-                "riskScore": latest_analysis.risk_score if latest_analysis and latest_analysis.risk_score is not None else None,
+                "riskScore": None if no_tumor_detected else (latest_analysis.risk_score if latest_analysis and latest_analysis.risk_score is not None else None),
             }
         )
 
@@ -758,11 +760,12 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
             .first()
         )
         image_analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.image_id == img.id).first()
+        no_tumor_detected = bool(image_analysis and getattr(image_analysis, "no_tumor_detected", False))
         review_state = classification_review_state(
             db,
             img.id,
-            _display_diagnosis(image_analysis.tumor_label) if image_analysis else None,
-            image_analysis.classification_confidence if image_analysis else None,
+            None if no_tumor_detected else (_display_diagnosis(image_analysis.tumor_label) if image_analysis else None),
+            None if no_tumor_detected else (image_analysis.classification_confidence if image_analysis else None),
         )
 
         ai_status = "done" if image_analysis else "ready"
@@ -783,8 +786,9 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
                 "latest_task_id": latest_task_id,
                 "latest_error_message": latest_error_message,
                 "has_analysis": image_analysis is not None,
-                "tumor_label": _display_diagnosis(image_analysis.tumor_label) if image_analysis else None,
-                "classification_confidence": image_analysis.classification_confidence if image_analysis else None,
+                "no_tumor_detected": no_tumor_detected,
+                "tumor_label": None if no_tumor_detected else (_display_diagnosis(image_analysis.tumor_label) if image_analysis else None),
+                "classification_confidence": None if no_tumor_detected else (image_analysis.classification_confidence if image_analysis else None),
                 "ai_tumor_label": review_state["ai_tumor_label"],
                 "final_tumor_label": review_state["final_tumor_label"],
                 "expert_tumor_label": review_state["expert_tumor_label"],
@@ -793,8 +797,8 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
                 "review_status": review_state["review_status"],
                 "review_action": review_state["review_action"],
                 "reviewed_at": review_state["reviewed_at"],
-                "risk_score": image_analysis.risk_score if image_analysis else None,
-                "risk_group": image_analysis.risk_group if image_analysis else None,
+                "risk_score": None if no_tumor_detected else (image_analysis.risk_score if image_analysis else None),
+                "risk_group": None if no_tumor_detected else (image_analysis.risk_group if image_analysis else None),
                 "is_series": img.is_series,
                 "num_slices": img.num_slices,
                 "key_slice_index": img.key_slice_index,

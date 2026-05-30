@@ -1089,7 +1089,7 @@ def get_patient_full_analysis(
             created_at = mri_task.created_at
 
     # Build overlay data URLs từ local paths
-    no_tumor_detected = bool(result_payload.get("no_tumor_detected"))
+    no_tumor_detected = bool(result_payload.get("no_tumor_detected") or (analysis and getattr(analysis, "no_tumor_detected", False)))
     bbox = result_payload.get("bbox")
     seg_mask_path = result_payload.get("seg_mask_path")
 
@@ -1147,9 +1147,9 @@ def get_patient_full_analysis(
         mask_data_url=_stored_image_to_data_url(result_payload.get("seg_mask_path")),
         mask_overlay_data_url=mask_overlay_data_url,
         contour_overlay_data_url=contour_overlay_data_url,
-        risk_score=result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis and analysis.risk_score is not None else (0.0 if result_payload.get("risk_group") or (analysis and analysis.risk_group) else None)),
-        risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
-        survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
+        risk_score=None if no_tumor_detected else (result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis else None)),
+        risk_group=None if no_tumor_detected else (result_payload.get("risk_group") or (analysis.risk_group if analysis else None)),
+        survival_curve_data=None if no_tumor_detected else (result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None)),
         multimodal_risk_xai_data_url=_stored_image_to_data_url(result_payload.get("multimodal_risk_xai_path") or result_payload.get("gradcam_heatmap_path")),
         multimodal_gradcam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("multimodal_gradcam_heatmap_path")),
         multimodal_gradcam_plus_heatmap_data_url=_stored_image_to_data_url(result_payload.get("multimodal_gradcam_plus_heatmap_path")),
@@ -1226,7 +1226,7 @@ def get_image_analysis_detail(
 
     bbox = result_payload.get("bbox")
     seg_mask_path = result_payload.get("seg_mask_path")
-    no_tumor_detected = bool(result_payload.get("no_tumor_detected"))
+    no_tumor_detected = bool(result_payload.get("no_tumor_detected") or (analysis and getattr(analysis, "no_tumor_detected", False)))
     mask_overlay_data_url = _stored_image_to_data_url(result_payload.get("mask_overlay_path"))
     contour_overlay_data_url = _stored_image_to_data_url(result_payload.get("contour_overlay_path"))
 
@@ -1281,9 +1281,9 @@ def get_image_analysis_detail(
         mask_data_url=_stored_image_to_data_url(result_payload.get("seg_mask_path")),
         mask_overlay_data_url=mask_overlay_data_url,
         contour_overlay_data_url=contour_overlay_data_url,
-        risk_score=result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis else None),
-        risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
-        survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
+        risk_score=None if no_tumor_detected else (result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis else None)),
+        risk_group=None if no_tumor_detected else (result_payload.get("risk_group") or (analysis.risk_group if analysis else None)),
+        survival_curve_data=None if no_tumor_detected else (result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None)),
         multimodal_risk_xai_data_url=_stored_image_to_data_url(result_payload.get("multimodal_risk_xai_path") or result_payload.get("gradcam_heatmap_path")),
         multimodal_gradcam_heatmap_data_url=_stored_image_to_data_url(result_payload.get("multimodal_gradcam_heatmap_path")),
         multimodal_gradcam_plus_heatmap_data_url=_stored_image_to_data_url(result_payload.get("multimodal_gradcam_plus_heatmap_path")),
@@ -1513,7 +1513,7 @@ def download_image_report(
             result_payload = _merge_prognosis_only(result_payload, prognosis_task.result)
         else:
             result_payload.update(prognosis_task.result)
-    no_tumor_detected = bool(result_payload.get("no_tumor_detected"))
+    no_tumor_detected = bool(result_payload.get("no_tumor_detected") or (analysis and getattr(analysis, "no_tumor_detected", False)))
     tumor_label = _display_tumor_label(
         result_payload.get("tumor_label") or (analysis.tumor_label if analysis else None),
         no_tumor_detected=no_tumor_detected,
@@ -1583,16 +1583,16 @@ def download_image_report(
             bbox=result_payload.get("bbox"),
             class_probabilities=result_payload.get("class_probabilities"),
             no_tumor_detected=no_tumor_detected,
-            multimodal_available=bool((analysis and (analysis.risk_score is not None or analysis.risk_group)) or result_payload.get("risk_group")),
+            multimodal_available=False if no_tumor_detected else bool((analysis and (analysis.risk_score is not None or analysis.risk_group)) or result_payload.get("risk_group")),
             original_image=_load_image_for_report(minio_file_path=image.file_path, local_path=result_payload.get("original_image_path")),
             bbox_image=_load_image_for_report(local_path=result_payload.get("bbox_image_path")),
             cropped_roi_image=_load_image_for_report(local_path=result_payload.get("cropped_roi_path")),
             mask_image=_load_image_for_report(local_path=result_payload.get("seg_mask_path")),
             overlay_image=_load_image_for_report(local_path=result_payload.get("mask_overlay_path"))
             or _load_image_for_report(local_path=result_payload.get("masked_roi_path")),
-            risk_score=result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis and analysis.risk_score is not None else (0.0 if result_payload.get("risk_group") or (analysis and analysis.risk_group) else None)),
-            risk_group=result_payload.get("risk_group") or (analysis.risk_group if analysis else None),
-            survival_curve_data=result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None),
+            risk_score=None if no_tumor_detected else (result_payload.get("risk_score") if result_payload.get("risk_score") is not None else (analysis.risk_score if analysis else None)),
+            risk_group=None if no_tumor_detected else (result_payload.get("risk_group") or (analysis.risk_group if analysis else None)),
+            survival_curve_data=None if no_tumor_detected else (result_payload.get("survival_curve_data") or (analysis.survival_curve_data if analysis else None)),
             heatmap_image=_bgr_path_to_pil(result_payload.get("multimodal_risk_xai_path") or result_payload.get("gradcam_heatmap_path")),
             gradcam_plus_image=_bgr_path_to_pil(result_payload.get("multimodal_gradcam_plus_heatmap_path") or result_payload.get("gradcam_plus_heatmap_path")),
             layercam_image=_bgr_path_to_pil(result_payload.get("multimodal_layercam_heatmap_path") or result_payload.get("layercam_heatmap_path")),

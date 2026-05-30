@@ -167,6 +167,10 @@ class TumorAnalysisPipeline:
                     mri_tensor = self.preprocess_for_multimodal(cropped_img)
                     has_mri = 1.0
             result_dict.update(mri_res)
+            if mri_res["status"] == "success" and mri_res.get("no_tumor_detected"):
+                if progress_callback:
+                    progress_callback(100, "Không phát hiện khối u trên MRI. Bỏ qua tiên lượng risk score.")
+                return result_dict
 
         # 2. Xử lý WSI Tiles (nếu có)
         wsi_tensor = torch.zeros(1, 1, 3, 224, 224, device=self.device)

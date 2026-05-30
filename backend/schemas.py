@@ -106,6 +106,7 @@ class AnalysisResultResponse(BaseModel):
     patient_id: int
 
     # Phân loại u
+    no_tumor_detected: Optional[bool] = None
     tumor_label: Optional[str]
     classification_confidence: Optional[float]
     review_action: Optional[str] = None

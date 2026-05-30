@@ -118,6 +118,7 @@ class AnalysisResult(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # --- Phân loại u (YOLOv5 + DenseNet169-ViT) ---
+    no_tumor_detected = Column(Boolean, default=False)
     tumor_label = Column(String, nullable=True)        # VD: "Glioblastoma", "Meningioma"
     classification_confidence = Column(Float, nullable=True)
 
