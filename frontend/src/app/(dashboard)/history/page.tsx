@@ -260,9 +260,13 @@ export default function HistoryPage() {
                         {item.patient_name || `Bệnh nhân ${item.patient_id}`}
                       </td>
                       <td className="px-5 py-4 text-slate-400">{formatDate(item.last_diagnosis_time)}</td>
-                      <td className="px-5 py-4">{item.latest_final_tumor_label || item.latest_tumor_label || "--"}</td>
+                      <td className="px-5 py-4">
+                        {item.latest_no_tumor_detected ? "Không phát hiện khối u" : item.latest_final_tumor_label || item.latest_tumor_label || "--"}
+                      </td>
                       <td className="px-5 py-4">{formatPercent(item.latest_classification_confidence)}</td>
-                      <td className="px-5 py-4">{formatScore(item.latest_risk_score)}</td>
+                      <td className="px-5 py-4">
+                        {item.latest_no_tumor_detected ? "Không áp dụng" : formatScore(item.latest_risk_score)}
+                      </td>
                       <td className="px-5 py-4">
                         <span
                           className={`rounded-full px-2.5 py-1 text-xs font-bold ${
@@ -273,7 +277,7 @@ export default function HistoryPage() {
                                 : "bg-slate-800 text-slate-400"
                           }`}
                         >
-                          {item.latest_risk_group || "N/A"}
+                          {item.latest_no_tumor_detected ? "Không áp dụng" : item.latest_risk_group || "N/A"}
                         </span>
                       </td>
                       <td className="px-5 py-4">

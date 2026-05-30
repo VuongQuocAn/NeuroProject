@@ -22,6 +22,7 @@ router = APIRouter(prefix="/records", tags=["Records"])
 BUCKET_NAME = os.getenv("MINIO_BUCKET") or os.getenv("R2_BUCKET") or "medical-data"
 REPORT_TYPE_DIAGNOSIS_HISTORY = "diagnosis_history"
 REPORT_PROMPT_VERSION = "patient-history-v1"
+NO_TUMOR_LABEL = "Không phát hiện khối u"
 
 
 def _natural_sort_key(text: str):
@@ -49,6 +50,12 @@ def _display_diagnosis(label: str | None) -> str | None:
     if not label:
         return None
     return LABEL_MAP.get(label, label)
+
+
+def _diagnosis_label(label: str | None, no_tumor_detected: bool = False) -> str | None:
+    if no_tumor_detected:
+        return NO_TUMOR_LABEL
+    return _display_diagnosis(label)
 
 
 def _safe_float(value):
@@ -135,8 +142,9 @@ def _build_patient_history_payload(db: Session, patient: models.Patient) -> dict
         status = "done" if analysis else "ready"
         if latest_task:
             status = latest_task.status
-        ai_label = _display_diagnosis(analysis.tumor_label) if analysis else None
-        ai_confidence = analysis.classification_confidence if analysis else None
+        no_tumor_detected = bool(analysis and getattr(analysis, "no_tumor_detected", False))
+        ai_label = _diagnosis_label(analysis.tumor_label, no_tumor_detected) if analysis else None
+        ai_confidence = None if no_tumor_detected else (analysis.classification_confidence if analysis else None)
         review_state = classification_review_state(db, img.id, ai_label, ai_confidence)
 
         timeline.append(
@@ -147,6 +155,7 @@ def _build_patient_history_payload(db: Session, patient: models.Patient) -> dict
                 "scan_date": img.scan_date.isoformat() if img.scan_date else None,
                 "image_url": _image_preview_url(img),
                 "ai_status": status,
+                "no_tumor_detected": no_tumor_detected,
                 "tumor_label": ai_label,
                 "classification_confidence": ai_confidence,
                 "ai_tumor_label": review_state["ai_tumor_label"],
@@ -155,8 +164,8 @@ def _build_patient_history_payload(db: Session, patient: models.Patient) -> dict
                 "review_status": review_state["review_status"],
                 "review_required": review_state["review_required"],
                 "expert_comment": review_state["expert_comment"],
-                "risk_score": analysis.risk_score if analysis else None,
-                "risk_group": analysis.risk_group if analysis else None,
+                "risk_score": None if no_tumor_detected else (analysis.risk_score if analysis else None),
+                "risk_group": None if no_tumor_detected else (analysis.risk_group if analysis else None),
                 "is_series": bool(img.is_series),
                 "num_slices": img.num_slices or 1,
                 "key_slice_index": img.key_slice_index or 0,
@@ -166,6 +175,7 @@ def _build_patient_history_payload(db: Session, patient: models.Patient) -> dict
     chronological = list(reversed(timeline))
     for idx, item in enumerate(chronological, start=1):
         item["chronological_index"] = idx
+        item["diagnosis_index"] = idx
 
     risk_trend = [
         {
@@ -178,6 +188,15 @@ def _build_patient_history_payload(db: Session, patient: models.Patient) -> dict
         }
         for item in chronological
         if item.get("risk_score") is not None
+    ]
+    no_tumor_risk_notes = [
+        {
+            "diagnosis_index": item["chronological_index"],
+            "scan_date": item["scan_date"],
+            "message": f"Lần {item['chronological_index']} không phát hiện khối u nên không tính risk score.",
+        }
+        for item in chronological
+        if item.get("no_tumor_detected")
     ]
 
     rna_record = (
@@ -221,9 +240,11 @@ def _build_patient_history_payload(db: Session, patient: models.Patient) -> dict
             "latest_risk_score": latest.get("risk_score"),
             "latest_risk_group": latest.get("risk_group"),
             "last_diagnosis_time": latest.get("scan_date"),
+            "latest_no_tumor_detected": latest.get("no_tumor_detected"),
         },
         "timeline": timeline,
         "risk_trend": risk_trend,
+        "no_tumor_risk_notes": no_tumor_risk_notes,
         "multimodal_data": {
             "has_mri": len(timeline) > 0,
             "has_wsi": wsi_count > 0,
@@ -260,6 +281,7 @@ def _history_data_hash(payload: dict) -> str:
                 "tumor_label": item.get("tumor_label"),
                 "classification_confidence": item.get("classification_confidence"),
                 "final_tumor_label": item.get("final_tumor_label"),
+                "no_tumor_detected": item.get("no_tumor_detected"),
                 "review_status": item.get("review_status"),
                 "expert_comment": item.get("expert_comment"),
                 "risk_score": item.get("risk_score"),
@@ -279,10 +301,12 @@ def _fallback_history_texts(payload: dict) -> dict[str, str]:
     timeline = payload.get("timeline", [])
     risk_trend = payload.get("risk_trend", [])
     latest_label = summary.get("latest_tumor_label") or "chua co ket qua phan loai"
+    latest_no_tumor = bool(summary.get("latest_no_tumor_detected"))
     latest_conf = _pct(summary.get("latest_classification_confidence"))
     latest_risk = summary.get("latest_risk_score")
     latest_risk_text = "chua co" if latest_risk is None else f"{latest_risk:.4f}"
     latest_group = _risk_display(summary.get("latest_risk_group"))
+    no_tumor_items = [item for item in reversed(timeline) if item.get("no_tumor_detected")]
 
     labels = [item.get("tumor_label") for item in reversed(timeline) if item.get("tumor_label")]
     unique_labels = list(dict.fromkeys(labels))
@@ -293,6 +317,10 @@ def _fallback_history_texts(payload: dict) -> dict[str, str]:
     else:
         class_trend = f"Nhãn phân loại thay đổi qua các lần chẩn đoán: {', '.join(unique_labels)}. Can doi chieu chat luong anh va danh gia chuyen khoa."
 
+    if no_tumor_items:
+        no_tumor_text = ", ".join([f"lan {item.get('chronological_index')}" for item in no_tumor_items])
+        class_trend += f" Luu y: {no_tumor_text} khong con phat hien khoi u."
+
     if len(risk_trend) >= 2:
         first = _safe_float(risk_trend[0].get("risk_score")) or 0
         last = _safe_float(risk_trend[-1].get("risk_score")) or 0
@@ -302,19 +330,29 @@ def _fallback_history_texts(payload: dict) -> dict[str, str]:
         risk_text = f"Hien chi co mot diem risk score ({risk_trend[0].get('risk_score'):.4f}), chua du de danh gia xu huong."
     else:
         risk_text = "Chua co du lieu risk score de ve va nhan xet xu huong tien luong."
+    if no_tumor_items:
+        skipped = ", ".join([f"lan {item.get('chronological_index')}" for item in no_tumor_items])
+        risk_text += f" Luu y: {skipped} khong phat hien khoi u nen khong tinh risk score."
 
     return {
         "summary_text": (
             f"Benh nhan co {len(timeline)} lan upload/chan doan MRI trong he thong. "
-            f"Ket qua gan nhat ghi nhan {latest_label} voi do tin cay {latest_conf}; "
-            f"risk score gan nhat la {latest_risk_text}, thuoc nhom {latest_group}."
+            + (
+                f"Ket qua gan nhat ghi nhan {NO_TUMOR_LABEL}; khong tinh risk score cho lan nay."
+                if latest_no_tumor
+                else f"Ket qua gan nhat ghi nhan {latest_label} voi do tin cay {latest_conf}; risk score gan nhat la {latest_risk_text}, thuoc nhom {latest_group}."
+            )
         ),
         "classification_trend_text": class_trend,
         "risk_trend_text": risk_text,
         "conclusion_text": (
-            f"Ket qua gan nhat la {latest_label}, risk group {latest_group}. "
-            "Bao cao nay tong hop lich su AI theo du lieu da luu va chi co vai tro ho tro tham khao; "
-            "can doi chieu voi danh gia lam sang cua bac si chuyen khoa."
+            (
+                f"Ket qua gan nhat la {NO_TUMOR_LABEL}; risk score/risk group khong ap dung cho lan nay. "
+                if latest_no_tumor
+                else f"Ket qua gan nhat la {latest_label}, risk group {latest_group}. "
+            )
+            + "Bao cao nay tong hop lich su AI theo du lieu da luu va chi co vai tro ho tro tham khao; "
+            + "can doi chieu voi danh gia lam sang cua bac si chuyen khoa."
         ),
     }
 
@@ -441,17 +479,21 @@ def _make_history_report_response(db: Session, patient: models.Patient, generate
     status = "ready" if _report_texts_ready(report, data_hash) else report.status
     if report.data_hash and report.data_hash != data_hash and status == "ready":
         status = "stale"
+    fallback_texts = _fallback_history_texts(payload)
+    display_texts = {
+        "summary_text": report.summary_text,
+        "classification_trend_text": report.classification_trend_text,
+        "risk_trend_text": report.risk_trend_text,
+        "conclusion_text": report.conclusion_text,
+    }
+    if status != "ready":
+        display_texts = fallback_texts
 
     return {
         **payload,
         "report_status": status,
         "data_hash": data_hash,
-        "texts": {
-            "summary_text": report.summary_text,
-            "classification_trend_text": report.classification_trend_text,
-            "risk_trend_text": report.risk_trend_text,
-            "conclusion_text": report.conclusion_text,
-        },
+        "texts": display_texts,
         "error_message": report.error_message,
     }
 
@@ -558,8 +600,8 @@ def get_all_patients(db: Session = Depends(get_db)):
                 "gender": patient.gender,
                 "lastVisit": latest_image.scan_date.isoformat() if latest_image and latest_image.scan_date else None,
                 "no_tumor_detected": no_tumor_detected,
-                "diagnosis": None if no_tumor_detected else review_state["final_tumor_label"],
-                "aiDiagnosis": None if no_tumor_detected else review_state["ai_tumor_label"],
+                "diagnosis": NO_TUMOR_LABEL if no_tumor_detected else review_state["final_tumor_label"],
+                "aiDiagnosis": NO_TUMOR_LABEL if no_tumor_detected else review_state["ai_tumor_label"],
                 "reviewStatus": review_state["review_status"],
                 "reviewRequired": review_state["review_required"],
                 "riskScore": None if no_tumor_detected else (latest_analysis.risk_score if latest_analysis and latest_analysis.risk_score is not None else None),
@@ -622,7 +664,8 @@ def get_diagnosis_history_patients(
             if query_text not in haystack:
                 continue
 
-        latest_risk_group = latest_analysis.risk_group if latest_analysis else None
+        latest_no_tumor_detected = bool(latest_analysis and getattr(latest_analysis, "no_tumor_detected", False))
+        latest_risk_group = None if latest_no_tumor_detected else (latest_analysis.risk_group if latest_analysis else None)
         if risk_filter and risk_filter not in {"all", "tat_ca"}:
             if risk_filter == "na":
                 if latest_risk_group:
@@ -640,16 +683,16 @@ def get_diagnosis_history_patients(
             classification_review_state(
                 db,
                 analysis.image_id,
-                _display_diagnosis(analysis.tumor_label),
-                analysis.classification_confidence,
+                None if getattr(analysis, "no_tumor_detected", False) else _display_diagnosis(analysis.tumor_label),
+                None if getattr(analysis, "no_tumor_detected", False) else analysis.classification_confidence,
             )
             for analysis in patient_analyses
         ]
         latest_review = classification_review_state(
             db,
             latest_analysis.image_id if latest_analysis else None,
-            _display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None,
-            latest_analysis.classification_confidence if latest_analysis else None,
+            None if latest_no_tumor_detected else (_display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None),
+            None if latest_no_tumor_detected else (latest_analysis.classification_confidence if latest_analysis else None),
         )
         items.append(
             {
@@ -657,16 +700,17 @@ def get_diagnosis_history_patients(
                 "patient_external_id": patient.patient_external_id,
                 "patient_name": patient.name,
                 "last_diagnosis_time": latest_image.scan_date if latest_image else None,
-                "latest_tumor_label": _display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None,
-                "latest_classification_confidence": latest_analysis.classification_confidence if latest_analysis else None,
-                "latest_ai_tumor_label": latest_review["ai_tumor_label"],
-                "latest_final_tumor_label": latest_review["final_tumor_label"],
+                "latest_no_tumor_detected": latest_no_tumor_detected,
+                "latest_tumor_label": NO_TUMOR_LABEL if latest_no_tumor_detected else (_display_diagnosis(latest_analysis.tumor_label) if latest_analysis else None),
+                "latest_classification_confidence": None if latest_no_tumor_detected else (latest_analysis.classification_confidence if latest_analysis else None),
+                "latest_ai_tumor_label": NO_TUMOR_LABEL if latest_no_tumor_detected else latest_review["ai_tumor_label"],
+                "latest_final_tumor_label": NO_TUMOR_LABEL if latest_no_tumor_detected else latest_review["final_tumor_label"],
                 "latest_review_status": latest_review["review_status"],
                 "latest_review_required": latest_review["review_required"],
                 "review_required_count": len([item for item in review_states if item["review_required"]]),
                 "review_corrected_count": len([item for item in review_states if item["review_status"] == "corrected"]),
                 "review_confirmed_count": len([item for item in review_states if item["review_status"] == "confirmed"]),
-                "latest_risk_score": latest_analysis.risk_score if latest_analysis else None,
+                "latest_risk_score": None if latest_no_tumor_detected else (latest_analysis.risk_score if latest_analysis else None),
                 "latest_risk_group": latest_risk_group,
                 "diagnosis_count": mri_count,
                 "history_report_status": status,

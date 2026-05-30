@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Any
 from datetime import datetime
 
@@ -254,6 +254,7 @@ class DiagnosisHistoryPatientItem(BaseModel):
     patient_external_id: Optional[str] = None
     patient_name: Optional[str] = None
     last_diagnosis_time: Optional[datetime] = None
+    latest_no_tumor_detected: bool = False
     latest_tumor_label: Optional[str] = None
     latest_classification_confidence: Optional[float] = None
     latest_ai_tumor_label: Optional[str] = None
@@ -283,6 +284,7 @@ class PatientHistoryTimelineItem(BaseModel):
     scan_date: Optional[datetime] = None
     image_url: Optional[str] = None
     ai_status: str = "ready"
+    no_tumor_detected: bool = False
     tumor_label: Optional[str] = None
     classification_confidence: Optional[float] = None
     ai_tumor_label: Optional[str] = None
@@ -319,6 +321,7 @@ class PatientHistoryReportResponse(BaseModel):
     summary: dict
     timeline: List[PatientHistoryTimelineItem]
     risk_trend: List[dict]
+    no_tumor_risk_notes: List[dict] = Field(default_factory=list)
     multimodal_data: dict
     expert_validations: List[dict]
     report_status: str

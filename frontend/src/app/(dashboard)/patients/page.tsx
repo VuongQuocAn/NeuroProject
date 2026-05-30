@@ -18,7 +18,6 @@ function displayDiagnosis(label?: string | null) {
 
 function hasPatientTumorDiagnosis(patient: any) {
   if (!patient) return false;
-  if (patient.no_tumor_detected === true) return false;
   return Boolean(patient.diagnosis || patient.aiDiagnosis || patient.classificationConfidence != null);
 }
 
@@ -243,7 +242,9 @@ export default function PatientsPage() {
   const renderStatusBadge = (diagnosis?: string) => {
     const label = displayDiagnosis(diagnosis);
     let bgClasses = "bg-slate-800 text-slate-400 border border-slate-700";
-    if (label.includes("Rủi ro cao") || label.includes("GBM") || label.includes("Glioma")) {
+    if (label.includes("Không phát hiện")) {
+      bgClasses = "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20";
+    } else if (label.includes("Rủi ro cao") || label.includes("GBM") || label.includes("Glioma")) {
       bgClasses = "bg-red-500/10 text-red-500 border border-red-500/20";
     } else if (label.includes("Meningioma") || label.includes("Aneurysm")) {
       bgClasses = "bg-blue-500/10 text-blue-400 border border-blue-500/20";
@@ -355,12 +356,12 @@ export default function PatientsPage() {
                               : "text-slate-500"
                         }`}
                       >
-                        {hasTumorDiagnosis ? reviewText(p.reviewStatus) : "Chưa chẩn đoán"}
+                        {p.no_tumor_detected ? "Không có khối u" : hasTumorDiagnosis ? reviewText(p.reviewStatus) : "Chưa chẩn đoán"}
                       </span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    {hasTumorDiagnosis && p.riskScore != null ? renderRiskBar(p.riskScore) : <span className="text-slate-500">—</span>}
+                    {p.no_tumor_detected ? <span className="text-slate-500">Không áp dụng</span> : hasTumorDiagnosis && p.riskScore != null ? renderRiskBar(p.riskScore) : <span className="text-slate-500">—</span>}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <button 

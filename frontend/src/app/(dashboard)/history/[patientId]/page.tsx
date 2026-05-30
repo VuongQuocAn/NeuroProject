@@ -82,7 +82,7 @@ function RiskTrendChart({ points }: { points: any[] }) {
               cx={point.x}
               cy={point.y}
               r="6"
-              fill={String(point.risk_group).toLowerCase() === "high" ? "#f97316" : "#10b981"}
+              fill={["high", "very high"].includes(String(point.risk_group).toLowerCase()) ? "#f97316" : "#10b981"}
               stroke="#ffffff"
               strokeWidth="2"
             />
@@ -91,6 +91,9 @@ function RiskTrendChart({ points }: { points: any[] }) {
             </text>
             <text x={point.x - 18} y={point.y - 12} fill="#e2e8f0" fontSize="12">
               {Number(point.risk_score).toFixed(2)}
+            </text>
+            <text x={point.x - 18} y={point.y + 20} fill="#94a3b8" fontSize="10">
+              {point.risk_group || ""}
             </text>
           </g>
         ))}
@@ -245,7 +248,9 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
         </div>
         <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
           <div className="text-xs uppercase text-slate-500">Risk group</div>
-          <div className="mt-2 text-lg font-bold text-white">{report?.summary?.latest_risk_group || "N/A"}</div>
+          <div className="mt-2 text-lg font-bold text-white">
+            {report?.summary?.latest_no_tumor_detected ? "Không áp dụng" : report?.summary?.latest_risk_group || "N/A"}
+          </div>
         </div>
       </div>
 
@@ -304,11 +309,15 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
                     {item.modality}
                     {item.is_series ? <div className="text-xs text-slate-500">Slice {item.key_slice_index}</div> : null}
                   </td>
-                  <td className="px-3 py-4">{item.tumor_label || "--"}</td>
+                  <td className="px-3 py-4">
+                    {item.no_tumor_detected ? "Không phát hiện khối u" : item.tumor_label || "--"}
+                  </td>
                   <td className="px-3 py-4">{formatPercent(item.classification_confidence)}</td>
                   <td className="px-3 py-4">
                     <div>{formatScore(item.risk_score)}</div>
-                    <div className="text-xs uppercase text-slate-500">{item.risk_group || "N/A"}</div>
+                    <div className="text-xs uppercase text-slate-500">
+                      {item.no_tumor_detected ? "Không áp dụng" : item.risk_group || "N/A"}
+                    </div>
                   </td>
                   <td className="px-3 py-4 uppercase">{item.ai_status}</td>
                 </tr>
@@ -326,6 +335,13 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
       <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
         <h2 className="mb-4 text-lg font-bold text-white">4. Biểu đồ diễn tiến tiên lượng theo thời gian</h2>
         <RiskTrendChart points={report?.risk_trend || []} />
+        {(report?.no_tumor_risk_notes || []).length > 0 && (
+          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+            {(report.no_tumor_risk_notes || []).map((note: any) => (
+              <div key={`${note.diagnosis_index}-${note.scan_date}`}>{note.message}</div>
+            ))}
+          </div>
+        )}
         <p className="mt-4 leading-relaxed text-slate-300">{texts.risk_trend_text || "Chưa có nhận xét AI."}</p>
       </section>
 
