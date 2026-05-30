@@ -48,6 +48,12 @@ function reviewStatusText(status?: string | null) {
   return "Chưa review";
 }
 
+function hasTumorClassification(record?: any) {
+  if (!record) return false;
+  if (record.no_tumor_detected === true) return false;
+  return Boolean(record.tumor_label || record.final_tumor_label || record.ai_tumor_label || record.classification_confidence != null);
+}
+
 function ClientDate({ date }: { date: string }) {
   const [formatted, setFormatted] = useState<string>("—");
 
@@ -316,6 +322,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     paginatedImages.map((img: any) => {
                       const backendStatus = String(img.ai_status || "ready").toLowerCase();
+                      const hasTumor = hasTumorClassification(img);
                       const isBusy =
                         backendStatus === "pending" ||
                         backendStatus === "processing" ||
@@ -379,19 +386,19 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                             </span>
                           </td>
                           <td className="px-6 py-5 text-slate-300">
-                            <div>{img.final_tumor_label || img.tumor_label || "—"}</div>
-                            {img.review_status && img.review_status !== "not_required" && img.review_status !== "not_available" && (
+                            <div>{hasTumor ? img.final_tumor_label || img.tumor_label || "—" : "—"}</div>
+                            {hasTumor && img.review_status && img.review_status !== "not_required" && img.review_status !== "not_available" && (
                               <div className={`mt-1 w-fit rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap ${img.review_status === "needs_review" ? "bg-red-500/10 text-red-300" : img.review_status === "corrected" ? "bg-violet-500/10 text-violet-300" : "bg-emerald-500/10 text-emerald-300"}`}>
                                 {reviewStatusText(img.review_status)}
                               </div>
                             )}
                           </td>
                           <td className="px-6 py-5 text-slate-300">
-                            {img.classification_confidence != null ? `${(img.classification_confidence * 100).toFixed(2)}%` : "—"}
+                            {hasTumor && img.classification_confidence != null ? `${(img.classification_confidence * 100).toFixed(2)}%` : "—"}
                           </td>
                           <td className="px-6 py-5 text-slate-300">
-                            <div>{img.risk_score != null ? Number(img.risk_score).toFixed(4) : "—"}</div>
-                            <div className="text-[10px] uppercase text-slate-500">{img.risk_group || "N/A"}</div>
+                            <div>{hasTumor && img.risk_score != null ? Number(img.risk_score).toFixed(4) : "—"}</div>
+                            <div className="text-[10px] uppercase text-slate-500">{hasTumor && img.risk_group ? img.risk_group : "—"}</div>
                           </td>
                           <td className="px-6 py-5 text-right">
                             <div className="flex items-center justify-end gap-3">
@@ -472,18 +479,21 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                 Chưa có kết quả phân tích nào được lưu cho bệnh nhân này.
               </div>
             ) : (
+              (() => {
+                const latestHasTumor = hasTumorClassification(latestAnalysis);
+                return (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Loại u</div>
                   <div className="text-lg font-bold text-white">
-                    {displayTumorLabel(latestAnalysis.tumor_label)}
+                    {latestHasTumor ? displayTumorLabel(latestAnalysis.tumor_label) : "—"}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Độ tin cậy</div>
                   <div className="text-lg font-bold text-white">
-                    {latestAnalysis.classification_confidence != null
+                    {latestHasTumor && latestAnalysis.classification_confidence != null
                       ? `${(latestAnalysis.classification_confidence * 100).toFixed(2)}%`
                       : "—"}
                   </div>
@@ -492,17 +502,19 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Risk score</div>
                   <div className="text-lg font-bold text-white">
-                    {latestAnalysis.risk_score != null ? latestAnalysis.risk_score.toFixed(4) : "—"}
+                    {latestHasTumor && latestAnalysis.risk_score != null ? latestAnalysis.risk_score.toFixed(4) : "—"}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Risk group</div>
                   <div className="text-lg font-bold text-white">
-                    {latestAnalysis.risk_group || "—"}
+                    {latestHasTumor ? latestAnalysis.risk_group || "—" : "—"}
                   </div>
                 </div>
               </div>
+                );
+              })()
             )}
           </div>
         </div>
