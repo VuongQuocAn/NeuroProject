@@ -247,6 +247,7 @@ export default function MriResultCard({
   const shouldWarnClassificationReview =
     reviewState.review_status === "needs_review" || (isLowClassificationConfidence && !hasCompletedClassificationReview);
   const shouldShowClassificationReviewForm = showReviewForm || shouldWarnClassificationReview;
+  const shouldShowMultimodalPrognosis = !noTumorDetected && result?.risk_score != null;
   const multimodalRiskXaiUrl = result?.multimodal_risk_xai_data_url || result?.gradcam_heatmap_data_url || null;
   const multimodalExplanation = result?.multimodal_xai_explanation || result?.xai_explanation || null;
   const imagePanels = [
@@ -320,7 +321,7 @@ export default function MriResultCard({
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 flex items-center gap-3 text-amber-200">
                   <Search className="h-5 w-5" />
                   <span className="text-sm font-medium">
-                    Không phát hiện khối u rõ ràng trên chuỗi MRI này. Kết luận dựa trên phân tích đa số.
+                    Không phát hiện khối u. Cần tham khảo ý kiến chuyên gia.
                   </span>
                 </div>
               )}
@@ -426,7 +427,7 @@ export default function MriResultCard({
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">
                     Tumor label
                   </div>
-                  <div className="text-sm font-semibold text-white">{result?.tumor_label || "--"}</div>
+                  <div className="text-sm font-semibold text-white">{noTumorDetected ? "--" : result?.tumor_label || "--"}</div>
                 </div>
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
@@ -434,7 +435,7 @@ export default function MriResultCard({
                     Classification confidence
                   </div>
                   <div className="text-sm font-semibold text-white">
-                    {formatConfidence(result?.classification_confidence)}
+                    {noTumorDetected ? "--" : formatConfidence(result?.classification_confidence)}
                   </div>
                 </div>
               </div>
@@ -444,11 +445,11 @@ export default function MriResultCard({
                   Class probabilities
                 </div>
                 <div className="text-sm font-semibold text-white break-all">
-                  {formatList(result?.class_probabilities)}
+                  {noTumorDetected ? "--" : formatList(result?.class_probabilities)}
                 </div>
               </div>
 
-              {result?.tumor_label && !shouldWarnClassificationReview && !hasCompletedClassificationReview && !showReviewForm && (
+              {result?.tumor_label && !noTumorDetected && !shouldWarnClassificationReview && !hasCompletedClassificationReview && !showReviewForm && (
                 <div className="flex justify-end">
                   <button
                     type="button"
@@ -460,7 +461,7 @@ export default function MriResultCard({
                 </div>
               )}
 
-              {result?.tumor_label && (shouldWarnClassificationReview || hasCompletedClassificationReview || showReviewForm) && (
+              {result?.tumor_label && !noTumorDetected && (shouldWarnClassificationReview || hasCompletedClassificationReview || showReviewForm) && (
                 <div
                   className={`rounded-xl border p-5 ${
                     shouldWarnClassificationReview
@@ -605,7 +606,7 @@ export default function MriResultCard({
                 </div>
               )}
 
-              {result?.risk_score != null && (
+              {shouldShowMultimodalPrognosis && (
                 <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5 space-y-5">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
@@ -840,7 +841,7 @@ export default function MriResultCard({
                 <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 flex items-center gap-3 text-emerald-300">
                   <CheckCircle2 className="h-5 w-5" />
                   <span className="text-sm font-medium">
-                    {result?.risk_score != null
+                    {shouldShowMultimodalPrognosis
                       ? "Kết quả MRI & Multimodal Prognosis đã sẵn sàng."
                       : "Kết quả MRI đã sẵn sàng để xem, tải báo cáo hoặc xóa."}
                   </span>
