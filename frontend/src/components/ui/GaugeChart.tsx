@@ -19,7 +19,10 @@ export function GaugeChart({ value, label, sublabel }: GaugeChartProps) {
   const [isMounted, setIsMounted] = useState(false);
   
   useEffect(() => {
-    setIsMounted(true);
+    const timer = setTimeout(() => {
+      setIsMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const normalizedValue = value <= 1 ? value * 100 : value;
@@ -33,7 +36,7 @@ export function GaugeChart({ value, label, sublabel }: GaugeChartProps) {
 
   return (
     <div className="relative h-40 w-full flex flex-col items-center justify-center">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height={140} minWidth={0}>
         <PieChart>
           <Pie
             data={data}
@@ -57,7 +60,7 @@ export function GaugeChart({ value, label, sublabel }: GaugeChartProps) {
       
       {/* Center Text */}
       <div className="absolute bottom-4 flex flex-col items-center">
-        <span className="text-3xl font-bold tracking-tight text-white mb-1">
+        <span className="text-3xl font-bold tracking-tight text-slate-100 mb-1">
           {value <= 1 ? value.toFixed(2) : value}
         </span>
         {label && (

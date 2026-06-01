@@ -245,27 +245,27 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="flex flex-col space-y-6 pb-10">
-      <button onClick={() => router.push("/patients")} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors w-fit group">
+      <button onClick={() => router.push("/patients")} className="flex items-center gap-2 text-slate-400 hover:text-slate-100 transition-colors w-fit group">
         <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Quay lại danh sách
       </button>
 
       {actionError && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 px-4 py-3 text-sm">
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 text-red-500 px-4 py-3 text-sm font-medium">
           {actionError}
         </div>
       )}
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 flex flex-col md:flex-row justify-between gap-6 shadow-xl backdrop-blur-sm">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 flex flex-col md:flex-row justify-between gap-6 shadow-sm">
         <div className="flex items-start gap-5">
-          <div className="h-16 w-16 rounded-2xl bg-teal-500/10 flex items-center justify-center border border-teal-500/20 text-teal-400 shadow-[0_0_20px_rgba(20,184,166,0.1)]">
+          <div className="h-16 w-16 rounded-2xl bg-teal-50 dark:bg-teal-500/10 flex items-center justify-center border border-teal-100 dark:border-teal-500/20 text-teal-600 dark:text-teal-400 shadow-sm">
             <User className="h-8 w-8" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white mb-1">{patient.name || `Bệnh nhân ${patient.external_id || patient.id}`}</h1>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-slate-400 text-sm">
-              <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4 text-teal-500/70" /> {patient.age || "—"} tuổi</span>
-              <span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-teal-500/70" /> {patient.gender === "M" ? "Nam" : patient.gender === "F" ? "Nữ" : patient.gender || "—"}</span>
-              <span className="bg-slate-800 px-3 py-1 rounded-full text-xs border border-slate-700 font-mono">ID: {patient.external_id || patient.id}</span>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">{patient.name || `Bệnh nhân ${patient.external_id || patient.id}`}</h1>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-slate-600 dark:text-slate-400 text-sm">
+              <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4 text-teal-600 dark:text-teal-400" /> {patient.age || "—"} tuổi</span>
+              <span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-teal-600 dark:text-teal-400" /> {patient.gender === "M" ? "Nam" : patient.gender === "F" ? "Nữ" : patient.gender || "—"}</span>
+              <span className="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full text-xs border border-slate-200 dark:border-slate-700 font-mono text-slate-700 dark:text-slate-300">ID: {patient.external_id || patient.id}</span>
             </div>
           </div>
         </div>
@@ -273,14 +273,14 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
         <div className="flex items-center gap-3">
           <button
             onClick={() => alert("Chức năng sửa thông tin đang được phát triển.")}
-            className="px-5 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-sm font-medium text-slate-200 transition-all active:scale-95 flex items-center gap-2"
+            className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-200 transition-all active:scale-95 flex items-center gap-2"
           >
             <Edit3 className="h-4 w-4" />
             Sửa thông tin
           </button>
           <button
             onClick={() => router.push(uploadHref("dicom"))}
-            className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold shadow-lg shadow-teal-500/20 transition-all active:scale-95 flex items-center gap-2"
+            className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold shadow-md transition-all active:scale-95 flex items-center gap-2"
           >
             <PlusCircle className="h-4 w-4" />
             Tải dữ liệu mới
@@ -290,17 +290,17 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden shadow-xl">
-            <div className="p-5 border-b border-slate-800 bg-[#151f32]/50 flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-                <ImageIcon className="h-5 w-5 text-teal-500" /> Hồ sơ dữ liệu hình ảnh
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex items-center justify-between">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <ImageIcon className="h-5 w-5 text-teal-600 dark:text-teal-500" /> Hồ sơ dữ liệu hình ảnh
               </h3>
-              <span className="text-xs font-bold text-slate-500 bg-slate-800 px-2.5 py-1 rounded-full">{images.length} tệp</span>
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full">{images.length} tệp</span>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-400">
-                <thead className="bg-[#151f32]/30 text-xs font-semibold text-slate-500 border-b border-slate-800 uppercase tracking-tight">
+              <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
+                <thead className="bg-slate-50 dark:bg-slate-950/20 text-xs font-semibold text-slate-500 border-b border-slate-100 dark:border-slate-800 uppercase tracking-tight">
                   <tr>
                     <th className="px-6 py-4">Mô thức chụp</th>
                     <th className="px-6 py-4">Thời gian</th>
@@ -311,7 +311,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                     <th className="px-6 py-4 text-right">Hành động</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/40">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
                   {images.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-6 py-16 text-center text-slate-500">
@@ -345,7 +345,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                               : "Ready";
 
                       return (
-                        <tr key={img.image_id} className="hover:bg-slate-800/30 transition-colors group">
+                        <tr key={img.image_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               {img.image_url ? (
@@ -357,7 +357,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                                       src: resolveImageUrl(img.image_url),
                                     })
                                   }
-                                  className="h-9 w-9 overflow-hidden rounded-lg border border-teal-500/20 bg-teal-500/10"
+                                  className="h-9 w-9 overflow-hidden rounded-lg border border-teal-200 dark:border-teal-500/20 bg-teal-50 dark:bg-teal-500/10"
                                   title="Phóng to ảnh"
                                 >
                                   <img
@@ -367,36 +367,36 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                                   />
                                 </button>
                               ) : (
-                                <div className="h-9 w-9 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-500 border border-teal-500/20">
+                                <div className="h-9 w-9 rounded-lg bg-teal-50 dark:bg-teal-500/10 flex items-center justify-center text-teal-600 dark:text-teal-500 border border-teal-200 dark:border-teal-500/20">
                                   <ImageIcon className="h-4 w-4" />
                                 </div>
                               )}
                               <div>
-                                <div className="font-bold text-slate-200">{img.modality}</div>
+                                <div className="font-bold text-slate-900 dark:text-slate-200">{img.modality}</div>
                                 <div className="text-[10px] text-slate-500 uppercase font-mono">#{img.image_id}</div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-5 text-slate-400">
+                          <td className="px-6 py-5">
                             <ClientDate date={img.scan_date} />
                           </td>
                           <td className="px-6 py-5">
-                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold border uppercase tracking-widest ${statusLabel === "Done" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : statusLabel === "Failed" ? "bg-red-500/10 text-red-400 border-red-500/20" : statusLabel === "Pending" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-slate-800 text-slate-400 border-slate-700"}`}>
+                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold border uppercase tracking-widest ${statusLabel === "Done" ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-500 dark:border-emerald-500/20" : statusLabel === "Failed" ? "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20" : statusLabel === "Pending" ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20" : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"}`}>
                               {statusLabel}
                             </span>
                           </td>
-                          <td className="px-6 py-5 text-slate-300">
+                          <td className="px-6 py-5 text-slate-800 dark:text-slate-300">
                             <div>{hasTumor ? img.final_tumor_label || img.tumor_label || "—" : "—"}</div>
                             {hasTumor && img.review_status && img.review_status !== "not_required" && img.review_status !== "not_available" && (
-                              <div className={`mt-1 w-fit rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap ${img.review_status === "needs_review" ? "bg-red-500/10 text-red-300" : img.review_status === "corrected" ? "bg-violet-500/10 text-violet-300" : "bg-emerald-500/10 text-emerald-300"}`}>
+                              <div className={`mt-1 w-fit rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap ${img.review_status === "needs_review" ? "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300" : img.review_status === "corrected" ? "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"}`}>
                                 {reviewStatusText(img.review_status)}
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-5 text-slate-300">
+                          <td className="px-6 py-5 text-slate-800 dark:text-slate-300">
                             {hasTumor && img.classification_confidence != null ? `${(img.classification_confidence * 100).toFixed(2)}%` : "—"}
                           </td>
-                          <td className="px-6 py-5 text-slate-300">
+                          <td className="px-6 py-5 text-slate-800 dark:text-slate-300">
                             <div>{hasTumor && img.risk_score != null ? Number(img.risk_score).toFixed(4) : "—"}</div>
                             <div className="text-[10px] uppercase text-slate-500">{hasTumor && img.risk_group ? img.risk_group : "—"}</div>
                           </td>
@@ -405,7 +405,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                               <button
                                 onClick={() => handleDownloadReport(img.image_id)}
                                 disabled={isBusy || backendStatus !== "done"}
-                                className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                                 title="Tải báo cáo PDF"
                               >
                                 <Download className="h-4 w-4" />
@@ -413,7 +413,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
 
                               <button
                                 onClick={() => setDeleteDialog({ open: true, imageId: img.image_id })}
-                                className="p-2 rounded-lg border border-red-500/20 text-red-300 hover:bg-red-500/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="p-2 rounded-lg border border-red-200 dark:border-red-500/20 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
                                 title="Xóa dòng kết quả"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -426,7 +426,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                                     : handleAnalyze(img)
                                 }
                                 disabled={isBusy}
-                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-teal-600 text-slate-200 text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-teal-700 text-white text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : backendStatus === "done" ? <Eye className="h-3.5 w-3.5" /> : backendStatus === "failed" ? <AlertTriangle className="h-3.5 w-3.5" /> : null}
                                 {primaryLabel} <ChevronRight className="h-3.5 w-3.5" />
@@ -441,7 +441,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
               </table>
             </div>
             {images.length > imagePageSize && (
-              <div className="flex items-center justify-between border-t border-slate-800 px-6 py-4">
+              <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 px-6 py-4">
                 <span className="text-xs text-slate-500">
                   Hiển thị {paginatedImages.length} trong số {images.length} lần upload
                 </span>
@@ -453,7 +453,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                       className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium ${
                         imagePage === pageNumber
                           ? "bg-teal-600 text-white"
-                          : "text-slate-400 hover:bg-slate-800"
+                          : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                       }`}
                     >
                       {pageNumber}
@@ -464,10 +464,10 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
             )}
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-xl">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-                <Activity className="h-5 w-5 text-emerald-500" /> Kết quả AI mới nhất
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-500" /> Kết quả AI mới nhất
               </h3>
               <span className="text-xs text-slate-500">
                 {latestAnalysis?.created_at ? <ClientDate date={latestAnalysis.created_at} /> : "Chưa có"}
@@ -475,7 +475,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
             </div>
 
             {!latestAnalysis ? (
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/40 px-5 py-8 text-center text-slate-500">
+              <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 px-5 py-8 text-center text-slate-500">
                 Chưa có kết quả phân tích nào được lưu cho bệnh nhân này.
               </div>
             ) : (
@@ -483,32 +483,32 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                 const latestHasTumor = hasTumorClassification(latestAnalysis);
                 return (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+                <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Loại u</div>
-                  <div className="text-lg font-bold text-white">
+                  <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
                     {latestHasTumor ? displayTumorLabel(latestAnalysis.tumor_label) : "—"}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+                <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Độ tin cậy</div>
-                  <div className="text-lg font-bold text-white">
+                  <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
                     {latestHasTumor && latestAnalysis.classification_confidence != null
                       ? `${(latestAnalysis.classification_confidence * 100).toFixed(2)}%`
                       : "—"}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+                <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Risk score</div>
-                  <div className="text-lg font-bold text-white">
+                  <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
                     {latestHasTumor && latestAnalysis.risk_score != null ? latestAnalysis.risk_score.toFixed(4) : "—"}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+                <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">Risk group</div>
-                  <div className="text-lg font-bold text-white">
+                  <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
                     {latestHasTumor ? latestAnalysis.risk_group || "—" : "—"}
                   </div>
                 </div>
@@ -521,19 +521,19 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
 
         <div className="space-y-6">
           {/* --- MRI Data Tab --- */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-5">
-              <ImageIcon className="h-5 w-5 text-teal-500" /> Dữ liệu MRI
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-5">
+              <ImageIcon className="h-5 w-5 text-teal-600 dark:text-teal-500" /> Dữ liệu MRI
             </h3>
-            <div className="p-5 rounded-2xl bg-teal-500/5 border border-teal-500/10 text-center">
-              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+            <div className="p-5 rounded-2xl bg-teal-50 dark:bg-teal-500/5 border border-teal-100 dark:border-teal-500/10 text-center">
+              <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
                 {totalMriFiles > 0
                   ? `MRI đã được upload: ${totalMriFiles} tệp MRI, sẵn sàng cho phân tích AI.`
                   : "Chưa có dữ liệu MRI cho bệnh nhân này."}
               </p>
               <button
                 onClick={() => router.push(uploadHref("dicom"))}
-                className="w-full py-2.5 rounded-xl bg-teal-600/20 hover:bg-teal-600 text-teal-400 hover:text-white text-xs font-bold transition-all border border-teal-600/30 flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-xl bg-teal-600/10 text-teal-700 dark:text-teal-400 hover:bg-teal-600 hover:text-white text-xs font-bold transition-all border border-teal-600/20 flex items-center justify-center gap-2"
               >
                 {mriImages.length > 0 ? "CẬP NHẬT MRI" : "UPLOAD MRI"} <ExternalLink className="h-3.5 w-3.5" />
               </button>
@@ -541,19 +541,19 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
           </div>
 
           {/* --- WSI Data Tab --- */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-5">
-              <ImageIcon className="h-5 w-5 text-amber-500" /> Dữ liệu WSI
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-5">
+              <ImageIcon className="h-5 w-5 text-amber-600 dark:text-amber-500" /> Dữ liệu WSI
             </h3>
-            <div className="p-5 rounded-2xl bg-amber-500/5 border border-amber-500/10 text-center">
-              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+            <div className="p-5 rounded-2xl bg-amber-50 dark:bg-amber-500/5 border border-amber-100 dark:border-amber-500/10 text-center">
+              <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
                 {totalWsiFiles > 0
                   ? `WSI đã được upload: ${totalWsiFiles} tệp WSI (mô bệnh học).`
                   : "Chưa có dữ liệu WSI cho bệnh nhân này."}
               </p>
               <button
                 onClick={() => router.push(uploadHref("wsi"))}
-                className="w-full py-2.5 rounded-xl bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white text-xs font-bold transition-all border border-amber-600/30 flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-xl bg-amber-600/10 text-amber-700 dark:text-amber-400 hover:bg-amber-600 hover:text-white text-xs font-bold transition-all border border-amber-600/20 flex items-center justify-center gap-2"
               >
                 {wsiImages.length > 0 ? "CẬP NHẬT WSI" : "UPLOAD WSI"} <ExternalLink className="h-3.5 w-3.5" />
               </button>
@@ -561,75 +561,75 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
           </div>
 
           {/* --- RNA Data Tab --- */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-5">
-              <Dna className="h-5 w-5 text-indigo-500" /> Dữ liệu RNA
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-5">
+              <Dna className="h-5 w-5 text-indigo-600 dark:text-indigo-500" /> Dữ liệu RNA
             </h3>
-            <div className="p-5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 text-center">
-              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+            <div className="p-5 rounded-2xl bg-indigo-50 dark:bg-indigo-500/5 border border-indigo-100 dark:border-indigo-500/10 text-center">
+              <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
                 {rna_uploaded
                   ? `RNA đã được upload: ${data.rna_info?.filename || "Sẵn sàng"} và sẵn sàng cho multimodal prognosis.`
                   : "Chưa có RNA cho bệnh nhân này."}
               </p>
               <button
                 onClick={() => router.push(uploadHref("rna"))}
-                className="w-full py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white text-xs font-bold transition-all border border-indigo-600/30 flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-xl bg-indigo-600/10 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white text-xs font-bold transition-all border border-indigo-600/20 flex items-center justify-center gap-2"
               >
                 {rna_uploaded ? "CẬP NHẬT RNA" : "UPLOAD RNA"} <ExternalLink className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-2 mb-6">
-              <FileText className="h-5 w-5 text-amber-500" /> Chỉ số lâm sàng
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-6">
+              <FileText className="h-5 w-5 text-amber-600 dark:text-amber-500" /> Chỉ số lâm sàng
             </h2>
             <div className="space-y-5">
               <div className="flex justify-between items-center text-sm">
                 <span className="text-slate-500">Chỉ số KI-67</span>
-                <span className="text-slate-200 font-bold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                <span className="text-slate-900 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                   {clinical_data?.ki67_index ?? "--"} %
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-slate-500">Bậc u (Grade)</span>
-                <span className="text-slate-200 font-bold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                <span className="text-slate-900 dark:text-slate-200 font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                   WHO {clinical_data?.grade ?? "--"}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-slate-500">Đột biến IDH</span>
-                <span className={`font-bold px-2 py-0.5 rounded border ${clinical_data?.idh_mutation === "1" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : clinical_data?.idh_mutation === "0" ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-slate-800 text-slate-400 border-slate-700"}`}>
+                <span className={`font-bold px-2 py-0.5 rounded border ${clinical_data?.idh_mutation === "1" ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-500 dark:border-emerald-500/20" : clinical_data?.idh_mutation === "0" ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20" : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"}`}>
                   {clinical_data?.idh_mutation === "1" ? "CÓ" : clinical_data?.idh_mutation === "0" ? "KHÔNG" : "—"}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-slate-500">MGMT Methylation</span>
-                <span className={`font-bold px-2 py-0.5 rounded border ${clinical_data?.mgmt_methylation === "1" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : clinical_data?.mgmt_methylation === "0" ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-slate-800 text-slate-400 border-slate-700"}`}>
+                <span className={`font-bold px-2 py-0.5 rounded border ${clinical_data?.mgmt_methylation === "1" ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-500 dark:border-emerald-500/20" : clinical_data?.mgmt_methylation === "0" ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20" : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"}`}>
                   {clinical_data?.mgmt_methylation === "1" ? "CÓ" : clinical_data?.mgmt_methylation === "0" ? "KHÔNG" : "—"}
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-slate-500">Ngày cập nhật</span>
-                <span className="text-slate-400">{clinical_data?.updated_at ? <ClientDate date={clinical_data.updated_at} /> : "Chưa có"}</span>
+                <span className="text-slate-600 dark:text-slate-400">{clinical_data?.updated_at ? <ClientDate date={clinical_data.updated_at} /> : "Chưa có"}</span>
               </div>
-              <hr className="border-slate-800" />
+              <hr className="border-slate-100 dark:border-slate-800" />
               <button
                 onClick={() => router.push(uploadHref("clinical"))}
-                className="w-full py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-bold transition-all"
+                className="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all"
               >
                 CẬP NHẬT LÂM SÀNG
               </button>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-lg backdrop-blur-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-200 mb-4">Tiên lượng multimodal</h2>
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-800 dark:text-slate-200 mb-4">Tiên lượng multimodal</h2>
             <div className="space-y-3">
               <button
                 onClick={handleRunPrognosis}
                 disabled={prognosisLoading || images.length === 0}
-                className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center justify-center gap-2"
               >
                 {prognosisLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 CHẠY MULTIMODAL PROGNOSIS

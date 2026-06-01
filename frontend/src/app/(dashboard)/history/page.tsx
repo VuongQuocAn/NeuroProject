@@ -145,7 +145,7 @@ export default function HistoryPage() {
   return (
     <div className="flex flex-col h-full space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white mb-2">Lịch sử chẩn đoán bệnh nhân</h1>
+        <h1 className="text-2xl font-bold text-slate-100 mb-2">Lịch sử chẩn đoán bệnh nhân</h1>
         <p className="text-sm text-slate-400">
           Theo dõi kết quả gần nhất và mở báo cáo lịch sử chi tiết cho từng bệnh nhân.
         </p>
@@ -157,7 +157,7 @@ export default function HistoryPage() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="relative w-full xl:max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -165,7 +165,7 @@ export default function HistoryPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Tìm theo tên hoặc mã bệnh nhân..."
-              className="w-full rounded-xl border border-slate-700 bg-slate-950/60 py-2.5 pl-10 pr-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-500 focus:border-teal-500"
+              className="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 pl-10 pr-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-500 focus:border-teal-500"
             />
           </div>
 
@@ -173,7 +173,7 @@ export default function HistoryPage() {
             <select
               value={riskGroup}
               onChange={(event) => setRiskGroup(event.target.value)}
-              className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-teal-500"
+              className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-teal-500"
             >
               <option value="all">Tất cả nguy cơ</option>
               <option value="high">Nguy cơ cao</option>
@@ -184,7 +184,7 @@ export default function HistoryPage() {
             <select
               value={reviewFilter}
               onChange={(event) => setReviewFilter(event.target.value)}
-              className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-teal-500"
+              className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-teal-500"
             >
               <option value="all">Tất cả review</option>
               <option value="needs_review">Cần chuyên gia</option>
@@ -196,7 +196,7 @@ export default function HistoryPage() {
             <select
               value={sort}
               onChange={(event) => setSort(event.target.value)}
-              className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-teal-500"
+              className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-teal-500"
             >
               <option value="latest_desc">Chẩn đoán mới nhất</option>
               <option value="latest_asc">Chẩn đoán cũ nhất</option>
@@ -217,7 +217,7 @@ export default function HistoryPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl">
+      <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1080px] text-left text-sm">
             <thead className="border-b border-slate-800 bg-slate-950/40 text-xs uppercase tracking-wider text-slate-500">
@@ -256,7 +256,7 @@ export default function HistoryPage() {
                       <td className="px-5 py-4 font-mono text-xs text-slate-400">
                         {item.patient_external_id || item.patient_id}
                       </td>
-                      <td className="px-5 py-4 font-semibold text-white">
+                      <td className="px-5 py-4 font-semibold text-slate-100">
                         {item.patient_name || `Bệnh nhân ${item.patient_id}`}
                       </td>
                       <td className="px-5 py-4 text-slate-400">{formatDate(item.last_diagnosis_time)}</td>
@@ -271,9 +271,9 @@ export default function HistoryPage() {
                         <span
                           className={`rounded-full px-2.5 py-1 text-xs font-bold ${
                             String(item.latest_risk_group).toLowerCase() === "high"
-                              ? "bg-red-500/10 text-red-300"
+                              ? "bg-red-500/10 text-red-700 dark:text-red-300"
                               : String(item.latest_risk_group).toLowerCase() === "low"
-                                ? "bg-emerald-500/10 text-emerald-300"
+                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                                 : "bg-slate-800 text-slate-400"
                           }`}
                         >
@@ -281,7 +281,7 @@ export default function HistoryPage() {
                         </span>
                       </td>
                       <td className="px-5 py-4">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.review_required_count > 0 ? "bg-amber-500/10 text-amber-300" : item.review_corrected_count > 0 ? "bg-violet-500/10 text-violet-300" : "bg-slate-800 text-slate-400"}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.review_required_count > 0 ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : item.review_corrected_count > 0 ? "bg-blue-500/10 text-blue-700 dark:text-blue-300" : "bg-slate-800 text-slate-400"}`}>
                           {reviewLabel(item)}
                         </span>
                       </td>
@@ -292,7 +292,7 @@ export default function HistoryPage() {
                             <button
                               onClick={() => handleGenerateReport(item.patient_id)}
                               disabled={generating}
-                              className="inline-flex items-center gap-2 rounded-xl border border-teal-500/30 px-3 py-2 text-xs font-bold text-teal-300 transition-colors hover:bg-teal-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex items-center gap-2 rounded-xl border border-teal-500/30 px-3 py-2 text-xs font-bold text-teal-600 dark:text-teal-300 transition-colors hover:bg-teal-500/10 dark:hover:bg-teal-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
                               {generating ? "Đang sinh" : "Sinh báo cáo"}
@@ -306,7 +306,7 @@ export default function HistoryPage() {
                               ready
                                 ? "bg-emerald-600 text-white hover:bg-emerald-500"
                                 : item.history_report_status === "failed"
-                                  ? "bg-red-500/10 text-red-300"
+                                  ? "bg-red-500/10 text-red-600 dark:text-red-300"
                                   : "cursor-not-allowed bg-slate-800 text-slate-500"
                             }`}
                           >

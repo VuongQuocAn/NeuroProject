@@ -73,7 +73,7 @@ export default function ResultsPage({ params }: { params: Promise<{ patientId: s
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push(uploadHref)}
-            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors group"
+            className="flex items-center gap-2 text-slate-400 hover:text-slate-100 transition-colors group"
           >
             <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
             Quay lại Upload
@@ -96,12 +96,12 @@ export default function ResultsPage({ params }: { params: Promise<{ patientId: s
 
       {/* Patient Info Banner */}
       {patientInfo && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 flex items-center gap-4 shadow-xl">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 flex items-center gap-4 shadow-xl">
           <div className="h-12 w-12 rounded-xl bg-teal-500/10 flex items-center justify-center text-teal-400 border border-teal-500/20">
             <Activity className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">
+            <h1 className="text-xl font-bold text-slate-100">
               Kết quả phân tích AI — {patientInfo.name || `Bệnh nhân ${patientInfo.external_id || patientId}`}
             </h1>
             <p className="text-sm text-slate-400">

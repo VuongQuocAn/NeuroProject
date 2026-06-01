@@ -440,12 +440,12 @@ export default function UploadPage() {
     }
 
     return (
-      <div className="flex-1 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/30 flex flex-col items-center justify-center p-12 relative group hover:border-teal-500/50 hover:bg-slate-800/50 transition-all">
-        <div className="h-20 w-20 rounded-full bg-teal-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-          <UploadCloud className="h-10 w-10 text-teal-500" />
+      <div className="flex-1 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-900 flex flex-col items-center justify-center p-12 relative group hover:border-teal-500/50 hover:bg-slate-800/50 transition-all">
+        <div className="h-20 w-20 rounded-full bg-teal-50 dark:bg-teal-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+          <UploadCloud className="h-10 w-10 text-teal-600 dark:text-teal-500" />
         </div>
 
-        <h3 className="text-xl font-bold text-white mb-2 text-center">
+        <h3 className="text-xl font-bold text-slate-100 mb-2 text-center">
           Tải lên ảnh / MRI để chạy pipeline YOLOv11 {"->"} DynUNet {"->"} DenseNet169
         </h3>
         <p className="text-slate-400 italic mb-8">
@@ -458,16 +458,16 @@ export default function UploadPage() {
             placeholder="Mã bệnh nhân (Patient ID)"
             value={patientId}
             onChange={(event) => setPatientId(event.target.value)}
-            className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mb-2 focus:border-teal-500 outline-none"
+            className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 mb-2 focus:border-teal-500 outline-none"
           />
           <label className="w-full relative">
             <input type="file" multiple className="hidden" onChange={handleMriFileChange} />
-            <div className="w-full px-6 py-3 cursor-pointer bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-teal-500/20 flex justify-center">
+            <div className="w-full px-6 py-3 cursor-pointer bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-xl transition-all shadow-md flex justify-center">
               + Chọn file / Chuỗi ảnh MRI
             </div>
           </label>
           {mriFiles.length > 0 && (
-            <div className="text-teal-400 text-sm">
+            <div className="text-teal-600 dark:text-teal-400 text-sm">
               Đã chọn {mriFiles.length} file {mriFiles.length === 1 ? `(${mriFiles[0].name})` : ""}
             </div>
           )}
@@ -475,7 +475,7 @@ export default function UploadPage() {
             <button
               onClick={handleUploadDicom}
               disabled={uploading || !patientId.trim() || mriFiles.length === 0}
-              className="w-full mt-2 px-6 py-3 bg-white hover:bg-slate-200 text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
+              className="w-full mt-2 px-6 py-3 bg-slate-100 dark:bg-white hover:bg-slate-200 text-slate-950 dark:text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
             >
               {uploading && activeTab === "dicom" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
               Tải lên MRI
@@ -487,7 +487,7 @@ export default function UploadPage() {
               </div>
               <button
                 onClick={() => setUploadedStatus(prev => ({ ...prev, mri: false }))}
-                className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl border border-slate-700 transition-all"
+                className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-100 font-medium rounded-xl border border-slate-700 transition-all"
               >
                 Cập nhật
               </button>
@@ -503,7 +503,7 @@ export default function UploadPage() {
       <div className="lg:col-span-2 flex flex-col">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white mb-1">Tải lên mới</h1>
+            <h1 className="text-2xl font-bold text-slate-100 mb-1">Tải lên mới</h1>
             <p className="text-sm text-slate-400">
               Đẩy dữ liệu lên backend và chạy đúng pipeline MRI hoặc multimodal.
             </p>
@@ -514,8 +514,8 @@ export default function UploadPage() {
               onClick={() => setActiveTab("dicom")}
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                 activeTab === "dicom"
-                  ? "bg-slate-700 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-slate-900 text-slate-100 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-100"
               }`}
             >
               MRI (Ảnh)
@@ -524,8 +524,8 @@ export default function UploadPage() {
               onClick={() => setActiveTab("wsi")}
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                 activeTab === "wsi"
-                  ? "bg-slate-700 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-slate-900 text-slate-100 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-100"
               }`}
             >
               WSI (Mô bệnh học)
@@ -534,8 +534,8 @@ export default function UploadPage() {
               onClick={() => setActiveTab("rna")}
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                 activeTab === "rna"
-                  ? "bg-slate-700 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-slate-900 text-slate-100 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-100"
               }`}
             >
               RNA
@@ -544,8 +544,8 @@ export default function UploadPage() {
               onClick={() => setActiveTab("clinical")}
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                 activeTab === "clinical"
-                  ? "bg-slate-700 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-slate-900 text-slate-100 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-100"
               }`}
             >
               Lâm sàng
@@ -610,12 +610,12 @@ export default function UploadPage() {
         {activeTab === "dicom" && renderMriCard()}
 
         {activeTab === "wsi" && (
-           <div className="flex-1 rounded-2xl border-2 border-dashed border-rose-700/50 bg-slate-900/30 flex flex-col items-center justify-center p-12 relative group hover:border-rose-500/50 hover:bg-rose-900/10 transition-all">
-             <div className="h-20 w-20 rounded-full bg-rose-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-               <UploadCloud className="h-10 w-10 text-rose-500" />
+           <div className="flex-1 rounded-2xl border-2 border-dashed border-rose-300 dark:border-rose-700/50 bg-slate-900 flex flex-col items-center justify-center p-12 relative group hover:border-rose-500/50 hover:bg-rose-900/10 transition-all">
+             <div className="h-20 w-20 rounded-full bg-rose-550 bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+               <UploadCloud className="h-10 w-10 text-rose-600 dark:text-rose-505 text-rose-500" />
              </div>
 
-             <h3 className="text-xl font-bold text-white mb-2 text-center">Tải lên WSI Tiles (Chuỗi ảnh)</h3>
+             <h3 className="text-xl font-bold text-slate-100 mb-2 text-center">Tải lên WSI Tiles (Chuỗi ảnh)</h3>
              <p className="text-slate-400 mb-8 max-w-md text-center italic">
                Hệ thống sẽ tự động lọc các tiles rỗng và chọn 200 tiles tốt nhất bằng CNN.
              </p>
@@ -626,21 +626,21 @@ export default function UploadPage() {
                   placeholder="Mã bệnh nhân (Patient ID)"
                   value={patientId}
                   onChange={(event) => setPatientId(event.target.value)}
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mb-2 focus:border-rose-500 outline-none"
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 mb-2 focus:border-rose-500 outline-none"
                 />
                 <label className="w-full relative">
                   <input type="file" multiple accept="image/*,.zip" className="hidden" onChange={handleWsiFileChange} />
-                  <div className="w-full px-6 py-3 cursor-pointer bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-rose-500/20 flex justify-center">
+                  <div className="w-full px-6 py-3 cursor-pointer bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-xl transition-all shadow-md flex justify-center">
                     + Chọn file ZIP / WSI Tiles
                   </div>
                 </label>
-                {wsiFiles.length > 0 && <div className="text-rose-400 text-sm">Đã chọn {wsiFiles.length} tiles</div>}
+                {wsiFiles.length > 0 && <div className="text-rose-600 dark:text-rose-400 text-sm">Đã chọn {wsiFiles.length} tiles</div>}
 
                 {!uploadedStatus.wsi ? (
                   <button
                     onClick={handleUploadWsi}
                     disabled={uploading || !patientId.trim() || wsiFiles.length === 0}
-                    className="w-full mt-2 px-6 py-3 bg-white hover:bg-slate-200 text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
+                    className="w-full mt-2 px-6 py-3 bg-slate-100 dark:bg-white hover:bg-slate-200 text-slate-955 text-slate-950 dark:text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
                   >
                     {uploading && activeTab === "wsi" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
                     Lọc và Tải lên WSI
@@ -652,7 +652,7 @@ export default function UploadPage() {
                     </div>
                     <button
                       onClick={() => setUploadedStatus(prev => ({ ...prev, wsi: false }))}
-                      className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl border border-slate-700 transition-all"
+                      className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-100 font-medium rounded-xl border border-slate-700 transition-all"
                     >
                       Cập nhật
                     </button>
@@ -663,12 +663,12 @@ export default function UploadPage() {
         )}
 
         {activeTab === "rna" && (
-          <div className="flex-1 rounded-2xl border-2 border-dashed border-indigo-700/50 bg-slate-900/30 flex flex-col items-center justify-center p-12 relative group hover:border-indigo-500/50 hover:bg-indigo-900/10 transition-all">
-            <div className="h-20 w-20 rounded-full bg-indigo-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-              <FileType className="h-10 w-10 text-indigo-500" />
+          <div className="flex-1 rounded-2xl border-2 border-dashed border-indigo-300 dark:border-indigo-700/50 bg-slate-900 flex flex-col items-center justify-center p-12 relative group hover:border-indigo-500/50 hover:bg-indigo-900/10 transition-all">
+            <div className="h-20 w-20 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+              <FileType className="h-10 w-10 text-indigo-600 dark:text-indigo-505 text-indigo-500" />
             </div>
 
-            <h3 className="text-xl font-bold text-white mb-2 text-center">Tải lên dữ liệu RNA-seq</h3>
+            <h3 className="text-xl font-bold text-slate-100 mb-2 text-center">Tải lên dữ liệu RNA-seq</h3>
             <p className="text-slate-400 mb-8 max-w-md text-center">
               Backend yêu cầu truyền đúng patient_id cùng file RNA.
             </p>
@@ -679,21 +679,21 @@ export default function UploadPage() {
                 placeholder="Mã bệnh nhân (Patient ID)"
                 value={patientId}
                 onChange={(event) => setPatientId(event.target.value)}
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white mb-2 focus:border-indigo-500 outline-none"
+                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 mb-2 focus:border-indigo-500 outline-none"
               />
               <label className="w-full relative">
                 <input type="file" accept=".csv,.tsv" className="hidden" onChange={handleRnaFileChange} />
-                <div className="w-full px-6 py-3 cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex justify-center">
+                <div className="w-full px-6 py-3 cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-md flex justify-center">
                   Chọn file RNA
                 </div>
               </label>
-              {rnaFile && <div className="text-indigo-400 text-sm">{rnaFile.name}</div>}
+              {rnaFile && <div className="text-indigo-600 dark:text-indigo-400 text-sm">{rnaFile.name}</div>}
               
               {!uploadedStatus.rna ? (
                 <button
                   onClick={handleUploadRna}
                   disabled={uploading || !patientId.trim() || !rnaFile}
-                  className="w-full mt-2 px-6 py-3 bg-white hover:bg-slate-200 text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
+                  className="w-full mt-2 px-6 py-3 bg-slate-100 dark:bg-white hover:bg-slate-200 text-slate-950 dark:text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
                 >
                   {uploading && activeTab === "rna" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
                   Tải lên RNA
@@ -705,7 +705,7 @@ export default function UploadPage() {
                   </div>
                   <button
                     onClick={() => setUploadedStatus(prev => ({ ...prev, rna: false }))}
-                    className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl border border-slate-700 transition-all"
+                    className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-100 font-medium rounded-xl border border-slate-700 transition-all"
                   >
                     Cập nhật
                   </button>
@@ -716,8 +716,8 @@ export default function UploadPage() {
         )}
 
         {activeTab === "clinical" && (
-          <div className="flex-1 rounded-2xl border border-slate-800 bg-slate-900/50 p-8 flex flex-col shadow-xl">
-            <h3 className="text-xl font-bold text-white mb-6 border-b border-slate-700 pb-4">
+          <div className="flex-1 rounded-2xl border border-slate-800 bg-slate-900 p-8 flex flex-col shadow-sm">
+            <h3 className="text-xl font-bold text-slate-100 mb-6 border-b border-slate-800 pb-4">
               Cập nhật chỉ số lâm sàng
             </h3>
 
@@ -731,7 +731,7 @@ export default function UploadPage() {
                   required
                   value={patientId}
                   onChange={(event) => setPatientId(event.target.value)}
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-emerald-500 outline-none"
+                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:border-emerald-500 outline-none"
                 />
               </div>
 
@@ -744,7 +744,7 @@ export default function UploadPage() {
                       disabled={uploadedStatus.clinical || uploading}
                       onChange={(e) => setKi67(e.target.value)}
                       placeholder="VD: 15"
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -754,7 +754,7 @@ export default function UploadPage() {
                         value={grade}
                         disabled={uploadedStatus.clinical || uploading}
                       onChange={(e) => setGrade(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <option value="">Chọn bậc u</option>
                         <option value="2">WHO Grade II</option>
@@ -768,7 +768,7 @@ export default function UploadPage() {
                         value={idhMutation}
                         disabled={uploadedStatus.clinical || uploading}
                         onChange={(e) => setIdhMutation(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="">Chưa xác định</option>
                         <option value="1">Có đột biến (Mutant)</option>
@@ -781,7 +781,7 @@ export default function UploadPage() {
                         value={mgmtMethylation}
                         disabled={uploadedStatus.clinical || uploading}
                         onChange={(e) => setMgmtMethylation(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="">Chưa xác định</option>
                         <option value="1">Có Methylation (Positive)</option>
@@ -796,7 +796,7 @@ export default function UploadPage() {
                   <button
                     onClick={handleUpdateClinical}
                     disabled={uploading || !patientId.trim() || (!ki67 && !grade && !idhMutation && !mgmtMethylation)}
-                    className="w-full px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 transition-all flex justify-center items-center shadow-lg shadow-emerald-500/20"
+                    className="w-full px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 transition-all flex justify-center items-center shadow-md"
                   >
                     {uploading && activeTab === "clinical" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
                     Lưu thông tin lâm sàng
@@ -808,7 +808,7 @@ export default function UploadPage() {
                     </div>
                     <button
                       onClick={() => setUploadedStatus(prev => ({ ...prev, clinical: false }))}
-                      className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white font-medium rounded-xl border border-slate-700 transition-all"
+                      className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-100 font-medium rounded-xl border border-slate-700 transition-all"
                     >
                       Cập nhật
                     </button>
@@ -821,18 +821,18 @@ export default function UploadPage() {
 
         {/* Nút Chạy Tổng Hợp cố định ở dưới - Chỉ hiện khi có MRI */}
         {uploadedStatus.mri && !requireNewUpload && (
-          <div className="mt-8 p-6 rounded-2xl bg-slate-800/50 border border-teal-500/30 flex flex-col items-center">
-            <h4 className="text-teal-400 font-bold mb-2 flex items-center gap-2">
+          <div className="mt-8 p-6 rounded-2xl bg-teal-50 dark:bg-slate-800/50 border border-teal-200 dark:border-teal-500/30 flex flex-col items-center">
+            <h4 className="text-teal-600 dark:text-teal-400 font-bold mb-2 flex items-center gap-2">
               <PlayCircle className="h-5 w-5" /> Sẵn sàng phân tích tổng hợp
             </h4>
-            <p className="text-slate-400 text-sm mb-6 text-center">
+            <p className="text-slate-600 dark:text-slate-400 text-sm mb-6 text-center">
               Dữ liệu đã được chuẩn bị cho bệnh nhân <strong>{patientId}</strong>. 
               Nhấn nút dưới đây để kích hoạt toàn bộ AI Pipeline.
             </p>
             <button
               onClick={handleRunFullPipeline}
               disabled={uploading}
-              className="px-12 py-4 bg-teal-600 hover:bg-teal-500 text-white text-lg font-black rounded-2xl transition-all shadow-xl shadow-teal-500/30 flex items-center gap-3 disabled:opacity-50"
+              className="px-12 py-4 bg-teal-600 hover:bg-teal-500 text-white text-lg font-black rounded-2xl transition-all shadow-md flex items-center gap-3 disabled:opacity-50"
             >
               {uploading && statusMsg.text.includes("quy trình") ? (
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -847,17 +847,17 @@ export default function UploadPage() {
 
       <div className="flex flex-col w-full h-full">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Clock className="h-5 w-5 text-teal-500" /> Tải lên gần đây
+          <h2 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+            <Clock className="h-5 w-5 text-teal-600 dark:text-teal-500" /> Tải lên gần đây
           </h2>
-          <button className="text-sm text-teal-500 hover:text-teal-400">Xem tất cả</button>
+          <button className="text-sm text-teal-600 dark:text-teal-500 hover:text-teal-400">Xem tất cả</button>
         </div>
 
         <div className="flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
           {recentUploads.map((item) => (
             <div
               key={item.id}
-              className="rounded-xl border border-slate-800 bg-slate-900/80 p-5 shadow-md flex flex-col relative overflow-hidden group"
+              className="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm flex flex-col relative overflow-hidden group"
             >
               <div
                 className={`absolute left-0 top-0 h-full w-1 ${
@@ -866,19 +866,19 @@ export default function UploadPage() {
               />
 
               <div className="flex justify-between items-start mb-3 ml-2">
-                <h4 className="font-semibold text-slate-200">{item.name}</h4>
+                <h4 className="font-semibold text-slate-800 dark:text-slate-200">{item.name}</h4>
                 <span
                   className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border tracking-wider ${
                     item.status === "READY"
-                      ? "text-teal-400 bg-teal-400/10 border-teal-400/20"
-                      : "text-slate-400 bg-slate-800 border-slate-700"
+                      ? "text-teal-600 bg-teal-50 dark:bg-teal-400/10 border-teal-200 dark:border-teal-400/20"
+                      : "text-slate-505 text-slate-500 bg-slate-100 border-slate-200 dark:bg-slate-800 dark:border-slate-700"
                   }`}
                 >
                   {item.status}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-slate-400 mb-4 ml-2">
+              <div className="flex items-center gap-2 text-xs text-slate-505 text-slate-500 dark:text-slate-400 mb-4 ml-2">
                 {item.time && (
                   <>
                     <Clock className="h-3.5 w-3.5" />
@@ -897,7 +897,7 @@ export default function UploadPage() {
               <button
                 disabled={item.status !== "READY"}
                 onClick={() => router.push("/patients")}
-                className="ml-2 py-2 w-full rounded-lg bg-slate-800 hover:bg-teal-600 disabled:opacity-50 disabled:hover:bg-slate-800 text-sm font-medium text-white transition-colors flex items-center justify-center gap-2"
+                className="ml-2 py-2 w-full rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 text-sm font-medium text-slate-700 dark:text-slate-100 transition-colors flex items-center justify-center gap-2"
               >
                 {item.status === "READY" ? (
                   <>

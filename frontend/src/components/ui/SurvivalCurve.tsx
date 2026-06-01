@@ -3,8 +3,6 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
-const LineChart = dynamic(() => import("recharts").then(m => m.LineChart), { ssr: false });
-const Line = dynamic(() => import("recharts").then(m => m.Line), { ssr: false });
 const XAxis = dynamic(() => import("recharts").then(m => m.XAxis), { ssr: false });
 const YAxis = dynamic(() => import("recharts").then(m => m.YAxis), { ssr: false });
 const CartesianGrid = dynamic(() => import("recharts").then(m => m.CartesianGrid), { ssr: false });
@@ -28,7 +26,10 @@ export function SurvivalCurve({ data, color = "#14b8a6", title = "Dự đoán x�
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
+    const timer = setTimeout(() => {
+      setIsMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   if (!isMounted) {
@@ -37,7 +38,7 @@ export function SurvivalCurve({ data, color = "#14b8a6", title = "Dự đoán x�
 
   if (!data || !Array.isArray(data) || data.length === 0) {
     return (
-      <div className="w-full h-64 bg-slate-900/40 rounded-xl border border-slate-800 p-4 flex flex-col items-center justify-center">
+      <div className="w-full h-64 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col items-center justify-center">
         <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">{title}</h4>
         <p className="text-sm text-slate-500">Chưa có dữ liệu sinh tồn (Survival Curve)</p>
       </div>
@@ -51,7 +52,7 @@ export function SurvivalCurve({ data, color = "#14b8a6", title = "Dự đoán x�
   }));
 
   return (
-    <div className="w-full h-64 bg-slate-900/40 rounded-xl border border-slate-800 p-4">
+    <div className="w-full h-64 bg-slate-900 rounded-xl border border-slate-800 p-4">
       <div className="flex justify-between items-center mb-4">
         <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400">{title}</h4>
         <div className="flex items-center gap-2">
@@ -60,7 +61,7 @@ export function SurvivalCurve({ data, color = "#14b8a6", title = "Dự đoán x�
         </div>
       </div>
       
-      <ResponsiveContainer width="100%" height="80%">
+      <ResponsiveContainer width="100%" height={200} minWidth={0}>
         <AreaChart data={formattedData}>
           <defs>
             <linearGradient id="colorProb" x1="0" y1="0" x2="0" y2="1">
@@ -68,25 +69,26 @@ export function SurvivalCurve({ data, color = "#14b8a6", title = "Dự đoán x�
               <stop offset="95%" stopColor={color} stopOpacity={0}/>
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--slate-800)" vertical={false} />
           <XAxis 
             dataKey="time" 
             axisLine={false} 
             tickLine={false} 
-            tick={{ fill: '#64748b', fontSize: 10 }}
-            label={{ value: 'Tháng', position: 'insideBottomRight', offset: -5, fill: '#64748b', fontSize: 10 }}
+            tick={{ fill: 'var(--slate-500)', fontSize: 10 }}
+            label={{ value: 'Tháng', position: 'insideBottomRight', offset: -5, fill: 'var(--slate-500)', fontSize: 10 }}
           />
           <YAxis 
             domain={[0, 100]} 
             axisLine={false} 
             tickLine={false} 
-            tick={{ fill: '#64748b', fontSize: 10 }}
-            label={{ value: '% Sống còn', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 10 }}
+            tick={{ fill: 'var(--slate-500)', fontSize: 10 }}
+            label={{ value: '% Sống còn', angle: -90, position: 'insideLeft', fill: 'var(--slate-500)', fontSize: 10 }}
           />
           <Tooltip 
-            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px' }}
+            contentStyle={{ backgroundColor: 'var(--slate-900)', border: '1px solid var(--slate-800)', borderRadius: '8px' }}
             itemStyle={{ color: color, fontWeight: 'bold' }}
-            labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+            labelStyle={{ color: 'var(--slate-400)', marginBottom: '4px' }}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             formatter={(value: any) => [`${value}%`, 'Xác suất']}
             labelFormatter={(label) => `Tháng thứ ${label}`}
           />

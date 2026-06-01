@@ -71,8 +71,8 @@ function CreatePatientModal({ open, onClose }: { open: boolean; onClose: () => v
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white">Thêm bệnh nhân mới</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+          <h2 className="text-xl font-bold text-slate-100">Thêm bệnh nhân mới</h2>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-100 transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -89,7 +89,7 @@ function CreatePatientModal({ open, onClose }: { open: boolean; onClose: () => v
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Nguyễn Văn A"
-              className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:border-teal-500 outline-none transition-colors"
+              className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-slate-100 focus:border-teal-500 outline-none transition-colors"
             />
           </div>
           <div>
@@ -99,7 +99,7 @@ function CreatePatientModal({ open, onClose }: { open: boolean; onClose: () => v
               value={externalId}
               onChange={(e) => setExternalId(e.target.value)}
               placeholder="VD: UCSF-001"
-              className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:border-teal-500 outline-none transition-colors"
+              className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-slate-100 focus:border-teal-500 outline-none transition-colors"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -110,7 +110,7 @@ function CreatePatientModal({ open, onClose }: { open: boolean; onClose: () => v
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
                 placeholder="45"
-                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:border-teal-500 outline-none transition-colors"
+                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-slate-100 focus:border-teal-500 outline-none transition-colors"
               />
             </div>
             <div>
@@ -118,7 +118,7 @@ function CreatePatientModal({ open, onClose }: { open: boolean; onClose: () => v
               <select
                 value={gender}
                 onChange={(e) => setGender(e.target.value)}
-                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:border-teal-500 outline-none transition-colors"
+                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-slate-100 focus:border-teal-500 outline-none transition-colors"
               >
                 <option value="M">Nam</option>
                 <option value="F">Nữ</option>
@@ -279,7 +279,7 @@ export default function PatientsPage() {
             placeholder="Tìm kiếm ID, Tên, hoặc DOB (YYYY-MM-DD)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl border border-slate-800 bg-slate-900/50 py-3 pl-10 pr-4 text-sm text-slate-200 placeholder:text-slate-500 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 transition-all shadow-sm"
+            className="w-full rounded-xl border border-slate-800 bg-slate-900 py-3 pl-10 pr-4 text-sm text-slate-200 placeholder:text-slate-500 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 transition-all shadow-sm"
           />
         </div>
         
@@ -304,12 +304,12 @@ export default function PatientsPage() {
       </div>
 
       {/* Main Table Area */}
-      <div className="flex-1 rounded-2xl border border-slate-800 bg-slate-900/50 backdrop-blur-sm overflow-hidden flex flex-col shadow-xl">
+      <div className="flex-1 rounded-2xl border border-slate-800 bg-slate-900 backdrop-blur-sm overflow-hidden flex flex-col shadow-xl">
         
         {/* Table Container */}
         <div className="flex-1 overflow-auto custom-scrollbar">
           <table className="w-full text-left text-sm text-slate-400">
-            <thead className="bg-[#151f32] text-xs uppercase font-semibold text-slate-500 sticky top-0 z-10 shadow-sm border-b border-slate-800">
+            <thead className="bg-slate-950/40 text-xs uppercase font-semibold text-slate-500 sticky top-0 z-10 shadow-sm border-b border-slate-800">
               <tr>
                 <th className="px-6 py-4">Mã BN</th>
                 <th className="px-6 py-4">Họ và tên</th>
@@ -379,7 +379,7 @@ export default function PatientsPage() {
         </div>
 
         {/* Pagination Footer */}
-        <div className="flex items-center justify-between border-t border-slate-800 bg-[#151f32]/50 px-6 py-3">
+        <div className="flex items-center justify-between border-t border-slate-800 bg-slate-950/30 px-6 py-3">
           <span className="text-sm text-slate-500">
             Hiển thị <span className="font-semibold text-slate-300">{totalItems > 0 ? startIndex + 1 : 0}</span> đến <span className="font-semibold text-slate-300">{endIndex}</span> trong <span className="font-semibold text-slate-300">{totalItems}</span> bệnh nhân
           </span>
@@ -420,7 +420,7 @@ export default function PatientsPage() {
       {/* Bottom KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* KPI 1 */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 flex items-center justify-between shadow-lg relative overflow-hidden group">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 flex items-center justify-between shadow-lg relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/5 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2 group-hover:bg-teal-500/10 transition-colors"></div>
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">Ca khám đang thực hiện</span>
@@ -428,13 +428,13 @@ export default function PatientsPage() {
                1,284
             </span>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-teal-500/10 flex items-center justify-center border border-teal-500/20 text-teal-400">
+          <div className="h-12 w-12 rounded-xl bg-teal-500/10 flex items-center justify-center border border-teal-500/20 text-teal-600 dark:text-teal-400">
              <FileSpreadsheet className="h-6 w-6" />
           </div>
         </div>
 
         {/* KPI 2 */}
-        <div className="rounded-2xl border border-red-900/30 bg-red-950/10 p-5 flex items-center justify-between shadow-lg relative overflow-hidden group hover:border-red-900/50 transition-colors">
+        <div className="rounded-2xl border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-950/10 p-5 flex items-center justify-between shadow-lg relative overflow-hidden group hover:border-red-300 dark:hover:border-red-900/50 transition-colors">
           <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">Cần xem xét gấp</span>
@@ -442,21 +442,21 @@ export default function PatientsPage() {
                12
             </span>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-500 animate-pulse">
+          <div className="h-12 w-12 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-600 dark:text-red-500 animate-pulse">
              <AlertTriangle className="h-6 w-6" />
           </div>
         </div>
 
         {/* KPI 3 */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 flex items-center justify-between shadow-lg relative overflow-hidden group">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 flex items-center justify-between shadow-lg relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1 block">Độ tin cậy AI</span>
-            <span className="text-3xl font-bold text-teal-400 drop-shadow-[0_0_8px_rgba(20,184,166,0.3)] flex items-center gap-3">
+            <span className="text-3xl font-bold text-teal-600 dark:text-teal-400 drop-shadow-[0_0_8px_rgba(20,184,166,0.3)] flex items-center gap-3">
                98.4%
             </span>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-slate-800 flex items-center justify-center border border-slate-700 text-teal-500">
+          <div className="h-12 w-12 rounded-xl bg-slate-800 flex items-center justify-center border border-slate-700 text-teal-600 dark:text-teal-500">
              <BadgeCheck className="h-6 w-6" />
           </div>
         </div>
