@@ -1,17 +1,20 @@
 import io
+import os
 import uuid
 import pandas as pd
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from minio.error import S3Error
 from sqlalchemy.orm import Session
 
 import models
 import schemas
 import crud
 from database import get_db
-from utils import minio_client, ensure_bucket_exists, get_current_user
+from utils import minio_client, get_current_user
 
 router = APIRouter(tags=["Multimodal Data"])
-RNA_BUCKET = "rna-data"
+RNA_BUCKET = os.getenv("RNA_BUCKET") or os.getenv("MINIO_BUCKET") or os.getenv("R2_BUCKET") or "medical-data"
+RNA_OBJECT_PREFIX = os.getenv("RNA_OBJECT_PREFIX", "rna-data").strip("/")
 
 ALLOWED_RNA_EXTENSIONS = {"csv", "tsv"}
 REQUIRED_RNA_COLUMN = "patient_id"
@@ -91,22 +94,41 @@ async def upload_rna(
         )
 
     # --- LƯU FILE LÊN MINIO ---
-    ensure_bucket_exists(RNA_BUCKET)
     unique_filename = f"{uuid.uuid4()}_{file.filename}"
+    object_name = f"{RNA_OBJECT_PREFIX}/{unique_filename}" if RNA_OBJECT_PREFIX else unique_filename
 
-    minio_client.put_object(
-        bucket_name=RNA_BUCKET,
-        object_name=unique_filename,
-        data=io.BytesIO(file_bytes),
-        length=len(file_bytes),
-        content_type="text/csv" if extension == "csv" else "text/tab-separated-values",
-    )
+    try:
+        minio_client.put_object(
+            bucket_name=RNA_BUCKET,
+            object_name=object_name,
+            data=io.BytesIO(file_bytes),
+            length=len(file_bytes),
+            content_type="text/csv" if extension == "csv" else "text/tab-separated-values",
+        )
+    except S3Error as storage_err:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Khong the luu file RNA vao object storage bucket '{RNA_BUCKET}'. "
+                f"Ma loi storage: {storage_err.code}."
+            ),
+        ) from storage_err
 
     # --- LƯU METADATA VÀO DB ---
     num_genes = len(header_df.columns) - 1  # Trừ cột patient_id
+    existing_rna = db.query(models.RnaData).filter(models.RnaData.patient_id == db_patient.id).first()
+    if existing_rna:
+        existing_rna.file_path = f"/{RNA_BUCKET}/{object_name}"
+        existing_rna.file_format = extension
+        existing_rna.num_genes = num_genes
+        existing_rna.expression_unit = "unknown"
+        db.commit()
+        db.refresh(existing_rna)
+        return existing_rna
+
     new_rna = models.RnaData(
         patient_id=db_patient.id,
-        file_path=f"/{RNA_BUCKET}/{unique_filename}",
+        file_path=f"/{RNA_BUCKET}/{object_name}",
         file_format=extension,
         num_genes=num_genes,
         expression_unit="unknown",  # Người dùng có thể PATCH sau
