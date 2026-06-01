@@ -34,7 +34,7 @@ function LoginContent() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0f172a] p-4 text-slate-200">
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4 text-slate-200">
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl backdrop-blur-sm">
         
         {/* Logo Header */}
@@ -125,7 +125,7 @@ function LoginContent() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-[#0f172a] p-4 text-slate-200">
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4 text-slate-200">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-10 w-10 animate-spin text-teal-500" />
           <span className="text-slate-400">Loading...</span>

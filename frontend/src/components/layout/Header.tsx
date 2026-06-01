@@ -1,10 +1,12 @@
 "use client";
 
-import { Bell, Moon } from "lucide-react";
+import { Bell, Moon, Sun } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export function Header() {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const isDoctor = user?.role === "doctor" || !user;
 
   return (
@@ -22,8 +24,12 @@ export function Header() {
         </span>
 
         {/* Theme Toggle */}
-        <button className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
-          <Moon className="h-5 w-5" />
+        <button 
+          onClick={toggleTheme}
+          className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+          title={theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}
+        >
+          {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </button>
 
         {/* Notifications */}
