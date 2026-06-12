@@ -440,9 +440,9 @@ export default function UploadPage() {
     }
 
     return (
-      <div className="flex-1 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-900 flex flex-col items-center justify-center p-12 relative group hover:border-teal-500/50 hover:bg-slate-800/50 transition-all">
-        <div className="h-20 w-20 rounded-full bg-teal-50 dark:bg-teal-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-          <UploadCloud className="h-10 w-10 text-teal-600 dark:text-teal-500" />
+      <div className="flex-1 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-800/50 flex flex-col items-center justify-center p-12 relative group hover:border-teal-500/50 hover:bg-slate-800/50 transition-all">
+        <div className="h-20 w-20 rounded-full bg-teal-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+          <UploadCloud className="h-10 w-10 text-teal-500" />
         </div>
 
         <h3 className="text-xl font-bold text-slate-100 mb-2 text-center">
@@ -467,7 +467,7 @@ export default function UploadPage() {
             </div>
           </label>
           {mriFiles.length > 0 && (
-            <div className="text-teal-600 dark:text-teal-400 text-sm">
+            <div className="text-teal-400 text-sm">
               Đã chọn {mriFiles.length} file {mriFiles.length === 1 ? `(${mriFiles[0].name})` : ""}
             </div>
           )}
@@ -475,7 +475,7 @@ export default function UploadPage() {
             <button
               onClick={handleUploadDicom}
               disabled={uploading || !patientId.trim() || mriFiles.length === 0}
-              className="w-full mt-2 px-6 py-3 bg-slate-100 dark:bg-white hover:bg-slate-200 text-slate-950 dark:text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
+              className="w-full mt-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-950 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
             >
               {uploading && activeTab === "dicom" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
               Tải lên MRI
@@ -515,7 +515,7 @@ export default function UploadPage() {
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                 activeTab === "dicom"
                   ? "bg-slate-900 text-slate-100 shadow-sm"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-100"
+                  : "text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400"
               }`}
             >
               MRI (Ảnh)
@@ -525,7 +525,7 @@ export default function UploadPage() {
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                 activeTab === "wsi"
                   ? "bg-slate-900 text-slate-100 shadow-sm"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-100"
+                  : "text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400"
               }`}
             >
               WSI (Mô bệnh học)
@@ -535,7 +535,7 @@ export default function UploadPage() {
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                 activeTab === "rna"
                   ? "bg-slate-900 text-slate-100 shadow-sm"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-100"
+                  : "text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400"
               }`}
             >
               RNA
@@ -545,7 +545,7 @@ export default function UploadPage() {
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                 activeTab === "clinical"
                   ? "bg-slate-900 text-slate-100 shadow-sm"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-100"
+                  : "text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400"
               }`}
             >
               Lâm sàng
@@ -611,8 +611,8 @@ export default function UploadPage() {
 
         {activeTab === "wsi" && (
            <div className="flex-1 rounded-2xl border-2 border-dashed border-rose-300 dark:border-rose-700/50 bg-slate-900 flex flex-col items-center justify-center p-12 relative group hover:border-rose-500/50 hover:bg-rose-900/10 transition-all">
-             <div className="h-20 w-20 rounded-full bg-rose-550 bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-               <UploadCloud className="h-10 w-10 text-rose-600 dark:text-rose-505 text-rose-500" />
+             <div className="h-20 w-20 rounded-full bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+               <UploadCloud className="h-10 w-10 text-rose-600 dark:text-rose-500" />
              </div>
 
              <h3 className="text-xl font-bold text-slate-100 mb-2 text-center">Tải lên WSI Tiles (Chuỗi ảnh)</h3>
@@ -640,7 +640,7 @@ export default function UploadPage() {
                   <button
                     onClick={handleUploadWsi}
                     disabled={uploading || !patientId.trim() || wsiFiles.length === 0}
-                    className="w-full mt-2 px-6 py-3 bg-slate-100 dark:bg-white hover:bg-slate-200 text-slate-955 text-slate-950 dark:text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
+                    className="w-full mt-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-955 text-slate-950 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
                   >
                     {uploading && activeTab === "wsi" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
                     Lọc và Tải lên WSI
@@ -665,7 +665,7 @@ export default function UploadPage() {
         {activeTab === "rna" && (
           <div className="flex-1 rounded-2xl border-2 border-dashed border-indigo-300 dark:border-indigo-700/50 bg-slate-900 flex flex-col items-center justify-center p-12 relative group hover:border-indigo-500/50 hover:bg-indigo-900/10 transition-all">
             <div className="h-20 w-20 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-              <FileType className="h-10 w-10 text-indigo-600 dark:text-indigo-505 text-indigo-500" />
+              <FileType className="h-10 w-10 text-indigo-600 dark:text-indigo-500" />
             </div>
 
             <h3 className="text-xl font-bold text-slate-100 mb-2 text-center">Tải lên dữ liệu RNA-seq</h3>
@@ -693,7 +693,7 @@ export default function UploadPage() {
                 <button
                   onClick={handleUploadRna}
                   disabled={uploading || !patientId.trim() || !rnaFile}
-                  className="w-full mt-2 px-6 py-3 bg-slate-100 dark:bg-white hover:bg-slate-200 text-slate-950 dark:text-slate-900 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
+                  className="w-full mt-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-950 font-bold rounded-xl disabled:opacity-50 flex justify-center items-center"
                 >
                   {uploading && activeTab === "rna" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
                   Tải lên RNA
@@ -731,7 +731,7 @@ export default function UploadPage() {
                   required
                   value={patientId}
                   onChange={(event) => setPatientId(event.target.value)}
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:border-emerald-500 outline-none"
+                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 text-slate-100 focus:border-emerald-500 outline-none"
                 />
               </div>
 
@@ -866,19 +866,19 @@ export default function UploadPage() {
               />
 
               <div className="flex justify-between items-start mb-3 ml-2">
-                <h4 className="font-semibold text-slate-800 dark:text-slate-200">{item.name}</h4>
+                <h4 className="font-semibold text-slate-100">{item.name}</h4>
                 <span
                   className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border tracking-wider ${
                     item.status === "READY"
                       ? "text-teal-600 bg-teal-50 dark:bg-teal-400/10 border-teal-200 dark:border-teal-400/20"
-                      : "text-slate-505 text-slate-500 bg-slate-100 border-slate-200 dark:bg-slate-800 dark:border-slate-700"
+                      : "text-slate-500 bg-slate-100 border-slate-200 dark:bg-slate-800 dark:border-slate-700"
                   }`}
                 >
                   {item.status}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-slate-505 text-slate-500 dark:text-slate-400 mb-4 ml-2">
+              <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-400 mb-4 ml-2">
                 {item.time && (
                   <>
                     <Clock className="h-3.5 w-3.5" />

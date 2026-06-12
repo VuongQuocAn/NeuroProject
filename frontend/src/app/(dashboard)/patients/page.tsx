@@ -243,13 +243,13 @@ export default function PatientsPage() {
     const label = displayDiagnosis(diagnosis);
     let bgClasses = "bg-slate-800 text-slate-400 border border-slate-700";
     if (label.includes("Không phát hiện")) {
-      bgClasses = "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20";
+      bgClasses = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-500/20";
     } else if (label.includes("Rủi ro cao") || label.includes("GBM") || label.includes("Glioma")) {
-      bgClasses = "bg-red-500/10 text-red-500 border border-red-500/20";
+      bgClasses = "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20";
     } else if (label.includes("Meningioma") || label.includes("Aneurysm")) {
-      bgClasses = "bg-blue-500/10 text-blue-400 border border-blue-500/20";
+      bgClasses = "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20";
     } else if (label.includes("Sclerosis")) {
-      bgClasses = "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20";
+      bgClasses = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20";
     }
     
     return (
@@ -350,9 +350,9 @@ export default function PatientsPage() {
                       <span
                         className={`text-[11px] font-semibold ${
                           p.reviewStatus === "needs_review"
-                            ? "text-amber-300"
+                            ? "text-amber-600 dark:text-amber-400"
                             : p.reviewStatus === "corrected"
-                              ? "text-violet-300"
+                              ? "text-indigo-600 dark:text-violet-450 dark:text-violet-400"
                               : "text-slate-500"
                         }`}
                       >

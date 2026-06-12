@@ -409,7 +409,7 @@ export default function MriResultCard({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">BBox</div>
-                  <div className="text-sm font-semibold text-white break-all">
+                  <div className="text-sm font-semibold text-slate-100 break-all">
                     {result?.bbox ? `[${result.bbox.join(", ")}]` : "--"}
                   </div>
                 </div>
@@ -418,7 +418,7 @@ export default function MriResultCard({
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">
                     Detection confidence
                   </div>
-                  <div className="text-sm font-semibold text-white">
+                  <div className="text-sm font-semibold text-slate-100">
                     {formatConfidence(result?.bbox_confidence)}
                   </div>
                 </div>
@@ -427,14 +427,14 @@ export default function MriResultCard({
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">
                     Tumor label
                   </div>
-                  <div className="text-sm font-semibold text-white">{noTumorDetected ? "--" : result?.tumor_label || "--"}</div>
+                  <div className="text-sm font-semibold text-slate-100">{noTumorDetected ? "--" : result?.tumor_label || "--"}</div>
                 </div>
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">
                     Classification confidence
                   </div>
-                  <div className="text-sm font-semibold text-white">
+                  <div className="text-sm font-semibold text-slate-100">
                     {noTumorDetected ? "--" : formatConfidence(result?.classification_confidence)}
                   </div>
                 </div>
@@ -444,7 +444,7 @@ export default function MriResultCard({
                 <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">
                   Class probabilities
                 </div>
-                <div className="text-sm font-semibold text-white break-all">
+                <div className="text-sm font-semibold text-slate-100 break-all">
                   {noTumorDetected ? "--" : formatList(result?.class_probabilities)}
                 </div>
               </div>
@@ -617,7 +617,7 @@ export default function MriResultCard({
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Risk Score</div>
-                      <div className="text-2xl font-bold text-white">{result.risk_score!.toFixed(4)}</div>
+                      <div className="text-2xl font-bold text-slate-100">{result.risk_score!.toFixed(4)}</div>
                     </div>
                     <div>
                       <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Risk Group</div>

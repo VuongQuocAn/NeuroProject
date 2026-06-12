@@ -61,15 +61,15 @@ function RiskTrendChart({ points }: { points: any[] }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
       <svg viewBox={`0 0 ${width} ${height}`} className="min-w-[760px]">
-        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#475569" />
-        <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#475569" />
+        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="var(--slate-400)" />
+        <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="var(--slate-400)" />
         {[0, 1, 2, 3].map((tick) => {
           const y = padding + tick * ((height - padding * 2) / 3);
           const value = maxScore - tick * (span / 3);
           return (
             <g key={tick}>
-              <line x1={padding} y1={y} x2={width - padding} y2={y} stroke="#1e293b" />
-              <text x={8} y={y + 4} fill="#94a3b8" fontSize="12">
+              <line x1={padding} y1={y} x2={width - padding} y2={y} stroke="var(--slate-800)" />
+              <text x={8} y={y + 4} fill="var(--slate-400)" fontSize="12">
                 {value.toFixed(2)}
               </text>
             </g>
@@ -83,16 +83,16 @@ function RiskTrendChart({ points }: { points: any[] }) {
               cy={point.y}
               r="6"
               fill={["high", "very high"].includes(String(point.risk_group).toLowerCase()) ? "#f97316" : "#10b981"}
-              stroke="#ffffff"
+              stroke="var(--slate-900)"
               strokeWidth="2"
             />
-            <text x={point.x - 18} y={height - 16} fill="#94a3b8" fontSize="12">
+            <text x={point.x - 18} y={height - 16} fill="var(--slate-400)" fontSize="12">
               Lần {point.diagnosis_index}
             </text>
-            <text x={point.x - 18} y={point.y - 12} fill="#e2e8f0" fontSize="12">
+            <text x={point.x - 18} y={point.y - 12} fill="var(--slate-100)" fontSize="12" className="font-bold">
               {Number(point.risk_score).toFixed(2)}
             </text>
-            <text x={point.x - 18} y={point.y + 20} fill="#94a3b8" fontSize="10">
+            <text x={point.x - 18} y={point.y + 20} fill="var(--slate-400)" fontSize="10">
               {point.risk_group || ""}
             </text>
           </g>
@@ -183,12 +183,12 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
         <div>
           <button
             onClick={() => router.push("/history")}
-            className="mb-4 flex w-fit items-center gap-2 text-slate-400 transition-colors hover:text-white"
+            className="mb-4 flex w-fit items-center gap-2 text-slate-400 transition-colors hover:text-teal-600 dark:hover:text-teal-400"
           >
             <ArrowLeft className="h-4 w-4" />
             Quay lại lịch sử
           </button>
-          <h1 className="text-2xl font-bold text-white">Báo cáo lịch sử chẩn đoán</h1>
+          <h1 className="text-2xl font-bold text-slate-100">Báo cáo lịch sử chẩn đoán</h1>
           <p className="mt-1 text-sm text-slate-400">
             {patient.name || `Bệnh nhân ${patient.id}`} • Mã: {patient.external_id || patient.id}
           </p>
@@ -198,14 +198,14 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
           <button
             onClick={handleGenerate}
             disabled={generating}
-            className="inline-flex items-center gap-2 rounded-xl border border-teal-500/30 px-4 py-2.5 text-sm font-semibold text-teal-300 transition-colors hover:bg-teal-500/10 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-teal-500/30 px-4 py-2.5 text-sm font-semibold text-teal-600 dark:text-teal-300 transition-colors hover:bg-teal-500/10 disabled:opacity-50"
           >
             {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
             {ready ? "Sinh lại nhận xét AI" : "Sinh nhận xét AI"}
           </button>
           <button
             onClick={loadReport}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-800"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-800"
           >
             <RefreshCw className="h-4 w-4" />
             Làm mới
@@ -236,31 +236,31 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
           <div className="text-xs uppercase text-slate-500">Số lần chẩn đoán</div>
-          <div className="mt-2 text-2xl font-bold text-white">{report?.summary?.diagnosis_count || 0}</div>
+          <div className="mt-2 text-2xl font-bold text-slate-100">{report?.summary?.diagnosis_count || 0}</div>
         </div>
         <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
           <div className="text-xs uppercase text-slate-500">Kết quả gần nhất</div>
-          <div className="mt-2 text-lg font-bold text-white">{report?.summary?.latest_tumor_label || "--"}</div>
+          <div className="mt-2 text-lg font-bold text-slate-100">{report?.summary?.latest_tumor_label || "--"}</div>
         </div>
         <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
           <div className="text-xs uppercase text-slate-500">Risk score</div>
-          <div className="mt-2 text-lg font-bold text-white">{formatScore(report?.summary?.latest_risk_score)}</div>
+          <div className="mt-2 text-lg font-bold text-slate-100">{formatScore(report?.summary?.latest_risk_score)}</div>
         </div>
         <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
           <div className="text-xs uppercase text-slate-500">Risk group</div>
-          <div className="mt-2 text-lg font-bold text-white">
+          <div className="mt-2 text-lg font-bold text-slate-100">
             {report?.summary?.latest_no_tumor_detected ? "Không áp dụng" : report?.summary?.latest_risk_group || "N/A"}
           </div>
         </div>
       </div>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 className="mb-3 text-lg font-bold text-white">1. Tóm tắt lịch sử chẩn đoán</h2>
+        <h2 className="mb-3 text-lg font-bold text-slate-100">1. Tóm tắt lịch sử chẩn đoán</h2>
         <p className="leading-relaxed text-slate-300">{texts.summary_text || "Chưa có nhận xét AI."}</p>
       </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 className="mb-4 text-lg font-bold text-white">2. Timeline các lần chẩn đoán</h2>
+        <h2 className="mb-4 text-lg font-bold text-slate-100">2. Timeline các lần chẩn đoán</h2>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[920px] text-left text-sm">
             <thead className="border-b border-slate-800 text-xs uppercase text-slate-500">
@@ -328,15 +328,15 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
       </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 className="mb-3 text-lg font-bold text-white">3. Diễn tiến kết quả phân loại u</h2>
+        <h2 className="mb-3 text-lg font-bold text-slate-100">3. Diễn tiến kết quả phân loại u</h2>
         <p className="leading-relaxed text-slate-300">{texts.classification_trend_text || "Chưa có nhận xét AI."}</p>
       </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 className="mb-4 text-lg font-bold text-white">4. Biểu đồ diễn tiến tiên lượng theo thời gian</h2>
+        <h2 className="mb-4 text-lg font-bold text-slate-100">4. Biểu đồ diễn tiến tiên lượng theo thời gian</h2>
         <RiskTrendChart points={report?.risk_trend || []} />
         {(report?.no_tumor_risk_notes || []).length > 0 && (
-          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-600 dark:text-emerald-200">
             {(report.no_tumor_risk_notes || []).map((note: any) => (
               <div key={`${note.diagnosis_index}-${note.scan_date}`}>{note.message}</div>
             ))}
@@ -346,7 +346,7 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
       </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 className="mb-4 text-lg font-bold text-white">5. Dữ liệu đa mô thức đã sử dụng</h2>
+        <h2 className="mb-4 text-lg font-bold text-slate-100">5. Dữ liệu đa mô thức đã sử dụng</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {[
             ["MRI", report?.multimodal_data?.has_mri],
@@ -356,7 +356,7 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
           ].map(([label, active]) => (
             <div key={String(label)} className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
               <div className="text-xs uppercase text-slate-500">{label}</div>
-              <div className={`mt-2 font-bold ${active ? "text-emerald-300" : "text-slate-500"}`}>
+              <div className={`mt-2 font-bold ${active ? "text-emerald-600 dark:text-emerald-300" : "text-slate-500"}`}>
                 {active ? "Có dữ liệu" : "Chưa có"}
               </div>
             </div>
@@ -365,14 +365,14 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
       </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 className="mb-4 text-lg font-bold text-white">6. Đánh giá chuyên gia</h2>
+        <h2 className="mb-4 text-lg font-bold text-slate-100">6. Đánh giá chuyên gia</h2>
         {(report?.expert_validations || []).length === 0 ? (
           <p className="text-slate-500">Chưa có đánh giá chuyên gia nào được ghi nhận cho bệnh nhân này.</p>
         ) : (
           <div className="space-y-3">
             {report.expert_validations.map((item: any, index: number) => (
               <div key={`${item.image_id}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-300">
-                <div className="font-semibold text-white">Lần ảnh #{item.image_id} • Rating {item.rating}/5</div>
+                <div className="font-semibold text-slate-100">Lần ảnh #{item.image_id} • Rating {item.rating}/5</div>
                 <div className="text-slate-500">{formatDate(item.created_at)}</div>
                 <div className="mt-2">{item.comments || "Không có nhận xét."}</div>
               </div>
@@ -382,7 +382,7 @@ export default function PatientHistoryReportPage({ params }: { params: Promise<{
       </section>
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 className="mb-3 text-lg font-bold text-white">7. Kết luận tổng hợp</h2>
+        <h2 className="mb-3 text-lg font-bold text-slate-100">7. Kết luận tổng hợp</h2>
         <p className="leading-relaxed text-slate-300">{texts.conclusion_text || "Chưa có nhận xét AI."}</p>
       </section>
 

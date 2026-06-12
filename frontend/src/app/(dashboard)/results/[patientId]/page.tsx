@@ -73,7 +73,7 @@ export default function ResultsPage({ params }: { params: Promise<{ patientId: s
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push(uploadHref)}
-            className="flex items-center gap-2 text-slate-400 hover:text-slate-100 transition-colors group"
+            className="flex items-center gap-2 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors group"
           >
             <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
             Quay lại Upload

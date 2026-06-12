@@ -74,15 +74,15 @@ export function SurvivalCurve({ data, color = "#14b8a6", title = "Dự đoán x�
             dataKey="time" 
             axisLine={false} 
             tickLine={false} 
-            tick={{ fill: 'var(--slate-500)', fontSize: 10 }}
-            label={{ value: 'Tháng', position: 'insideBottomRight', offset: -5, fill: 'var(--slate-500)', fontSize: 10 }}
+            tick={{ fill: 'var(--slate-400)', fontSize: 10 }}
+            label={{ value: 'Tháng', position: 'insideBottomRight', offset: -5, fill: 'var(--slate-400)', fontSize: 10 }}
           />
           <YAxis 
             domain={[0, 100]} 
             axisLine={false} 
             tickLine={false} 
-            tick={{ fill: 'var(--slate-500)', fontSize: 10 }}
-            label={{ value: '% Sống còn', angle: -90, position: 'insideLeft', fill: 'var(--slate-500)', fontSize: 10 }}
+            tick={{ fill: 'var(--slate-400)', fontSize: 10 }}
+            label={{ value: '% Sống còn', angle: -90, position: 'insideLeft', fill: 'var(--slate-400)', fontSize: 10 }}
           />
           <Tooltip 
             contentStyle={{ backgroundColor: 'var(--slate-900)', border: '1px solid var(--slate-800)', borderRadius: '8px' }}
