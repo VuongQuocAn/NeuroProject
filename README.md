@@ -848,6 +848,8 @@ Chi tiết R2, CORS, đổi giữa local/tunnel và lỗi thường gặp: [TUNN
 
 ## Hướng dẫn sử dụng toàn bộ web
 
+**Tài khoản đăng nhập demo:** tên đăng nhập `admin`, mật khẩu `123456`.
+
 Hướng dẫn này áp dụng cho web chạy local tại [localhost:3000](http://localhost:3000/login) và frontend [Vercel](https://neurodiagnosisai.vercel.app/login) khi backend/tunnel đang hoạt động. Đăng nhập trước khi thao tác. Local có sẵn hai bệnh nhân `UCSF-003`, `UCSF-001`; có thể tạo thêm bệnh nhân để thử upload mà vẫn giữ các ca mẫu.
 
 Các ảnh dưới đây là ảnh màn hình bạn cung cấp, được giữ nguyên tỷ lệ và căn giữa. Bấm vào ảnh trong GitHub để mở bản gốc lớn hơn. ID ảnh và một số giá trị có thể khác trong bản clone vì database local cấp ID mới.
