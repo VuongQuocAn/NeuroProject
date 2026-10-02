@@ -1,7 +1,24 @@
 # Vercel frontend + backend Docker local qua Cloudflare Tunnel
 
 Frontend: [https://neurodiagnosisai.vercel.app/login](https://neurodiagnosisai.vercel.app/login).
-Kinh phí AWS đã hết nên backend hiện không còn được duy trì trên AWS. Khi cần demo, chạy FastAPI/Celery/PostgreSQL/Redis bằng Docker trên máy cá nhân, mở HTTPS tunnel cho cổng 8000 rồi gán URL vào Vercel. Ảnh/kết quả lưu trên Cloudflare R2.
+Kinh phí AWS đã hết nên backend hiện không còn được duy trì trên AWS. Khi cần demo, chạy FastAPI/Celery/PostgreSQL/Redis bằng Docker trên máy cá nhân, mở HTTPS tunnel rồi gán URL vào Vercel. Có thể dùng MinIO local cổng API **8001**, hoặc bộ `neuroproject-tunnel` + Cloudflare R2 cổng API **8000**.
+
+## Dùng ngay bộ local sau khi clone (MinIO, có hai bệnh nhân demo)
+
+Hoàn thành [SETUP_GUIDE.md](SETUP_GUIDE.md), giữ `neuroproject-local` chạy. Trong `.env`, đặt `FRONTEND_URL=https://neurodiagnosisai.vercel.app` và `CORS_ORIGINS=http://localhost:3000,https://neurodiagnosisai.vercel.app` (hoặc domain Vercel riêng). Copy hai key Gemini/HF do chủ dự án cung cấp ở [phần cấu hình LLM của README](README.md#llm-setup) vào `.env`.
+
+```powershell
+docker compose -f docker-compose.local.yml up -d --force-recreate backend worker
+curl.exe http://localhost:8001/health
+winget install --id Cloudflare.cloudflared --exact
+cloudflared tunnel --protocol http2 --url http://localhost:8001
+```
+
+Nếu vừa cài `cloudflared` mà lệnh chưa được nhận diện, mở terminal mới. Copy URL HTTPS in ra, kiểm tra `/health`, rồi thực hiện phần **5–6** bên dưới để kết nối GitHub/Vercel và sửa `NEXT_PUBLIC_API_URL`. Web Vercel dùng cùng database và MinIO của bộ local, gồm hai ca demo; không cần tài khoản R2 hay công khai cổng MinIO. File được phục vụ qua backend `/media/...`.
+
+Để dùng đầy đủ Chatbox SSE trên Vercel, làm phần [Tunnel có tên cho Chatbox](#tunnel-co-ten-cho-chatbox), thay `service` trong ví dụ thành `http://localhost:8001`. Quick Tunnel không hỗ trợ SSE. Các phần R2 bên dưới là cấu hình riêng của bộ `neuroproject-tunnel`, dùng cổng 8000.
+
+## Bộ tunnel + R2
 
 ```text
 Browser -> Vercel Next.js -> Cloudflare HTTPS Tunnel -> FastAPI local :8000
@@ -52,20 +69,17 @@ RNA_BUCKET=medical-data
 MINIO_PUBLIC_URL=
 FRONTEND_URL=https://neurodiagnosisai.vercel.app
 CORS_ORIGINS=http://localhost:3000,https://neurodiagnosisai.vercel.app
-GEMINI_API_KEY=<key-neu-dung-dien-giai>
-HF_API_TOKEN=<token-neu-dung-RAG>
 ```
 
-Thay placeholder; để Gemini/HF key trống nếu không dùng phần tương ứng. `MINIO_URL` chỉ có hostname, không có `https://` hoặc tên bucket. `MINIO_PUBLIC_URL` trống để ký URL HTTPS trực tiếp cho R2. Compose tạo database URL từ biến POSTGRES; dùng mật khẩu chữ/số để tránh ký tự phải URL-encode, đồng bộ `DATABASE_URL` trong template nếu chạy script ngoài Compose.
+Thay placeholder; copy hai key Gemini/HF ở [phần cấu hình LLM của README](README.md#llm-setup) vào `.env.tunnel`, hoặc dùng key riêng nếu muốn. `MINIO_URL` chỉ có hostname, không có `https://` hoặc tên bucket. `MINIO_PUBLIC_URL` trống để ký URL HTTPS trực tiếp cho R2. Compose tạo database URL từ biến POSTGRES; dùng mật khẩu chữ/số để tránh ký tự phải URL-encode, đồng bộ `DATABASE_URL` trong template nếu chạy script ngoài Compose.
 
-Thay bucket không tự di chuyển object hoặc sửa đường dẫn trong database cũ. Không xóa/ghi đè bucket hay volume đang có dữ liệu cần giữ. Không commit key thật.
+Thay bucket không tự di chuyển object hoặc sửa đường dẫn trong database cũ. Không xóa/ghi đè bucket hay volume đang có dữ liệu cần giữ. Giữ riêng credentials R2, JWT, database và file `.env.tunnel`; hai key demo Gemini/HF trong README được chủ dự án cho phép chia sẻ.
 
 ## 3. Build backend và worker
 
-Dừng stack đang chiếm cổng 8000. Với bộ local mới:
+Đảm bảo cổng 8000 chưa bị ứng dụng khác chiếm. Bộ local mới dùng 8001 nên không cần dừng nó:
 
 ```powershell
-docker compose -f docker-compose.local.yml stop
 docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel config --quiet
 docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel build backend
 docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel run --rm --no-deps backend python scripts/check_local_setup.py
@@ -151,6 +165,8 @@ Trên web: tạo bệnh nhân → upload MRI → xem preview → inference → m
 
 Mở thêm **NeuroBoard** và biểu tượng robot **Chatbox Agent**. Cả hai dùng chung source/backend với bộ local. Chatbox trả lời bằng Gemini nên cần key/model hợp lệ; streaming SSE cần loại tunnel hỗ trợ SSE như phần dưới.
 
+<a id="tunnel-co-ten-cho-chatbox"></a>
+
 ### Tunnel có tên cho Chatbox
 
 [Quick Tunnel có giới hạn SSE](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/). Muốn dùng đầy đủ chat streaming và tránh đổi URL mỗi lần mở, dùng tunnel có tên với domain đang quản lý trên Cloudflare:
@@ -194,7 +210,7 @@ docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel stop
 docker compose -f docker-compose.local.yml up -d
 ```
 
-`Ctrl+C` ở terminal cloudflared để dừng tunnel. Web local dùng `http://localhost:8000`, không cần sửa env Vercel. Web Vercel sẽ mất backend cho tới khi người vận hành mở/cập nhật tunnel.
+`Ctrl+C` ở terminal cloudflared để dừng tunnel. Web local mở tại `http://localhost:3000`, gọi API `http://localhost:8001`, không cần sửa env Vercel. Web Vercel sẽ mất backend cho tới khi người vận hành mở/cập nhật tunnel.
 
 `stop` giữ dữ liệu. **`down -v` xóa volume database**, chỉ dùng khi muốn reset và đã sao lưu. R2 nằm ngoài Docker nên Compose không tự xóa dữ liệu bucket.
 

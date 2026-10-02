@@ -4,7 +4,7 @@ Repo: [VuongQuocAn/NeuroProject](https://github.com/VuongQuocAn/NeuroProject).
 Các lệnh chính dùng PowerShell trên Windows. Chạy từ thư mục gốc repo trừ khi có chỉ dẫn khác.
 
 ```text
-Browser localhost:3000 -> Next.js -> FastAPI localhost:8000
+Browser localhost:3000 -> Next.js -> FastAPI localhost:8001
                                -> PostgreSQL + Redis + Celery worker
                                -> MinIO localhost:9000 (console :9001)
 ```
@@ -66,7 +66,7 @@ Linux dùng `cp .env.example .env`, sửa bằng editor và tạo khóa JWT ng�
 
 Template có credentials development dùng được ngay. Compose nạp `.env` vào backend và worker, ghi đè hostname thành `db`, `redis`, `minio` trong mạng Docker. Trình duyệt lấy ảnh qua API `/media/...`; `minio:9000` chỉ dùng cho backend đọc/ghi.
 
-Để Chatbox Agent trả lời và sinh diễn giải XAI/báo cáo, điền `GEMINI_API_KEY`; RAG cần thêm `HF_API_TOKEN`. Tạo Gemini key tại [Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key), HF token có quyền Inference theo [hướng dẫn Hugging Face](https://huggingface.co/docs/hub/security-tokens). Model/endpoint mẫu cần còn được cung cấp cho tài khoản và có quota. Có thể để key trống để mở web, NeuroBoard và chạy model ảnh; Chatbox không trả lời bằng LLM nếu thiếu key. `NEUROBOARD_SEED_DEMO=true` tạo tài khoản/bài minh họa, không sao chép dữ liệu thật của tác giả.
+Sau khi copy `.env.example`, copy hai dòng `GEMINI_API_KEY` và `HF_API_TOKEN` được chủ dự án cung cấp trong [phần cấu hình LLM của README](README.md#llm-setup) vào `.env`. Backend/worker dùng chúng cho Chatbox, diễn giải/báo cáo và RAG; cần Internet, model/endpoint được cấp quyền và còn quota. Cùng phần đó hướng dẫn đổi key và kiểm tra LLM khi hết hạn/hạn mức. `NEUROBOARD_SEED_DEMO=true` tạo tài khoản/bài minh họa; `LOCAL_DEMO_SEED=true` của compose local tự nạp hai ca demo đã đóng gói trong repo.
 
 ## 4. Build và tạo container lần đầu
 
@@ -76,7 +76,7 @@ docker compose -f docker-compose.local.yml build backend frontend minio
 docker compose -f docker-compose.local.yml run --rm --no-deps backend python scripts/check_local_setup.py
 docker compose -f docker-compose.local.yml up -d
 docker compose -f docker-compose.local.yml ps -a
-curl.exe http://localhost:8000/health
+curl.exe http://localhost:8001/health
 ```
 
 Nếu một bước lỗi, xử lý trước khi chạy bước kế tiếp. Checker cần báo đủ bốn model và bốn artifact RAG. Lần đầu build cần Internet, có thể mất nhiều phút; cache giúp lần sau nhanh hơn.
@@ -95,17 +95,19 @@ Image MinIO registry cũ không còn tải được khi kiểm tra, nên local b
 
 Compose tự tạo network/container/volume. `minio-init` **Exited (0)** là thành công. Backend đợi PostgreSQL/Redis/MinIO sẵn sàng; worker/frontend đợi backend. API cần trả `{"status":"ok"}`. Next.js có thể cần thêm thời gian compile lần truy cập đầu.
 
+Worker dùng `--pool=threads --concurrency=1`: mỗi lần xử lý một tác vụ AI, còn tiến trình chính tiếp tục nhận kiểm tra từ API. Cấu hình này tránh việc worker đang xử lý bị báo nhầm là chưa chạy như khi dùng `solo`. Sau khi đổi cấu hình worker, chạy `up -d worker` để Compose tạo lại container với lệnh mới.
+
 Giữ `minio-init` dù đã thoát. Nếu xóa container này, nút Start của Docker Desktop có thể báo `could not find minio-init`; chạy lại lệnh `up -d` ở trên để tạo lại.
 
-Luôn dùng `-f docker-compose.local.yml`: project `neuroproject-local` có volume mới riêng, không nạp override/database của máy tác giả. Host cần trống cổng **3000, 8000, 9000, 9001**. PostgreSQL/Redis chỉ mở trong mạng Docker. Không chạy đồng thời local và tunnel trên cổng 8000.
+Luôn dùng `-f docker-compose.local.yml`: project `neuroproject-local` có volume mới riêng, không nạp override/database của máy tác giả. Host cần trống cổng **3000, 8001, 9000, 9001**. PostgreSQL/Redis chỉ mở trong mạng Docker. Local dùng 8001, tunnel dùng 8000 nên hai backend có thể chạy đồng thời. Đổi `LOCAL_BACKEND_PORT` trong `.env` nếu cần.
 
 ## 5. Đăng nhập và kiểm tra AI
 
 - Web: [http://localhost:3000/login](http://localhost:3000/login), `admin` / `123456`, vai trò researcher, được tạo trên database mới.
-- API/Swagger: [http://localhost:8000/docs](http://localhost:8000/docs).
+- API/Swagger: [http://localhost:8001/docs](http://localhost:8001/docs).
 - MinIO console: [http://localhost:9001](http://localhost:9001), `admin` / `password123` hoặc credentials trong `.env`.
 
-Database mới có schema/tài khoản, chưa có bệnh nhân/kết quả của tác giả. Tạo bệnh nhân, tải MRI PNG/JPG/DICOM được hỗ trợ, gửi phân tích rồi kiểm tra kết quả/ảnh XAI. API cụ thể có trong Swagger của bản clone. Worker cần chạy để xử lý job.
+Database local mới tự nạp hai bệnh nhân demo `UCSF-003`, `UCSF-001`, gồm file và kết quả từ [gói dữ liệu](backend/demo_data/README.md). `UCSF-003` có 3 MRI, 3 bộ WSI × 100 tile, RNA CSV và lâm sàng; `UCSF-001` có 3 MRI và kết quả đã lưu, chưa có WSI/RNA/lâm sàng trong nguồn. Mở hồ sơ để xem dữ liệu hoặc tạo thêm bệnh nhân và upload MRI để thử pipeline. Worker cần chạy để xử lý job mới.
 
 Checklist kiểm tra thủ công:
 
@@ -121,7 +123,7 @@ Checklist kiểm tra thủ công:
 | Nhập lâm sàng, upload RNA/WSI phù hợp | Dữ liệu thuộc đúng bệnh nhân và chạy được pipeline tương ứng |
 | Dừng rồi khởi động lại bằng `stop` / `up -d` | Hồ sơ, bài đăng, hội thoại và file đã lưu còn nguyên |
 
-Tài khoản bác sĩ `doctor_lan` và `doctor_minh` có mật khẩu local ban đầu `123456`. Dữ liệu bệnh nhân/ca đã phân tích của website tác giả không được đưa vào database local mới.
+Tài khoản bác sĩ `doctor_lan` và `doctor_minh` có mật khẩu local ban đầu `123456`. Hai ca demo được nạp từ ZIP trong repo vào PostgreSQL/MinIO local. Bệnh nhân cùng mã đã tồn tại được giữ nguyên, restart không tạo trùng. Đặt `LOCAL_DEMO_SEED=false` trong `.env` trước lần chạy đầu nếu không muốn seed. Không cần R2 key để nạp ca mẫu.
 
 Kiểm tra khả năng nạp model khi chưa có job AI:
 
@@ -170,7 +172,7 @@ Cài Node.js 20 trở lên khi không dùng frontend container. Giữ backend Do
 docker compose -f docker-compose.local.yml stop frontend
 cd frontend
 npm ci
-Set-Content .env.local 'NEXT_PUBLIC_API_URL=http://localhost:8000' -Encoding ascii
+Set-Content .env.local 'NEXT_PUBLIC_API_URL=http://localhost:8001' -Encoding ascii
 npm run dev
 ```
 
@@ -200,6 +202,6 @@ npm run dev
 ## 10. Frontend Vercel + backend local qua tunnel
 
 Website: [https://neurodiagnosisai.vercel.app/login](https://neurodiagnosisai.vercel.app/login).
-Backend AWS đã hết kinh phí; web cần backend/worker Docker local + Cloudflare Tunnel + R2, sửa `NEXT_PUBLIC_API_URL` trên Vercel và redeploy.
+Backend AWS đã hết kinh phí; chạy backend/worker Docker local, mở Cloudflare Tunnel, sửa `NEXT_PUBLIC_API_URL` trên Vercel rồi redeploy. Có thể dùng ngay bộ local + MinIO cổng 8001 (có hai ca demo, không cần R2), hoặc bộ tunnel + R2 cổng 8000. Xem [README](README.md#website-deployment) và [TUNNEL_DEPLOY_GUIDE.md](TUNNEL_DEPLOY_GUIDE.md).
 
 Làm theo [TUNNEL_DEPLOY_GUIDE.md](TUNNEL_DEPLOY_GUIDE.md) hoặc [Website Deployment trong README](README.md#website-deployment). Chạy local độc lập không cần quyền Vercel; thay env project tác giả cần người có quyền thực hiện.
