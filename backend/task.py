@@ -278,7 +278,7 @@ def run_mri_pipeline(self, task_id: int, image_id: int):
 
 
 @shared_task(name="tasks.run_prognosis_pipeline", bind=True)
-def run_prognosis_pipeline(self, task_id: int, patient_id: int):
+def run_prognosis_pipeline(self, task_id: int, patient_id: int, image_id: int | None = None):
     """MRI pipeline moi -> masked ROI + RNA + clinical -> multimodal prognosis."""
     print(f"[CELERY WORKER] Nhan task prognosis. Task ID: {task_id} | Patient ID: {patient_id}")
     db = SessionLocal()
@@ -299,15 +299,17 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
         )
 
         # 1. Tìm ảnh MRI (nếu có)
-        mri_record = (
-            db.query(models.Image)
-            .filter(
-                models.Image.patient_id == patient_id,
-                models.Image.modality.in_(["MRI", "MRI_SERIES"]),
-            )
-            .order_by(models.Image.scan_date.desc())
-            .first()
+        mri_query = db.query(models.Image).filter(
+            models.Image.patient_id == patient_id,
+            models.Image.modality.in_(["MRI", "MRI_SERIES"]),
         )
+        if image_id is not None:
+            mri_query = mri_query.filter(models.Image.id == image_id)
+        else:
+            mri_query = mri_query.order_by(models.Image.scan_date.desc())
+        mri_record = mri_query.first()
+        if image_id is not None and mri_record is None:
+            raise ValueError(f"Khong tim thay MRI image_id={image_id} cua patient_id={patient_id}")
         
         mri_bytes = None
         mri_all_bytes = None  # Toàn bộ series bytes (nếu là series)
@@ -466,17 +468,19 @@ def run_prognosis_pipeline(self, task_id: int, patient_id: int):
             return data
 
         clean_result = sanitize_json(result)
+        if mri_record:
+            clean_result["image_id"] = mri_record.id
 
         task_record.status = "done"
         task_record.result = clean_result
 
-        # Prognosis process: attach prognosis to the latest MRI analysis row.
+        # Attach the prognosis to the exact MRI selected for this task.
         analysis = None
         if mri_record:
             analysis = db.query(models.AnalysisResult).filter(
                 models.AnalysisResult.image_id == mri_record.id
             ).first()
-        if not analysis:
+        if not analysis and not mri_record:
             analysis = db.query(models.AnalysisResult).filter(
                 models.AnalysisResult.patient_id == patient_id
             ).order_by(models.AnalysisResult.created_at.desc()).first()

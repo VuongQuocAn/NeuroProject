@@ -16,6 +16,8 @@ An end-to-end research prototype that combines MRI tumor detection, segmentation
 
 **Research title:** *Development of a Multimodal Deep Learning Model with XAI for Supporting Brain Tumor Diagnosis and Prognosis*
 
+**Web demo:** [neurodiagnosisai.vercel.app/login](https://neurodiagnosisai.vercel.app/login)
+
 </div>
 
 > [!IMPORTANT]
@@ -36,6 +38,7 @@ An end-to-end research prototype that combines MRI tumor detection, segmentation
 - [Repository Structure](#repository-structure)
 - [API Overview](#api-overview)
 - [Getting Started](#getting-started)
+- [Website Deployment](#website-deployment)
 - [Security and Data Governance](#security-and-data-governance)
 - [Limitations](#limitations)
 - [Citation](#citation)
@@ -445,8 +448,11 @@ The best validation C-index is **0.6936 at epoch 11**. Under random WSI or RNA-s
 |   |-- src/hooks/             Streaming and UI hooks
 |   `-- src/lib/               API clients and shared utilities
 |-- assets/readme/             Architecture and experimental figures
-|-- docker-compose.yml         Full local stack
-|-- docker-compose.tunnel.yml  GPU backend stack for Vercel/tunnel deployment
+|-- docker-compose.local.yml   Standalone local stack, CPU by default
+|-- docker-compose.gpu.yml     Optional NVIDIA GPU overlay
+|-- docker-compose.yml         Original development stack
+|-- docker-compose.tunnel.yml  Local backend stack for Vercel/tunnel deployment
+|-- docker/minio/Dockerfile    Build pinned MinIO and mc from official sources
 |-- SETUP_GUIDE.md             Complete setup instructions
 `-- TUNNEL_DEPLOY_GUIDE.md     Tunnel deployment workflow
 ```
@@ -464,89 +470,235 @@ The complete, executable API specification is available from FastAPI Swagger at 
 | Results and XAI | `GET /records/analysis/image/{image_id}`, `GET /records/analysis/image/{image_id}/report`, `POST /records/analysis/image/{image_id}/validate` |
 | Classification review | `POST /records/analysis/image/{image_id}/classification-review` |
 | Agent | `POST /agent/chat`, `POST /agent/chat/stream`, `GET /agent/conversations`, `POST /agent/quick-mri` |
+| NeuroBoard | `GET /neuroboard/feed`, `POST /neuroboard/posts`, `GET /neuroboard/me` |
 | Administration | `GET /admin/logs` |
 
 ## Getting Started
 
-### Prerequisites
+Hướng dẫn dưới đây dành cho người clone repo lần đầu, chạy **toàn bộ dự án bằng Docker** trên máy cá nhân. Cách cài phần mềm, GPU, chạy frontend riêng và xử lý lỗi nằm trong [SETUP_GUIDE.md](SETUP_GUIDE.md).
 
-- Git and Git LFS;
-- Docker Desktop with Docker Compose;
-- NVIDIA GPU, current driver and Docker GPU access for accelerated inference;
-- Node.js only when running the frontend outside Docker;
-- Gemini and Hugging Face API credentials for Agent/RAG generation;
-- Cloudflare R2 credentials only for tunnel deployment.
+Bộ local dùng cùng source frontend/backend với bộ `neuroproject-tunnel`, có đầy đủ **Chatbox Agent, NeuroBoard, hồ sơ bệnh nhân, MRI và phân tích đa mô thức**. Web chạy tại `localhost:3000`, API tại `localhost:8000`; PostgreSQL và MinIO lưu dữ liệu riêng trên máy người chạy. Không cần Vercel hay tunnel để dùng web local.
 
-### 1. Clone and download model weights
+### 1. Cài Git, Git LFS và Docker
 
-```bash
-git clone git@github.com:Dang123-ui/brain-tumor-multimodal-xai.git
-cd brain-tumor-multimodal-xai
-git lfs install
-git lfs pull
-```
+- Cài [Git](https://git-scm.com/downloads) và [Git LFS](https://git-lfs.com/).
+- Windows: cài [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/), bật WSL 2 và dùng Linux containers. Mở Docker Desktop, đợi engine chạy trước khi dùng lệnh Docker.
+- Linux: cài [Docker Engine](https://docs.docker.com/engine/install/) và [Compose plugin](https://docs.docker.com/compose/install/linux/).
+- Khuyến nghị máy x86_64 có ít nhất 16 GB RAM và khoảng 25 GB ổ trống cho source, model, image và cache. Đây là mức chuẩn bị tham khảo; dữ liệu WSI và inference đa mô thức có thể cần thêm tài nguyên.
+- Local mặc định chạy CPU. NVIDIA GPU là tùy chọn tăng tốc; không cần cài Python, Node.js hay CUDA Toolkit trên host khi chạy mọi thành phần trong Docker.
 
-Required model files are expected under `backend/ai_core/weights/`:
-
-```text
-yolo_weights.pt
-unet_weights.pt
-densenet169_weights.pth
-best_multimodal_model.pth
-```
-
-### 2. Configure environment variables
-
-Use `.env.example` as the variable reference for local development and `.env.tunnel.example` for the tunnel stack. At minimum, replace the placeholder JWT, object-storage, Gemini and Hugging Face values. Never commit `.env`, `backend/.env`, or `.env.tunnel`.
-
-### 3. Run the complete local stack
+Kiểm tra trong PowerShell:
 
 ```powershell
-docker compose up -d --build
-docker compose ps
+git --version
+git lfs version
+docker version
+docker compose version
+```
+
+### 2. Clone repository và tải model
+
+```powershell
+git lfs install
+git clone https://github.com/VuongQuocAn/NeuroProject.git
+cd NeuroProject
+git lfs pull origin
+git lfs fsck
+```
+
+HTTPS giúp clone public repo mà không cần tạo SSH key. Hai file `.pth` dùng Git LFS; file pointer vài trăm byte chưa phải model. Các file cần có:
+
+| File trong `backend/ai_core/weights/` | Chức năng | Kích thước tham khảo |
+|---|---|---|
+| `yolo_weights.pt` | Phát hiện u | 40.5 MB |
+| `unet_weights.pt` | Phân đoạn u | 46.5 MB |
+| `densenet169_weights.pth` | Phân loại u | 51 MB |
+| `best_multimodal_model.pth` | Tiên lượng đa mô thức | 313 MB |
+
+Giữ nguyên `backend/rag/xai/`: `embedding_config.json`, `child_embeddings.npy`, `child_chunks_metadata.jsonl`, `parent_chunks_lookup.json` đã có trong repo. Không cần tải dataset huấn luyện để mở web và chạy inference trên dữ liệu tự cung cấp. Database mới sẽ chưa có hồ sơ bệnh nhân hoặc kết quả của máy tác giả.
+
+### 3. Tạo cấu hình local
+
+Chạy tại thư mục gốc chứa `docker-compose.local.yml`:
+
+```powershell
+Copy-Item .env.example .env
+$localSecret = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
+(Get-Content .env) -replace '^SECRET_KEY=.*$', "SECRET_KEY=$localSecret" | Set-Content .env -Encoding ascii
+notepad .env
+```
+
+Chỉ copy template lần đầu, tránh ghi đè cấu hình đã có. Linux dùng `cp .env.example .env`, sửa bằng trình soạn thảo và đặt `SECRET_KEY` thành chuỗi ngẫu nhiên riêng ít nhất 32 ký tự.
+
+Các giá trị database/MinIO mẫu dùng được cho local. Compose tự đổi địa chỉ database, Redis và MinIO sang hostname nội bộ container, đồng thời tạo bucket lưu trữ. Không dùng địa chỉ `localhost` để các container gọi nhau.
+
+| Biến | Khi nào cần |
+|---|---|
+| `SECRET_KEY` | Khóa JWT riêng cho backend và worker |
+| `GEMINI_API_KEY` | Cho Chatbox Agent trả lời bằng LLM và sinh diễn giải XAI/báo cáo; tạo tại [Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key) |
+| `HF_API_TOKEN` | Query embedding/reranking cho RAG; tạo token có quyền Inference tại [Hugging Face](https://huggingface.co/docs/hub/security-tokens) |
+| `GEMINI_MODEL`, `HF_EMBEDDING_API_URL`, `HF_RERANKER_API_URL` | Chọn model/endpoint mà tài khoản của bạn có quyền dùng |
+| `NEUROBOARD_SEED_DEMO` | Mặc định `true`: tạo tài khoản và bài đăng minh họa NeuroBoard; đặt `false` để không seed bài mẫu |
+
+Có thể để hai API key trống để khởi động web, đăng nhập, quản lý hồ sơ, mở NeuroBoard và chạy model ảnh local. Chatbox vẫn có giao diện nhưng cần Gemini key/model hợp lệ để trả lời bằng LLM; truy xuất RAG cần thêm HF token. Các phần này cần Internet và hạn mức sử dụng. Local dùng MinIO nên không cần tài khoản AWS hoặc Cloudflare R2.
+
+### 4. Build image và tạo container
+
+```powershell
+docker compose -f docker-compose.local.yml config --quiet
+docker compose -f docker-compose.local.yml build backend frontend minio
+docker compose -f docker-compose.local.yml run --rm --no-deps backend python scripts/check_local_setup.py
+docker compose -f docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml ps -a
 curl.exe http://localhost:8000/health
 ```
 
-Local services:
+Lần đầu build cần Internet và có thể mất nhiều phút. Image backend chứa Python/PyTorch và được worker dùng chung. MinIO và `mc` được build từ source chính thức ghim phiên bản vì registry MinIO cũ không còn tải được; Go compiler chạy trong Docker, không cần cài Go trên host.
 
-| Service | URL |
-|---|---|
-| Web application | `http://localhost:3000` |
-| FastAPI Swagger | `http://localhost:8000/docs` |
-| MinIO console | `http://localhost:9001` |
+Compose tạo network, volume và các container `db`, `redis`, `minio`, `backend`, `worker`, `frontend`. `minio-init` chạy một lần để tạo bucket, nên trạng thái **Exited (0)** của container này là bình thường. Backend đợi database/Redis/MinIO sẵn sàng; worker và frontend đợi backend. Không cần tạo container thủ công trong Docker Desktop.
 
-### 4. Inspect logs
+Giữ container `minio-init` sau khi nó chạy xong. Nếu đã xóa và nút Start của Docker Desktop báo `could not find minio-init`, chạy lại `docker compose -f docker-compose.local.yml up -d` để tạo lại container còn thiếu.
+
+Luôn dùng `-f docker-compose.local.yml` cho bộ local mới. File này dùng project `neuroproject-local` và volume riêng, không phụ thuộc volume của máy tác giả hay tự nạp `docker-compose.override.yml` của máy khác. Dừng stack cũ nếu nó đang chiếm cổng 3000, 8000, 9000 hoặc 9001.
+
+### 5. Mở web và kiểm tra workflow
+
+| Dịch vụ | Địa chỉ | Đăng nhập local mặc định |
+|---|---|---|
+| Web | [http://localhost:3000/login](http://localhost:3000/login) | `admin` / `123456` (researcher) |
+| Swagger API | [http://localhost:8000/docs](http://localhost:8000/docs) | Dùng `POST /auth/login` khi endpoint cần JWT |
+| MinIO console | [http://localhost:9001](http://localhost:9001) | `admin` / `password123`, hoặc giá trị trong `.env` |
+
+Backend trả `{"status":"ok"}` ở `/health`. Tài khoản `admin` được tạo khi database trống; thông tin trong bảng chỉ dành cho local. Mở web, tạo bệnh nhân mới, tải một ảnh MRI được hỗ trợ (PNG/JPG/DICOM), chạy phân tích và kiểm tra kết quả/ảnh XAI. Worker phải chạy để job AI được xử lý.
+
+Kiểm tra thủ công sau khi đăng nhập:
+
+1. Mở **NeuroBoard** trong menu hoặc [localhost:3000/neuroboard](http://localhost:3000/neuroboard). Với seed mặc định, phải thấy bài minh họa; thử đăng một bài, bình luận và tải lại trang.
+2. Bấm biểu tượng robot để mở **NeuroDiagnosis Agent**. Kiểm tra mở/đóng và lịch sử chat; nếu đã điền Gemini key, gửi câu hỏi đơn giản và chờ trả lời.
+3. Tạo bệnh nhân thử, upload MRI, kiểm tra ảnh preview, chạy phân tích và mở kết quả. Với ảnh phát hiện u, kiểm tra thêm XAI/phân đoạn; ảnh dự đoán không có u có thể bỏ qua các bước này.
+4. Nếu có file phù hợp, upload WSI/RNA và nhập dữ liệu lâm sàng cho cùng bệnh nhân rồi chạy phân tích đa mô thức.
+5. Dùng `stop`, sau đó `up -d` và đăng nhập lại: bệnh nhân, kết quả, bài đăng và hội thoại đã lưu phải còn. Bộ local không tự tải hồ sơ hoặc hội thoại từ database/R2 của tác giả.
+
+Tài khoản bác sĩ mặc định `doctor_lan` / `123456` và `doctor_minh` / `123456` cũng được tạo khi khởi động; có thể dùng để thử chức năng theo vai trò. Đổi mật khẩu nếu chia sẻ backend cho người khác.
+
+Health check chỉ xác nhận API trả lời. Để kiểm tra cả khả năng nạp các model:
 
 ```powershell
-docker compose logs -f backend
-docker compose logs -f worker
+docker compose -f docker-compose.local.yml exec worker python scripts/check_local_setup.py --load-models
 ```
 
-### 5. Run the frontend independently
+Lệnh này dùng thêm RAM vì nạp một bản model trong tiến trình riêng; chạy trước khi gửi job AI. Lần đầu backbone DenseNet121 có thể tải weights từ Internet, được giữ trong volume `torch_cache`. CPU chạy chậm hơn GPU, đặc biệt với WSI/tiên lượng đa mô thức.
+
+### 6. Xem log, dừng và chạy lại
 
 ```powershell
-cd frontend
-npm install
-notepad .env.local
-npm run dev
+docker compose -f docker-compose.local.yml logs -f backend worker frontend
+docker compose -f docker-compose.local.yml stop
+docker compose -f docker-compose.local.yml up -d
 ```
 
-Set the following value in `frontend/.env.local` before starting Next.js:
+`Ctrl+C` thoát xem log. `stop` giữ dữ liệu; `down` gỡ container/network nhưng giữ named volume. **`down -v` xóa volume database, MinIO và cache**, chỉ dùng khi chủ động muốn xóa dữ liệu. Sau khi sửa `.env`, dùng `up -d --force-recreate backend worker`; `restart` đơn thuần không nạp lại biến môi trường container.
+
+Muốn dùng NVIDIA GPU, xem phần [GPU trong SETUP_GUIDE.md](SETUP_GUIDE.md#6-chay-voi-nvidia-gpu-tuy-chon). Có thể chạy frontend bằng Node.js riêng theo hướng dẫn trong cùng file.
+
+## Website Deployment
+
+Frontend của dự án đã deploy trên **Vercel**: [https://neurodiagnosisai.vercel.app/login](https://neurodiagnosisai.vercel.app/login).
+
+**Tình trạng backend:** kinh phí AWS đã hết nên backend hiện không còn được duy trì trên AWS. Để web Vercel gọi được API và chạy AI, người vận hành phải chạy backend/worker bằng Docker trên máy cá nhân, mở Cloudflare Tunnel, rồi đặt URL tunnel vào biến môi trường của project Vercel và redeploy frontend. Khi máy backend hoặc tunnel tắt, giao diện Vercel có thể vẫn mở nhưng đăng nhập, dữ liệu và inference sẽ không hoạt động.
+
+```text
+Trình duyệt -> frontend Vercel -> HTTPS Cloudflare Tunnel
+                              -> FastAPI trên máy cá nhân :8000
+                              -> PostgreSQL + Redis + Celery worker (CPU/GPU)
+                              -> Cloudflare R2 (ảnh và kết quả)
+```
+
+### 1. Chuẩn bị backend Docker và R2
+
+Clone và tải model như phần local. Cài [cloudflared](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/) trên máy chạy backend; Windows có thể dùng:
+
+```powershell
+winget install --id Cloudflare.cloudflared --exact
+cloudflared --version
+Copy-Item .env.tunnel.example .env.tunnel
+notepad .env.tunnel
+```
+
+Mở terminal mới nếu `cloudflared` chưa được nhận diện sau khi cài. Trong [Cloudflare R2](https://developers.cloudflare.com/r2/get-started/), tạo bucket **`medical-data`**, lấy endpoint S3 và API credentials có quyền đọc/ghi bucket. Điền `.env.tunnel`:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
+POSTGRES_PASSWORD=<mat-khau-database-rieng-dung-chu-va-so>
+SECRET_KEY=<khoa-JWT-ngau-nhien-rieng-it-nhat-32-ky-tu>
+MINIO_URL=<account-id>.r2.cloudflarestorage.com
+MINIO_ACCESS_KEY=<R2-access-key-id>
+MINIO_SECRET_KEY=<R2-secret-access-key>
+MINIO_SECURE=true
+MINIO_REGION=auto
+MINIO_BUCKET=medical-data
+R2_BUCKET=medical-data
+RNA_BUCKET=medical-data
+MINIO_PUBLIC_URL=
+FRONTEND_URL=https://neurodiagnosisai.vercel.app
+CORS_ORIGINS=http://localhost:3000,https://neurodiagnosisai.vercel.app
+GEMINI_API_KEY=<key-cua-ban-neu-dung-dien-giai>
+HF_API_TOKEN=<token-cua-ban-neu-dung-RAG>
 ```
 
-### Tunnel/Vercel deployment
+Thay các placeholder bằng giá trị thật; để key trống nếu không dùng phần tương ứng. `MINIO_URL` chỉ chứa hostname, không có `https://` hoặc tên bucket. Bộ `neuroproject-tunnel` dùng R2, không chạy MinIO local; ảnh được phục vụ qua API `/media/...` để frontend truy cập bằng cùng URL backend.
 
-The project also supports a Vercel frontend connected to a locally hosted GPU backend through a Cloudflare Quick Tunnel and Cloudflare R2. Follow [TUNNEL_DEPLOY_GUIDE.md](TUNNEL_DEPLOY_GUIDE.md) for the exact command order and environment configuration.
+### 2. Khởi động backend và worker
+
+Nếu bộ local mới đang chạy, dừng nó để nhường cổng 8000:
 
 ```powershell
+docker compose -f docker-compose.local.yml stop
+docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel config --quiet
+docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel build backend
 docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel up -d
+docker compose -f docker-compose.tunnel.yml --env-file .env.tunnel ps
+curl.exe http://localhost:8000/health
+```
+
+Mặc định CPU; để tăng tốc, thêm `-f docker-compose.gpu.yml` sau file tunnel vào mọi lệnh build/up/kiểm tra của stack. Database local và database tunnel ở volume riêng; chuyển chế độ không tự chuyển hồ sơ/dữ liệu giữa hai nơi.
+
+### 3. Mở tunnel và lấy URL HTTPS
+
+Mở terminal khác, giữ terminal này chạy:
+
+```powershell
 cloudflared tunnel --protocol http2 --url http://localhost:8000
 ```
 
-The generated `https://...trycloudflare.com` address must be assigned to Vercel's public `NEXT_PUBLIC_API_URL` configuration and the frontend must then be redeployed.
+Copy URL được in ra, ví dụ `https://abc-def-xyz.trycloudflare.com`, rồi kiểm tra:
+
+```powershell
+curl.exe https://abc-def-xyz.trycloudflare.com/health
+```
+
+Thay URL ví dụ bằng URL thực tế của bạn. Kết quả cần là `{"status":"ok"}`. Quick Tunnel không cần tài khoản Cloudflare; R2 cần tài khoản và credentials riêng.
+
+Chatbox dùng streaming SSE. Quick Tunnel có giới hạn SSE; để dùng đầy đủ chat streaming và có URL ổn định, xem phần **Tunnel có tên cho Chatbox** trong [TUNNEL_DEPLOY_GUIDE.md](TUNNEL_DEPLOY_GUIDE.md). Trên localhost, Chatbox gọi API trực tiếp và không chịu giới hạn của tunnel.
+
+### 4. Gán URL vào Vercel và redeploy
+
+Người có quyền quản lý project Vercel thực hiện:
+
+1. Mở **Vercel Dashboard → project → Settings → Environment Variables** (hoặc mục Environment Variables bên trong môi trường Production).
+2. Thêm/sửa biến **`NEXT_PUBLIC_API_URL`**, giá trị là URL gốc HTTPS của tunnel, ví dụ `https://abc-def-xyz.trycloudflare.com`. Không thêm `/login`, `/docs` hoặc `/health`.
+3. Chọn **Production**; chọn thêm **Preview** nếu muốn bản preview gọi cùng backend. Lưu cấu hình.
+4. Mở **Deployments → deployment production mới nhất → Redeploy** và đợi trạng thái **Ready**. Biến `NEXT_PUBLIC_*` được đưa vào frontend lúc build; sửa biến rồi chỉ reload trình duyệt chưa đủ. [Tài liệu biến môi trường Vercel](https://vercel.com/docs/environment-variables).
+5. Mở lại [web demo](https://neurodiagnosisai.vercel.app/login), đăng nhập bằng tài khoản của database backend đang chạy, thử tải MRI và chạy job. Trong DevTools → Network, request API phải đi tới URL tunnel vừa cấu hình.
+
+Nếu tự tạo project Vercel: chọn **Add New → Project**, kết nối GitHub và cấp quyền repo `VuongQuocAn/NeuroProject`, chọn **Import**, đặt **Framework Preset: Next.js**, **Root Directory: frontend**, **Build Command: npm run build**, giữ Output Directory mặc định và thêm biến trên trước khi Deploy. Push lên production branch sau khi kết nối Git sẽ tự tạo deployment mới theo [Git integration](https://vercel.com/docs/git). Dùng URL Vercel của project riêng trong `FRONTEND_URL` và `CORS_ORIGINS`, không thêm đường dẫn `/login` vào origin.
+
+### 5. Mỗi lần mở lại backend/tunnel
+
+Khởi động Docker stack tunnel, mở `cloudflared`, copy URL mới → sửa `NEXT_PUBLIC_API_URL` → redeploy Vercel → kiểm tra `/health` và đăng nhập. URL Quick Tunnel đổi sau mỗi lần tạo lại; Docker, backend, worker, Internet và tiến trình tunnel cần tiếp tục chạy suốt buổi demo.
+
+Bạn có thể gửi link website Vercel cho người xem mà không cấp quyền quản lý Vercel. Clone repo và chạy local cũng không cần quyền trên project Vercel của tác giả. Để sửa biến môi trường của website tác giả, cần chủ project hoặc thành viên có quyền thực hiện; mỗi project Vercel dùng chung một URL backend production tại một thời điểm.
+
+Chi tiết R2, CORS, đổi giữa local/tunnel và lỗi thường gặp: [TUNNEL_DEPLOY_GUIDE.md](TUNNEL_DEPLOY_GUIDE.md). Cloudflare Quick Tunnel dùng cho demo, không có bảo đảm uptime và không hỗ trợ SSE; nếu phiên bản frontend dùng chat streaming thì cần tunnel có tên/domain ổn định hỗ trợ luồng đó. [Giới hạn Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/#limitations).
 
 ## Security and Data Governance
 

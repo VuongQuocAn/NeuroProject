@@ -1,7 +1,8 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+import crud
 import models
 import schemas
 from celery_app import celery_app
@@ -18,6 +19,8 @@ def _create_inference_task(
     task_type: str,
     target_id: int,
     celery_signature: str,
+    celery_extra_args: list[int | None] | None = None,
+    initial_result: dict | None = None,
 ) -> models.InferenceTask:
     """Helper: tạo bản ghi InferenceTask trong DB rồi gửi task lên Celery."""
     placeholder_celery_id = str(uuid.uuid4())
@@ -27,6 +30,7 @@ def _create_inference_task(
         task_type=task_type,
         target_id=target_id,
         status="pending",
+        result=initial_result,
     )
     db.add(db_task)
     db.commit()
@@ -38,15 +42,68 @@ def _create_inference_task(
         # Gửi task bất đồng bộ tới Celery worker
         celery_app.send_task(
             celery_signature,
-            args=[db_task.id, target_id],
+            args=[db_task.id, target_id, *(celery_extra_args or [])],
             task_id=placeholder_celery_id,
         )
         print(f"[API] Da gui task_id={db_task.id} thanh cong.")
     except Exception as e:
         print(f"[API] LOI KHI GUI TASK SANG CELERY: {e}")
-        # Van tra ve task_id de frontend co the polling, worker se xu ly sau khi ket noi lai
+        db_task.status = "failed"
+        db_task.error_message = f"Khong the gui task sang Celery: {e}"
+        db.commit()
+        raise HTTPException(status_code=503, detail=db_task.error_message) from e
         
     return db_task
+
+
+def _reusable_task(
+    db: Session,
+    task_type: str,
+    target_id: int,
+    image_id: int | None = None,
+) -> models.InferenceTask | None:
+    """Reuse an active/completed task for the exact image instead of duplicating work."""
+    tasks = (
+        db.query(models.InferenceTask)
+        .filter(
+            models.InferenceTask.task_type == task_type,
+            models.InferenceTask.target_id == target_id,
+            models.InferenceTask.status.in_(["pending", "processing", "done"]),
+        )
+        .order_by(models.InferenceTask.created_at.desc(), models.InferenceTask.id.desc())
+        .all()
+    )
+    if image_id is None:
+        return tasks[0] if tasks else None
+
+    for task in tasks:
+        result = task.result if isinstance(task.result, dict) else {}
+        task_image_id = result.get("image_id")
+        try:
+            if task_image_id is not None and int(task_image_id) == image_id:
+                return task
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _ensure_celery_worker_available() -> None:
+    try:
+        responses = celery_app.control.ping(timeout=0.7)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Celery worker chua san sang: {exc}",
+        ) from exc
+
+    if not responses:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Celery worker chua chay nen pipeline se bi ket pending. "
+                "Hay bat worker: backend\\.venv\\Scripts\\celery.exe -A celery_app.celery_app worker --loglevel=info --pool=solo"
+            ),
+        )
 
 
 # ============================================================
@@ -61,7 +118,7 @@ def trigger_mri_inference(
     current_user: dict = Depends(get_current_user),
 ):
     # Xác minh ảnh tồn tại trong DB
-    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    image = crud.get_image_for_user(db, image_id, current_user)
     if not image:
         raise HTTPException(status_code=404, detail="Không tìm thấy ảnh MRI")
 
@@ -71,7 +128,18 @@ def trigger_mri_inference(
             detail=f"Ảnh này có modality='{image.modality}', endpoint này chỉ xử lý MRI hoặc MRI_SERIES",
         )
 
+    _ensure_celery_worker_available()
+
     # Tương tự như Prognosis, bỏ qua việc check task cũ để tránh deadlock khi worker sập.
+
+    existing_task = _reusable_task(db, "mri_pipeline", image_id)
+    if existing_task:
+        return schemas.InferenceTaskResponse(
+            task_id=existing_task.id,
+            celery_task_id=existing_task.celery_task_id,
+            status=existing_task.status,
+            message="Đã có task MRI tương ứng cho ảnh này; sử dụng lại task hiện tại.",
+        )
 
     db_task = _create_inference_task(
         db=db,
@@ -96,17 +164,43 @@ def trigger_mri_inference(
 @router.post("/prognosis/{patient_id}", response_model=schemas.InferenceTaskResponse)
 def trigger_prognosis_inference(
     patient_id: str,
+    image_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    import crud
     # Xác minh bệnh nhân tồn tại (hỗ trợ cả ID số và External ID chuỗi)
-    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    patient = crud.get_patient_for_user(db, patient_id, current_user)
     if not patient:
         raise HTTPException(status_code=404, detail=f"Không tìm thấy bệnh nhân với ID '{patient_id}'")
 
     # Sử dụng ID số nội bộ từ đây
     real_id = patient.id
+
+    selected_image_id = None
+    if image_id is not None:
+        selected_image = crud.get_image_for_user(db, image_id, current_user)
+        if not selected_image or selected_image.patient_id != real_id:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Khong tim thay anh MRI image_id={image_id} cua benh nhan nay",
+            )
+        if selected_image.modality not in ["MRI", "MRI_SERIES"]:
+            raise HTTPException(status_code=400, detail="image_id phai la anh MRI hoac MRI_SERIES")
+        selected_image_id = selected_image.id
+    else:
+        mri_count = (
+            db.query(models.Image)
+            .filter(
+                models.Image.patient_id == real_id,
+                models.Image.modality.in_(["MRI", "MRI_SERIES"]),
+            )
+            .count()
+        )
+        if mri_count > 0:
+            raise HTTPException(
+                status_code=409,
+                detail="Bat buoc gui image_id cua MRI dang chay de tranh chay lai ket qua cu.",
+            )
 
     # Kiểm tra dữ liệu RNA đã được tải lên chưa (cần thiết cho Fusion Model)
     # RnaData is no longer strictly mandatory since the model handles missing data gracefully via masking,
@@ -115,14 +209,24 @@ def trigger_prognosis_inference(
     if not rna:
         print(f"[Warning] No RNA-seq data found cho bệnh nhân {patient_id}. The model will automatically skip it using Attention Mask.")
 
-    # Loại bỏ cơ chế kiểm tra tác vụ cũ vì nếu Worker sập, DB sẽ lưu trạng thái 'processing' mãi mãi.
-    # Luôn luôn tạo một task mới khi người dùng yêu cầu để tránh bị kẹt (deadlock).
+    _ensure_celery_worker_available()
+
+    existing_task = _reusable_task(db, "prognosis", real_id, selected_image_id)
+    if existing_task:
+        return schemas.InferenceTaskResponse(
+            task_id=existing_task.id,
+            celery_task_id=existing_task.celery_task_id,
+            status=existing_task.status,
+            message="Đã có task tiên lượng tương ứng cho ảnh này; sử dụng lại task hiện tại.",
+        )
 
     db_task = _create_inference_task(
         db=db,
         task_type="prognosis",
         target_id=real_id,
         celery_signature="tasks.run_prognosis_pipeline",
+        celery_extra_args=[selected_image_id],
+        initial_result={"image_id": selected_image_id},
     )
 
     return schemas.InferenceTaskResponse(
@@ -147,6 +251,22 @@ def get_task_status(
     task = db.query(models.InferenceTask).filter(models.InferenceTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail=f"Không tìm thấy tác vụ id={task_id}")
+
+    if task.task_type == "mri_pipeline":
+        image = crud.get_image_for_user(db, int(task.target_id), current_user)
+        if not image:
+            raise HTTPException(status_code=404, detail=f"Task id={task_id} not found")
+    elif task.task_type == "prognosis":
+        patient = (
+            db.query(models.Patient)
+            .filter(
+                models.Patient.id == int(task.target_id),
+                models.Patient.owner_user_id == crud.current_user_id(current_user),
+            )
+            .first()
+        )
+        if not patient:
+            raise HTTPException(status_code=404, detail=f"Task id={task_id} not found")
 
     progress_percent = None
     progress_status = None

@@ -8,11 +8,12 @@ from typing import Any, List
 import cv2
 import numpy as np
 import pydicom
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse, Response
 from PIL import Image, ImageDraw, ImageFile, ImageFont, ImageOps
 from sqlalchemy.orm import Session
 
+import crud
 import models
 import schemas
 from database import get_db
@@ -78,11 +79,9 @@ def _get_presigned_url(file_path: str | None) -> str | None:
     if not file_path:
         return None
     try:
-        object_name = file_path.split("/", 2)[-1]
-        return minio_client.presigned_get_object(
-            bucket_name=BUCKET_NAME,
-            object_name=object_name,
-        )
+        bucket_name, object_name = _parse_minio_path(file_path)
+        from utils import build_minio_presigned_url
+        return build_minio_presigned_url(bucket_name, object_name)
     except Exception:
         return None
 
@@ -103,35 +102,14 @@ def _local_image_to_data_url(file_path: str | None) -> str | None:
 
 
 def _stored_image_to_data_url(file_path: str | None) -> str | None:
-    """Return data URL for either a local result file or a MinIO object path."""
+    """Return a browser-readable image URL for local files or object storage paths."""
     if not file_path:
         return None
 
     if os.path.exists(file_path):
         return _local_image_to_data_url(file_path)
 
-    try:
-        bucket_name, object_name = _parse_minio_path(file_path)
-        response = minio_client.get_object(bucket_name, object_name)
-        try:
-            data = response.read()
-        finally:
-            response.close()
-            response.release_conn()
-
-        extension = os.path.splitext(object_name)[1].lower()
-        mime_type = "image/png"
-        if extension in {".jpg", ".jpeg"}:
-            mime_type = "image/jpeg"
-        elif extension == ".bmp":
-            mime_type = "image/bmp"
-        elif extension in {".tif", ".tiff"}:
-            mime_type = "image/tiff"
-
-        encoded = base64.b64encode(data).decode("ascii")
-        return f"data:{mime_type};base64,{encoded}"
-    except Exception:
-        return None
+    return _get_presigned_url(file_path)
 
 
 def _stored_file_exists(file_path: str | None) -> bool:
@@ -926,20 +904,41 @@ def _get_latest_mri_task(db: Session, image_id: int) -> models.InferenceTask | N
     )
 
 
+def _get_latest_prognosis_task(
+    db: Session,
+    patient_id: int,
+    image_id: int | None = None,
+) -> models.InferenceTask | None:
+    """Return prognosis for the requested MRI, never another MRI of the patient."""
+    tasks = (
+        db.query(models.InferenceTask)
+        .filter(
+            models.InferenceTask.task_type == "prognosis",
+            models.InferenceTask.target_id == patient_id,
+        )
+        .order_by(models.InferenceTask.created_at.desc(), models.InferenceTask.id.desc())
+        .all()
+    )
+    if image_id is None:
+        return tasks[0] if tasks else None
+
+    for task in tasks:
+        result = task.result if isinstance(task.result, dict) else {}
+        task_image_id = result.get("image_id")
+        try:
+            if task_image_id is not None and int(task_image_id) == image_id:
+                return task
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def _get_latest_classification_xai_task(db: Session, image: models.Image) -> models.InferenceTask | None:
     mri_task = _get_latest_mri_task(db, image.id)
     if mri_task and isinstance(mri_task.result, dict) and mri_task.result.get("classification_xai_path"):
         return mri_task
 
-    return (
-        db.query(models.InferenceTask)
-        .filter(
-            models.InferenceTask.task_type == "prognosis",
-            models.InferenceTask.target_id == image.patient_id,
-        )
-        .order_by(models.InferenceTask.created_at.desc())
-        .first()
-    )
+    return _get_latest_prognosis_task(db, image.patient_id, image.id)
 
 
 def _build_classification_xai_fallback(
@@ -999,6 +998,7 @@ def _build_classification_xai_fallback(
 @router.get("/records/analysis/patient/{patient_id}/full", response_model=schemas.ImageAIResultResponse)
 def get_patient_full_analysis(
     patient_id: str,
+    image_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
@@ -1006,34 +1006,39 @@ def get_patient_full_analysis(
     Endpoint đầy đủ: kết hợp AnalysisResult + InferenceTask.result
     để trả về overlay images, heatmaps, multimodal fields cho Frontend.
     """
-    import crud
-    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    patient = crud.get_patient_for_user(db, patient_id, current_user)
     if not patient:
         raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
 
     real_id = patient.id
 
     # Lấy AnalysisResult mới nhất
-    analysis = (
-        db.query(models.AnalysisResult)
-        .filter(models.AnalysisResult.patient_id == real_id)
-        .order_by(models.AnalysisResult.created_at.desc())
-        .first()
+    selected_image = None
+    if image_id is not None:
+        selected_image = (
+            db.query(models.Image)
+            .filter(
+                models.Image.id == image_id,
+                models.Image.patient_id == real_id,
+                models.Image.modality.in_(["MRI", "MRI_SERIES"]),
+            )
+            .first()
+        )
+        if not selected_image:
+            raise HTTPException(status_code=404, detail="Khong tim thay anh MRI cua benh nhan")
+
+    analysis_query = db.query(models.AnalysisResult).filter(
+        models.AnalysisResult.patient_id == real_id
     )
+    if image_id is not None:
+        analysis_query = analysis_query.filter(models.AnalysisResult.image_id == image_id)
+    analysis = analysis_query.order_by(models.AnalysisResult.created_at.desc()).first()
 
     # Lấy InferenceTask mới nhất (prognosis hoặc mri_pipeline)
-    prognosis_task = (
-        db.query(models.InferenceTask)
-        .filter(
-            models.InferenceTask.task_type == "prognosis",
-            models.InferenceTask.target_id == real_id,
-        )
-        .order_by(models.InferenceTask.created_at.desc())
-        .first()
-    )
+    prognosis_task = _get_latest_prognosis_task(db, real_id, image_id)
 
     # Cũng tìm MRI task nếu có (để lấy overlay images)
-    mri_image = (
+    mri_image = selected_image or (
         db.query(models.Image)
         .filter(
             models.Image.patient_id == real_id,
@@ -1182,8 +1187,7 @@ def get_patient_analysis(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    import crud
-    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    patient = crud.get_patient_for_user(db, patient_id, current_user)
     if not patient:
         raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
 
@@ -1202,7 +1206,7 @@ def get_image_analysis_detail(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    image = crud.get_image_for_user_or_second_opinion(db, image_id, current_user)
     if not image:
         raise HTTPException(status_code=404, detail="Khong tim thay anh MRI")
 
@@ -1316,7 +1320,7 @@ def explain_classification_xai(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    image = crud.get_image_for_user_or_second_opinion(db, image_id, current_user)
     if not image:
         raise HTTPException(status_code=404, detail="Khong tim thay anh MRI")
 
@@ -1441,7 +1445,7 @@ def get_slice_image(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    image = crud.get_image_for_user_or_second_opinion(db, image_id, current_user)
     if not image:
         raise HTTPException(status_code=404, detail="Khong tim thay anh MRI")
 
@@ -1458,23 +1462,12 @@ def get_slice_image(
         raise HTTPException(status_code=404, detail="Index lat cat khong hop le")
 
     target_obj = sorted_objects[slice_index]
-    obj_res = minio_client.get_object(bucket_name, target_obj.object_name)
     try:
-        file_bytes = obj_res.read()
-    finally:
-        obj_res.close()
-        obj_res.release_conn()
+        url = minio_client.presigned_get_object(bucket_name, target_obj.object_name)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Khong the tao URL lat cat MRI") from exc
 
-    # Decode and return as PNG
-    img_bgr = _decode_image_bytes(file_bytes)
-    if img_bgr is None:
-        raise HTTPException(status_code=500, detail="Khong the decode lat cat")
-
-    success, encoded = cv2.imencode(".png", img_bgr)
-    if not success:
-        raise HTTPException(status_code=500, detail="Loi encode PNG")
-
-    return Response(content=encoded.tobytes(), media_type="image/png")
+    return RedirectResponse(url=url)
 
 
 @router.get("/records/analysis/image/{image_id}/report")
@@ -1483,24 +1476,14 @@ def download_image_report(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    image = crud.get_image_for_user_or_second_opinion(db, image_id, current_user)
     if not image:
         raise HTTPException(status_code=404, detail="Khong tim thay anh MRI")
 
     latest_task = _get_latest_mri_task(db, image_id)
     # Cũng tìm prognosis task theo patient_id nếu không có mri_pipeline task
-    prognosis_task = (
-        db.query(models.InferenceTask)
-        .filter(
-            models.InferenceTask.task_type == "prognosis",
-            models.InferenceTask.target_id == image.patient_id,
-        )
-        .order_by(models.InferenceTask.created_at.desc())
-        .first()
-    )
+    prognosis_task = _get_latest_prognosis_task(db, image.patient_id, image_id)
     analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.image_id == image_id).first()
-    if not analysis:
-        analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.patient_id == image.patient_id).first()
     if not latest_task and not prognosis_task and not analysis:
         raise HTTPException(status_code=404, detail="Chua co ket qua de xuat bao cao")
 
@@ -1635,6 +1618,10 @@ def get_xai_overlay(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    image = crud.get_image_for_user_or_second_opinion(db, image_id, current_user)
+    if not image:
+        raise HTTPException(status_code=404, detail=f"Chua co ket qua XAI cho image_id={image_id}.")
+
     result = db.query(models.AnalysisResult).filter(models.AnalysisResult.image_id == image_id).first()
     if not result:
         raise HTTPException(status_code=404, detail=f"Chua co ket qua XAI cho image_id={image_id}.")
@@ -1652,8 +1639,7 @@ def get_survival_curve(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    import crud
-    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    patient = crud.get_patient_for_user(db, patient_id, current_user)
     if not patient:
         raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
 
@@ -1694,7 +1680,7 @@ def submit_expert_validation(
     current_user: dict = Depends(get_current_user),
 ):
     # Check if image exists
-    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    image = crud.get_image_for_user_or_second_opinion(db, image_id, current_user)
     if not image:
         raise HTTPException(status_code=404, detail="Không tìm thấy hình ảnh.")
         
@@ -1718,7 +1704,7 @@ def submit_classification_review(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    image = crud.get_image_for_user_or_second_opinion(db, image_id, current_user)
     if not image:
         raise HTTPException(status_code=404, detail="Khong tim thay anh MRI")
 
@@ -1738,11 +1724,7 @@ def submit_classification_review(
         raise HTTPException(status_code=400, detail="Nhan chuyen gia khong duoc de trong")
 
     review_action = "confirmed" if ai_label and expert_label.lower() == ai_label.lower() else "corrected"
-    user_id = None
-    try:
-        user_id = int(current_user.get("sub"))
-    except Exception:
-        user_id = None
+    user_id = crud.current_user_id(current_user)
 
     review = models.ClassificationReview(
         image_id=image_id,
@@ -1755,6 +1737,21 @@ def submit_classification_review(
         review_action=review_action,
     )
     db.add(review)
+    if user_id is not None:
+        second_opinion_request = (
+            db.query(models.NeuroSecondOpinionRequest)
+            .filter(
+                models.NeuroSecondOpinionRequest.case_image_id == image_id,
+                models.NeuroSecondOpinionRequest.reviewer_doctor_id == user_id,
+                models.NeuroSecondOpinionRequest.status != "Completed",
+            )
+            .order_by(models.NeuroSecondOpinionRequest.created_at.desc())
+            .first()
+        )
+        if second_opinion_request:
+            second_opinion_request.status = "Completed"
+            second_opinion_request.completed_at = datetime.datetime.utcnow()
+            second_opinion_request.opinion = payload.expert_comment or expert_label
     db.commit()
     db.refresh(review)
 
@@ -1781,24 +1778,53 @@ def get_dashboard_stats(
     current_user: dict = Depends(get_current_user),
 ):
     from sqlalchemy import func
+    user_id = crud.current_user_id(current_user)
     
     # 1. Total patients
-    total_patients = db.query(models.Patient).count()
+    total_patients = (
+        db.query(models.Patient)
+        .filter(models.Patient.owner_user_id == user_id)
+        .count()
+    )
     
     # 2. Tumor distribution
-    tumor_counts = db.query(models.AnalysisResult.tumor_label, func.count(models.AnalysisResult.id)).group_by(models.AnalysisResult.tumor_label).all()
+    tumor_counts = (
+        db.query(models.AnalysisResult.tumor_label, func.count(models.AnalysisResult.id))
+        .join(models.Patient, models.AnalysisResult.patient_id == models.Patient.id)
+        .filter(models.Patient.owner_user_id == user_id)
+        .group_by(models.AnalysisResult.tumor_label)
+        .all()
+    )
     tumor_distribution = {label or "Unknown": count for label, count in tumor_counts}
     
     # 3. Risk group distribution
-    risk_counts = db.query(models.AnalysisResult.risk_group, func.count(models.AnalysisResult.id)).group_by(models.AnalysisResult.risk_group).all()
+    risk_counts = (
+        db.query(models.AnalysisResult.risk_group, func.count(models.AnalysisResult.id))
+        .join(models.Patient, models.AnalysisResult.patient_id == models.Patient.id)
+        .filter(models.Patient.owner_user_id == user_id)
+        .group_by(models.AnalysisResult.risk_group)
+        .all()
+    )
     risk_distribution = {group or "N/A": count for group, count in risk_counts}
     
     # 4. Average Sanity Check rating
-    avg_rating_result = db.query(func.avg(models.ExpertValidation.rating)).scalar()
+    avg_rating_result = (
+        db.query(func.avg(models.ExpertValidation.rating))
+        .join(models.Image, models.ExpertValidation.image_id == models.Image.id)
+        .join(models.Patient, models.Image.patient_id == models.Patient.id)
+        .filter(models.Patient.owner_user_id == user_id)
+        .scalar()
+    )
     avg_rating = round(float(avg_rating_result), 1) if avg_rating_result else 0.0
     
     # 5. Total validations
-    total_validations = db.query(models.ExpertValidation).count()
+    total_validations = (
+        db.query(models.ExpertValidation)
+        .join(models.Image, models.ExpertValidation.image_id == models.Image.id)
+        .join(models.Patient, models.Image.patient_id == models.Patient.id)
+        .filter(models.Patient.owner_user_id == user_id)
+        .count()
+    )
     
     return {
         "total_patients": total_patients,
@@ -1815,11 +1841,16 @@ def export_research_data(
 ):
     import csv
     from io import StringIO
+    user_id = crud.current_user_id(current_user)
     
     # Lấy tất cả validations cùng với thông tin analysis result
-    validations = db.query(models.ExpertValidation, models.AnalysisResult).join(
-        models.AnalysisResult, models.ExpertValidation.image_id == models.AnalysisResult.image_id
-    ).all()
+    validations = (
+        db.query(models.ExpertValidation, models.AnalysisResult)
+        .join(models.AnalysisResult, models.ExpertValidation.image_id == models.AnalysisResult.image_id)
+        .join(models.Patient, models.AnalysisResult.patient_id == models.Patient.id)
+        .filter(models.Patient.owner_user_id == user_id)
+        .all()
+    )
     
     output = StringIO()
     writer = csv.writer(output)

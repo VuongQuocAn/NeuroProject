@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { api, apiBaseUrl, resolveMediaUrl } from "@/lib/api";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -77,6 +77,7 @@ type Props = {
   onDownload?: () => void;
   onExtraAction?: () => void;
   extraActionLabel?: string;
+  openReviewForm?: boolean;
   compact?: boolean;
 };
 
@@ -108,6 +109,7 @@ export default function MriResultCard({
   onDownload,
   onExtraAction,
   extraActionLabel,
+  openReviewForm = false,
   compact = false,
 }: Props) {
   const [previewImage, setPreviewImage] = useState<ImagePreviewState | null>(null);
@@ -123,7 +125,7 @@ export default function MriResultCard({
   const [expertComment, setExpertComment] = useState(result?.expert_comment || "");
   const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
-  const [showReviewForm, setShowReviewForm] = useState(result?.review_status === "needs_review");
+  const [showReviewForm, setShowReviewForm] = useState(openReviewForm || result?.review_status === "needs_review");
   const [reviewState, setReviewState] = useState({
     final_tumor_label: result?.final_tumor_label,
     expert_tumor_label: result?.expert_tumor_label,
@@ -138,7 +140,8 @@ export default function MriResultCard({
 
   const getSliceUrl = (index: number) => {
     if (!result?.image_id) return "";
-    return `${api.defaults.baseURL}/records/analysis/image/${result.image_id}/slice/${index}`;
+    return resolveMediaUrl(`/records/analysis/image/${result.image_id}/slice/${index}`) ||
+      `${apiBaseUrl()}/records/analysis/image/${result.image_id}/slice/${index}`;
   };
 
   const handleRating = async (star: number) => {
@@ -198,7 +201,7 @@ export default function MriResultCard({
       review_status: result?.review_status,
       review_action: result?.review_action,
     });
-    setShowReviewForm(result?.review_status === "needs_review");
+    setShowReviewForm(openReviewForm || result?.review_status === "needs_review");
   }, [
     result?.image_id,
     result?.final_tumor_label,
@@ -208,6 +211,7 @@ export default function MriResultCard({
     result?.review_status,
     result?.review_action,
     result?.tumor_label,
+    openReviewForm,
   ]);
 
   const submitClassificationReview = async () => {
@@ -248,25 +252,34 @@ export default function MriResultCard({
     reviewState.review_status === "needs_review" || (isLowClassificationConfidence && !hasCompletedClassificationReview);
   const shouldShowClassificationReviewForm = showReviewForm || shouldWarnClassificationReview;
   const shouldShowMultimodalPrognosis = !noTumorDetected && result?.risk_score != null;
-  const multimodalRiskXaiUrl = result?.multimodal_risk_xai_data_url || result?.gradcam_heatmap_data_url || null;
+  const detectionXaiUrl = resolveMediaUrl(result?.detection_xai_data_url);
+  const segmentationXaiUrl = resolveMediaUrl(result?.segmentation_xai_data_url);
+  const classificationXaiUrl = resolveMediaUrl(result?.classification_xai_data_url);
+  const multimodalRiskXaiUrl = resolveMediaUrl(result?.multimodal_risk_xai_data_url || result?.gradcam_heatmap_data_url);
+  const multimodalGradcamUrl = resolveMediaUrl(result?.multimodal_gradcam_heatmap_data_url) || multimodalRiskXaiUrl;
+  const multimodalGradcamPlusUrl = resolveMediaUrl(result?.multimodal_gradcam_plus_heatmap_data_url);
+  const multimodalLayercamUrl = resolveMediaUrl(result?.multimodal_layercam_heatmap_data_url);
+  const gradcamUrl = resolveMediaUrl(result?.gradcam_heatmap_data_url);
+  const gradcamPlusUrl = resolveMediaUrl(result?.gradcam_plus_heatmap_data_url);
+  const layercamUrl = resolveMediaUrl(result?.layercam_heatmap_data_url);
   const multimodalExplanation = result?.multimodal_xai_explanation || result?.xai_explanation || null;
   const imagePanels = [
     {
       key: "bbox",
       title: "Detection (BBox)",
-      src: result?.bbox_overlay_data_url,
+      src: resolveMediaUrl(result?.bbox_overlay_data_url),
       alt: "MRI bbox overlay",
     },
     {
       key: "mask",
       title: "Segmentation (Mask)",
-      src: result?.mask_overlay_data_url,
+      src: resolveMediaUrl(result?.mask_overlay_data_url),
       alt: "MRI mask overlay",
     },
     {
       key: "contour",
       title: "Tumor Contour",
-      src: result?.contour_overlay_data_url,
+      src: resolveMediaUrl(result?.contour_overlay_data_url),
       alt: "MRI contour overlay",
     },
   ].filter((item): item is { key: string; title: string; src: string; alt: string } => Boolean(item.src));
@@ -463,52 +476,52 @@ export default function MriResultCard({
 
               {result?.tumor_label && !noTumorDetected && (shouldWarnClassificationReview || hasCompletedClassificationReview || showReviewForm) && (
                 <div
-                  className={`rounded-xl border p-5 ${
+                  className={`rounded-xl border p-5 !text-[#0F172A] shadow-sm ${
                     shouldWarnClassificationReview
-                      ? "border-red-500/30 bg-red-500/10"
+                      ? "border-red-200 bg-red-50"
                       : hasCompletedClassificationReview
-                        ? "border-emerald-500/30 bg-emerald-500/10"
-                        : "border-slate-800 bg-slate-950/50"
+                        ? "border-emerald-200 bg-[#ECFDF5]"
+                        : "border-slate-200 bg-white"
                   }`}
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                      <div className="text-[11px] uppercase tracking-widest text-slate-500">Review phân loại</div>
-                      <div className="mt-2 text-sm text-slate-300">
-                        AI ban đầu: <span className="font-semibold text-white">{result.ai_tumor_label || result.tumor_label}</span>
+                      <div className="text-[11px] font-semibold uppercase tracking-widest !text-[#475569]">Review phân loại</div>
+                      <div className="mt-2 text-sm !text-[#1E293B]">
+                        AI ban đầu: <span className="font-semibold !text-[#020617]">{result.ai_tumor_label || result.tumor_label}</span>
                         {" "}({formatConfidence(classificationConfidence)})
                       </div>
-                      <div className="mt-1 text-sm text-slate-300">
-                        Kết quả cuối: <span className="font-semibold text-white">{reviewState.final_tumor_label || result.final_tumor_label || result.tumor_label}</span>
+                      <div className="mt-1 text-sm !text-[#1E293B]">
+                        Kết quả cuối: <span className="font-semibold !text-[#020617]">{reviewState.final_tumor_label || result.final_tumor_label || result.tumor_label}</span>
                       </div>
                       {shouldWarnClassificationReview && (
-                        <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200">
+                        <div className="mt-3 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium !text-[#B91C1C]">
                           Kết quả của model không chắc chắn, cần chuyên gia xem xét lại.
                         </div>
                       )}
                       {hasCompletedClassificationReview && isLowClassificationConfidence && (
-                        <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-200">
+                        <div className="mt-3 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-medium !text-[#065F46]">
                           Mặc dù độ tin cậy &lt; 0.95 nhưng đã được chuyên gia xác nhận.
                         </div>
                       )}
                       {reviewState.review_status === "corrected" && (
-                        <div className="mt-2 text-sm text-emerald-200">
+                        <div className="mt-2 text-sm !text-[#065F46]">
                           Chuyên gia đã chỉnh nhãn sang <span className="font-semibold">{reviewState.final_tumor_label}</span>.
                         </div>
                       )}
                       {reviewState.expert_comment && (
-                        <div className="mt-2 text-sm text-slate-400">Ghi chú chuyên gia: {reviewState.expert_comment}</div>
+                        <div className="mt-2 text-sm !text-[#1E293B]">Ghi chú chuyên gia: {reviewState.expert_comment}</div>
                       )}
                     </div>
                     <div className="flex flex-col items-start gap-2 lg:items-end">
-                      <span className="w-fit rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200">
+                      <span className="w-fit rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold !text-[#1E293B]">
                         {reviewStatusText(reviewState.review_status)}
                       </span>
                       {!shouldShowClassificationReviewForm && (
                         <button
                           type="button"
                           onClick={() => setShowReviewForm(true)}
-                          className="rounded-xl border border-teal-500/30 px-4 py-2 text-sm font-semibold text-teal-200 hover:bg-teal-500/10"
+                          className="rounded-xl border border-teal-300 bg-white px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"
                         >
                           {hasCompletedClassificationReview ? "Xác nhận lại" : "Xác nhận phân loại"}
                         </button>
@@ -521,17 +534,17 @@ export default function MriResultCard({
                       <select
                         value={expertLabel}
                         onChange={(event) => setExpertLabel(event.target.value)}
-                        className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-teal-500"
+                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium !text-[#0F172A] outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 [color-scheme:light]"
                       >
-                        <option value="Glioma">Glioma</option>
-                        <option value="Meningioma">Meningioma</option>
-                        <option value="Pituitary tumor">Pituitary tumor</option>
+                        <option className="bg-white !text-[#0F172A]" value="Glioma">Glioma</option>
+                        <option className="bg-white !text-[#0F172A]" value="Meningioma">Meningioma</option>
+                        <option className="bg-white !text-[#0F172A]" value="Pituitary tumor">Pituitary tumor</option>
                       </select>
                       <input
                         value={expertComment}
                         onChange={(event) => setExpertComment(event.target.value)}
                         placeholder="Ghi chú chuyên gia..."
-                        className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-teal-500"
+                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 placeholder:text-slate-500 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                       />
                       <button
                         onClick={submitClassificationReview}
@@ -542,47 +555,47 @@ export default function MriResultCard({
                       </button>
                     </div>
                   )}
-                  {reviewError && <div className="mt-3 text-sm text-red-300">{reviewError}</div>}
+                  {reviewError && <div className="mt-3 text-sm font-medium text-red-700">{reviewError}</div>}
                 </div>
               )}
 
-              {(result?.detection_xai_data_url || result?.segmentation_xai_data_url || result?.classification_xai_data_url || explainingXai || explanationError || aiExplanation) && (
+              {(detectionXaiUrl || segmentationXaiUrl || classificationXaiUrl || explainingXai || explanationError || aiExplanation) && (
                 <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5 space-y-5">
                   <div className="text-[11px] uppercase tracking-widest text-slate-500 flex items-center gap-2">
                     <Search className="h-4 w-4 text-teal-500" />
                     MRI Core XAI
                   </div>
 
-                  {(result?.detection_xai_data_url || result?.segmentation_xai_data_url || result?.classification_xai_data_url) && (
+                  {(detectionXaiUrl || segmentationXaiUrl || classificationXaiUrl) && (
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                      {result.detection_xai_data_url && (
+                      {detectionXaiUrl && (
                         <button
                           type="button"
-                          onClick={() => setPreviewImage({ title: "Detection XAI - ODAM", src: result.detection_xai_data_url! })}
+                          onClick={() => setPreviewImage({ title: "Detection XAI - ODAM", src: detectionXaiUrl })}
                           className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
                         >
                           <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Detection / ODAM</div>
-                          <img src={result.detection_xai_data_url} alt="Detection XAI" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                          <img src={detectionXaiUrl} alt="Detection XAI" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
                         </button>
                       )}
-                      {result.segmentation_xai_data_url && (
+                      {segmentationXaiUrl && (
                         <button
                           type="button"
-                          onClick={() => setPreviewImage({ title: "Segmentation XAI - Seg-Eigen-CAM", src: result.segmentation_xai_data_url! })}
+                          onClick={() => setPreviewImage({ title: "Segmentation XAI - Seg-Eigen-CAM", src: segmentationXaiUrl })}
                           className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
                         >
                           <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Segmentation / Seg-Eigen-CAM</div>
-                          <img src={result.segmentation_xai_data_url} alt="Segmentation XAI" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                          <img src={segmentationXaiUrl} alt="Segmentation XAI" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
                         </button>
                       )}
-                      {result.classification_xai_data_url && (
+                      {classificationXaiUrl && (
                         <button
                           type="button"
-                          onClick={() => setPreviewImage({ title: "Classification XAI - Finer-CAM", src: result.classification_xai_data_url! })}
+                          onClick={() => setPreviewImage({ title: "Classification XAI - Finer-CAM", src: classificationXaiUrl })}
                           className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all"
                         >
                           <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Classification / Finer-CAM</div>
-                          <img src={result.classification_xai_data_url} alt="Classification XAI" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                          <img src={classificationXaiUrl} alt="Classification XAI" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
                         </button>
                       )}
                     </div>
@@ -634,40 +647,40 @@ export default function MriResultCard({
                   </div>
 
                   {/* Multimodal prognosis risk heatmap */}
-                  {(result.multimodal_gradcam_heatmap_data_url || result.multimodal_gradcam_plus_heatmap_data_url || result.multimodal_layercam_heatmap_data_url || multimodalRiskXaiUrl) && (
+                  {(multimodalGradcamUrl || multimodalGradcamPlusUrl || multimodalLayercamUrl || multimodalRiskXaiUrl) && (
                     <div className="mb-6">
                       <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Multimodal Risk XAI (Heatmap)</div>
                       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                        {(result.multimodal_gradcam_heatmap_data_url || multimodalRiskXaiUrl) && (
+                        {(multimodalGradcamUrl || multimodalRiskXaiUrl) && (
                           <button
                             type="button"
-                            onClick={() => setPreviewImage({ title: "Multimodal Prognosis - Grad-CAM", src: (result.multimodal_gradcam_heatmap_data_url || multimodalRiskXaiUrl)! })}
+                            onClick={() => setPreviewImage({ title: "Multimodal Prognosis - Grad-CAM", src: multimodalGradcamUrl || multimodalRiskXaiUrl })}
                             className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
                           >
                             <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM</div>
-                            <img src={result.multimodal_gradcam_heatmap_data_url || multimodalRiskXaiUrl || undefined} alt="Multimodal Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                            <img src={multimodalGradcamUrl || multimodalRiskXaiUrl || undefined} alt="Multimodal Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
                             <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
                           </button>
                         )}
-                        {result.multimodal_gradcam_plus_heatmap_data_url && (
+                        {multimodalGradcamPlusUrl && (
                           <button
                             type="button"
-                            onClick={() => setPreviewImage({ title: "Multimodal Prognosis - Grad-CAM++", src: result.multimodal_gradcam_plus_heatmap_data_url! })}
+                            onClick={() => setPreviewImage({ title: "Multimodal Prognosis - Grad-CAM++", src: multimodalGradcamPlusUrl })}
                             className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
                           >
                             <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM++</div>
-                            <img src={result.multimodal_gradcam_plus_heatmap_data_url} alt="Multimodal Grad-CAM++" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                            <img src={multimodalGradcamPlusUrl} alt="Multimodal Grad-CAM++" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
                             <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
                           </button>
                         )}
-                        {result.multimodal_layercam_heatmap_data_url && (
+                        {multimodalLayercamUrl && (
                           <button
                             type="button"
-                            onClick={() => setPreviewImage({ title: "Multimodal Prognosis - Layer-CAM", src: result.multimodal_layercam_heatmap_data_url! })}
+                            onClick={() => setPreviewImage({ title: "Multimodal Prognosis - Layer-CAM", src: multimodalLayercamUrl })}
                             className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
                           >
                             <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Layer-CAM</div>
-                            <img src={result.multimodal_layercam_heatmap_data_url} alt="Multimodal Layer-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                            <img src={multimodalLayercamUrl} alt="Multimodal Layer-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
                             <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
                           </button>
                         )}
@@ -683,41 +696,41 @@ export default function MriResultCard({
                   )}
 
                   {/* XAI Heatmaps — hiển thị cả 3 loại CAM cho MRI Classification */}
-                  {(result.gradcam_heatmap_data_url || result.gradcam_plus_heatmap_data_url || result.layercam_heatmap_data_url) && (
+                  {(gradcamUrl || gradcamPlusUrl || layercamUrl) && (
                     <div className="space-y-4">
                       <div>
                         <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Bản đồ nhiệt XAI Phân loại (Heatmap)</div>
                         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                          {result.gradcam_heatmap_data_url && (
+                          {gradcamUrl && (
                             <button
                               type="button"
-                              onClick={() => setPreviewImage({ title: "Classification Grad-CAM", src: result.gradcam_heatmap_data_url! })}
+                              onClick={() => setPreviewImage({ title: "Classification Grad-CAM", src: gradcamUrl })}
                               className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
                             >
                               <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM</div>
-                              <img src={result.gradcam_heatmap_data_url} alt="Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                              <img src={gradcamUrl} alt="Grad-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
                               <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
                             </button>
                           )}
-                          {result.gradcam_plus_heatmap_data_url && (
+                          {gradcamPlusUrl && (
                             <button
                               type="button"
-                              onClick={() => setPreviewImage({ title: "Classification Grad-CAM++", src: result.gradcam_plus_heatmap_data_url! })}
+                              onClick={() => setPreviewImage({ title: "Classification Grad-CAM++", src: gradcamPlusUrl })}
                               className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
                             >
                               <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Grad-CAM++</div>
-                              <img src={result.gradcam_plus_heatmap_data_url} alt="Grad-CAM++" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                              <img src={gradcamPlusUrl} alt="Grad-CAM++" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
                               <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
                             </button>
                           )}
-                          {result.layercam_heatmap_data_url && (
+                          {layercamUrl && (
                             <button
                               type="button"
-                              onClick={() => setPreviewImage({ title: "Classification Layer-CAM", src: result.layercam_heatmap_data_url! })}
+                              onClick={() => setPreviewImage({ title: "Classification Layer-CAM", src: layercamUrl })}
                               className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-left hover:border-teal-500/40 hover:bg-slate-950 transition-all w-full"
                             >
                               <div className="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Layer-CAM</div>
-                              <img src={result.layercam_heatmap_data_url} alt="Layer-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
+                              <img src={layercamUrl} alt="Layer-CAM" className="w-full max-h-[280px] object-contain rounded-lg bg-slate-950" />
                               <div className="mt-3 text-xs text-teal-400">Nhấn để xem ảnh lớn hơn</div>
                             </button>
                           )}

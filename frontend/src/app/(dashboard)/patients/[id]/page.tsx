@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { api, apiService } from "@/lib/api";
+import { apiService, resolveMediaUrl } from "@/lib/api";
 import {
   ArrowLeft,
   User,
@@ -32,12 +32,6 @@ const LABEL_MAP: Record<string, string> = {
 function displayTumorLabel(label?: string | null) {
   if (!label) return "Chưa xác định";
   return LABEL_MAP[label] || label;
-}
-
-function resolveImageUrl(url?: string | null) {
-  if (!url) return "";
-  if (url.startsWith("http") || url.startsWith("data:")) return url;
-  return `${api.defaults.baseURL}${url}`;
 }
 
 function reviewStatusText(status?: string | null) {
@@ -133,6 +127,12 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
         await apiService.inference.waitForTask(taskId, 2000, 300000);
       }
 
+      const prognosisResponse = await apiService.inference.runPrognosis(id, img.image_id);
+      const prognosisTaskId = prognosisResponse.data?.task_id;
+      if (prognosisTaskId) {
+        await apiService.inference.waitForTask(prognosisTaskId, 2000, 1200000);
+      }
+
       await fetchPatientData();
       router.push(`/results/${id}?imageId=${img.image_id}`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -183,7 +183,10 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
     setPrognosisLoading(true);
 
     try {
-      const taskResponse = await apiService.inference.runPrognosis(id);
+      const latestImage = [...(data?.images || [])]
+        .filter((image: any) => image.modality === "MRI" || image.modality === "MRI_SERIES")
+        .sort((a: any, b: any) => new Date(b.scan_date).getTime() - new Date(a.scan_date).getTime())[0];
+      const taskResponse = await apiService.inference.runPrognosis(id, latestImage?.image_id);
       const taskId = taskResponse.data?.task_id;
       if (taskId) {
         await apiService.inference.waitForTask(taskId, 2000, 300000);
@@ -299,7 +302,7 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
+              <table className="w-full min-w-[920px] text-left text-sm text-slate-600 dark:text-slate-400">
                 <thead className="bg-slate-950/20 text-xs font-semibold text-slate-400 border-b border-slate-800 uppercase tracking-tight">
                   <tr>
                     <th className="px-6 py-4">Mô thức chụp</th>
@@ -354,14 +357,14 @@ export default function PatientDetailsPage({ params }: { params: Promise<{ id: s
                                   onClick={() =>
                                     setPreviewImage({
                                       title: `${img.modality} #${img.image_id}`,
-                                      src: resolveImageUrl(img.image_url),
+                                      src: resolveMediaUrl(img.image_url),
                                     })
                                   }
                                   className="h-9 w-9 overflow-hidden rounded-lg border border-teal-200 dark:border-teal-500/20 bg-teal-50 dark:bg-teal-500/10"
                                   title="Phóng to ảnh"
                                 >
                                   <img
-                                    src={resolveImageUrl(img.image_url)}
+                                    src={resolveMediaUrl(img.image_url)}
                                     alt={`${img.modality} ${img.image_id}`}
                                     className="h-full w-full object-cover transition-transform hover:scale-105"
                                   />

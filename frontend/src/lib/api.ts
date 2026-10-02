@@ -1,13 +1,73 @@
 import axios from "axios";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL?.trim();
+const NORMALIZED_API_URL = API_URL?.replace(/\/$/, "") || "";
+
+const API_ROUTE_PREFIXES = [
+  "/agent/",
+  "/analytics/",
+  "/auth/",
+  "/inference/",
+  "/media/",
+  "/neuroboard/",
+  "/records/",
+  "/upload/",
+];
 
 export const api = axios.create({
-  baseURL: API_URL,
+  baseURL: NORMALIZED_API_URL,
   headers: {
     "Content-Type": "application/json",
   },
 });
+
+export function apiBaseUrl() {
+  const configured = String(api.defaults.baseURL || NORMALIZED_API_URL || "").replace(/\/$/, "");
+  if (configured) return configured;
+
+  // Local development can use the backend port without an env file. A deployed
+  // browser must receive NEXT_PUBLIC_API_URL at build time instead of silently
+  // falling back to the developer machine's localhost.
+  if (typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname)) {
+    return "http://localhost:8000";
+  }
+
+  return "";
+}
+
+export function resolveMediaUrl(url?: string | null) {
+  if (!url) return "";
+  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+
+  const baseUrl = apiBaseUrl();
+  if (url.startsWith("/")) {
+    const isApiRoute = API_ROUTE_PREFIXES.some((prefix) => url.startsWith(prefix));
+    const requestPath = isApiRoute || url.startsWith("/health") ? url : `/media${url}`;
+    return baseUrl ? `${baseUrl}${requestPath}` : requestPath;
+  }
+
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const isLocalStorageHost =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "minio" ||
+      host.endsWith(".internal");
+
+    if (baseUrl && isLocalStorageHost) {
+      const objectPath = parsed.pathname.replace(/^\/+/, "");
+      if (objectPath.startsWith("media/")) {
+        return `${baseUrl}/${objectPath}`;
+      }
+      return `${baseUrl}/media/${objectPath}`;
+    }
+  } catch {
+    // Fall through and return the original value for non-URL strings.
+  }
+
+  return url;
+}
 
 // Request interceptor to add JWT token
 api.interceptors.request.use(
@@ -20,7 +80,7 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // Response interceptor for handling 401s
@@ -33,7 +93,7 @@ api.interceptors.response.use(
       window.location.href = "/login";
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 // API Service Wrapper (Handles Mocks)
@@ -41,11 +101,11 @@ export const apiService = {
   auth: {
     login: async (credentials: any) => {
       const formData = new URLSearchParams();
-      formData.append('username', credentials.username);
-      formData.append('password', credentials.password);
-      
+      formData.append("username", credentials.username);
+      formData.append("password", credentials.password);
+
       return api.post("/auth/login", formData, {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" }
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
     },
   },
@@ -62,7 +122,12 @@ export const apiService = {
     getById: async (id: string) => {
       return api.get(`/records/patients/${id}`);
     },
-    create: async (data: { name: string; external_id?: string; age?: number; gender?: string }) => {
+    create: async (data: {
+      name: string;
+      external_id?: string;
+      age?: number;
+      gender?: string;
+    }) => {
       return api.post("/records/patients/", data);
     },
     deleteImage: async (imageId: string | number) => {
@@ -72,20 +137,23 @@ export const apiService = {
       return api.get(`/records/patients/${patientId}/history-report`);
     },
     regenerateHistoryReport: async (patientId: string | number) => {
-      return api.post(`/records/patients/${patientId}/history-report/regenerate`);
+      return api.post(
+        `/records/patients/${patientId}/history-report/regenerate`,
+      );
     },
     downloadHistoryReport: async (patientId: string | number) => {
       return api.get(`/records/patients/${patientId}/history-report/pdf`, {
         responseType: "blob",
       });
-    }
+    },
   },
   analysis: {
     getResult: async (patientId: string) => {
       return api.get(`/records/analysis/${patientId}`);
     },
-    getFullResult: async (patientId: string) => {
-      return api.get(`/records/analysis/patient/${patientId}/full`);
+    getFullResult: async (patientId: string, imageId?: string | number) => {
+      const suffix = imageId != null ? `?image_id=${encodeURIComponent(String(imageId))}` : "";
+      return api.get(`/records/analysis/patient/${patientId}/full${suffix}`);
     },
     getSurvivalCurve: async (patientId: string) => {
       return api.get(`/analytics/survival/${patientId}`);
@@ -97,13 +165,18 @@ export const apiService = {
       return api.get(`/records/analysis/image/${imageId}`);
     },
     explainClassificationXai: async (imageId: string | number) => {
-      return api.post(`/records/analysis/image/${imageId}/explain/classification`);
+      return api.post(
+        `/records/analysis/image/${imageId}/explain/classification`,
+      );
     },
     submitClassificationReview: async (
       imageId: string | number,
-      payload: { expert_tumor_label: string; expert_comment?: string }
+      payload: { expert_tumor_label: string; expert_comment?: string },
     ) => {
-      return api.post(`/records/analysis/image/${imageId}/classification-review`, payload);
+      return api.post(
+        `/records/analysis/image/${imageId}/classification-review`,
+        payload,
+      );
     },
     downloadReport: async (imageId: string | number) => {
       return api.get(`/records/analysis/image/${imageId}/report`, {
@@ -112,19 +185,25 @@ export const apiService = {
     },
     getDashboardStats: async () => {
       return api.get("/records/dashboard/stats");
-    }
+    },
   },
   inference: {
     runMri: async (imageId: string | number) => {
       return api.post(`/inference/mri/${imageId}`);
     },
-    runPrognosis: async (patientId: string | number) => {
-      return api.post(`/inference/prognosis/${patientId}`);
+    runPrognosis: async (patientId: string | number, imageId?: string | number) => {
+      const suffix = imageId != null ? `?image_id=${encodeURIComponent(String(imageId))}` : "";
+      return api.post(`/inference/prognosis/${patientId}${suffix}`);
     },
     getTask: async (taskId: string | number) => {
       return api.get(`/inference/tasks/${taskId}`);
     },
-    waitForTask: async (taskId: string | number, intervalMs = 2000, timeoutMs = 180000, onProgress?: (percent: number, status: string) => void) => {
+    waitForTask: async (
+      taskId: string | number,
+      intervalMs = 2000,
+      timeoutMs = 600000,
+      onProgress?: (percent: number, status: string) => void,
+    ) => {
       const startedAt = Date.now();
 
       while (Date.now() - startedAt < timeoutMs) {
@@ -139,8 +218,15 @@ export const apiService = {
           throw new Error(task.error_message || "AI task failed");
         }
 
-        if (task.status === "processing" && onProgress && task.progress_percent !== null) {
-          onProgress(task.progress_percent, task.progress_status || "Đang xử lý...");
+        if (
+          task.status === "processing" &&
+          onProgress &&
+          task.progress_percent !== null
+        ) {
+          onProgress(
+            task.progress_percent,
+            task.progress_status || "Đang xử lý...",
+          );
         }
 
         await new Promise((resolve) => setTimeout(resolve, intervalMs));
@@ -154,27 +240,36 @@ export const apiService = {
       const formData = new FormData();
       formData.append("file", file);
       return api.post(`/upload/mri/?patient_id=${patientId}`, formData, {
-        headers: { "Content-Type": "multipart/form-data" }
+        headers: { "Content-Type": "multipart/form-data" },
       });
     },
     mriSeries: async (patientId: string, files: File[] | File) => {
       const formData = new FormData();
       if (Array.isArray(files)) {
-        files.forEach(f => formData.append("files", f));
+        files.forEach((f) => formData.append("files", f));
       } else {
         // Assume it's a ZIP file
         formData.append("zip_file", files);
       }
-      return api.post(`/upload/mri/series?patient_id=${encodeURIComponent(patientId)}`, formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
+      return api.post(
+        `/upload/mri/series?patient_id=${encodeURIComponent(patientId)}`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
     },
     rna: async (patientId: string, file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      return api.post(`/upload/rna/?patient_id=${encodeURIComponent(patientId)}`, formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
+      return api.post(
+        `/upload/rna/?patient_id=${encodeURIComponent(patientId)}`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+          timeout: 1200000,
+        },
+      );
     },
     clinical: async (patientId: string, data: any) => {
       return api.patch(`/records/patients/${patientId}/clinical`, data);
@@ -182,14 +277,18 @@ export const apiService = {
     wsiSeries: async (patientId: string, files: File[] | File) => {
       const formData = new FormData();
       if (Array.isArray(files)) {
-        files.forEach(f => formData.append("files", f));
+        files.forEach((f) => formData.append("files", f));
       } else {
         // Assume it's a ZIP file
         formData.append("zip_file", files);
       }
-      return api.post(`/upload/wsi/series?patient_id=${encodeURIComponent(patientId)}`, formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
-    }
-  }
+      return api.post(
+        `/upload/wsi/series?patient_id=${encodeURIComponent(patientId)}`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+    },
+  },
 };

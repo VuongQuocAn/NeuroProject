@@ -171,6 +171,8 @@ export default function UploadPage() {
   const handleMriFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
       setMriFiles(Array.from(event.target.files));
+      setStatusMsg({ text: "", type: "" });
+      setLastUploadedImageId(null);
     }
   };
 
@@ -372,32 +374,54 @@ export default function UploadPage() {
       return;
     }
 
+    // Keep the upload selected for this run stable even if React state changes.
+    let uploadedImageId = lastUploadedImageId;
+    if (!uploadedImageId && mriFiles.length === 0) {
+      setStatusMsg({
+        text: "Vui lòng upload MRI mới trước khi chạy pipeline. Hệ thống không tự chạy lại kết quả cũ.",
+        type: "error",
+      });
+      return;
+    }
+
     setUploading(true);
     setStatusMsg({ text: "Đang kích hoạt quy trình phân tích tổng hợp AI...", type: "success" });
     setProgress(null);
 
     try {
-      if (lastUploadedImageId) {
-        setStatusMsg({ text: "Đang chạy pipeline MRI cho ảnh vừa upload...", type: "success" });
-        const mriTaskResponse = await apiService.inference.runMri(lastUploadedImageId);
-        const mriTaskId = mriTaskResponse.data?.task_id;
-
-        if (mriTaskId) {
-          await apiService.inference.waitForTask(mriTaskId, 3000, 1200000, (p, s) => {
-            const percent = Math.min(60, Math.round((p || 0) * 0.6));
-            setProgress({ percent, status: s });
-            setStatusMsg({ text: s, type: "success" });
-          });
+      if (!uploadedImageId && mriFiles.length > 0) {
+        setStatusMsg({ text: "Uploading selected MRI...", type: "success" });
+        const isSeries = mriFiles.length > 1 || mriFiles[0].name.toLowerCase().endsWith(".zip");
+        const uploadResponse = isSeries
+          ? await apiService.upload.mriSeries(
+              patientId.trim(),
+              mriFiles.length === 1 && mriFiles[0].name.toLowerCase().endsWith(".zip")
+                ? mriFiles[0]
+                : mriFiles,
+            )
+          : await apiService.upload.mri(patientId.trim(), mriFiles[0]);
+        uploadedImageId = uploadResponse.data?.image_id;
+        if (!uploadedImageId) {
+          throw new Error("Upload succeeded but backend did not return image_id.");
         }
+        setLastUploadedImageId(uploadedImageId);
+        setUploadedStatus((prev) => ({ ...prev, mri: true }));
+        setRequireNewUpload(false);
+        setMriFiles([]);
       }
 
+      // The prognosis task owns the complete MRI and multimodal pipeline.
+
       setStatusMsg({ text: "Đang chạy pipeline tiên lượng đa mô thức...", type: "success" });
-      const taskResponse = await apiService.inference.runPrognosis(patientId.trim());
+      const taskResponse = await apiService.inference.runPrognosis(
+        patientId.trim(),
+        uploadedImageId || undefined,
+      );
       const taskId = taskResponse.data?.task_id;
       
       if (taskId) {
         await apiService.inference.waitForTask(taskId, 3000, 1200000, (p, s) => {
-          const percent = lastUploadedImageId ? 60 + Math.round((p || 0) * 0.4) : p;
+          const percent = p;
           setProgress({ percent, status: s });
           setStatusMsg({ text: s, type: "success" });
         });
@@ -411,7 +435,11 @@ export default function UploadPage() {
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       // Tự động chuyển sang trang kết quả
-      router.push(`/results/${patientId.trim()}`);
+      const resultPath = `/results/${encodeURIComponent(patientId.trim())}`;
+      const imageQuery = uploadedImageId
+        ? `?imageId=${encodeURIComponent(String(uploadedImageId))}`
+        : "";
+      router.push(`${resultPath}${imageQuery}`);
     } catch (err: any) {
       const errorText = `Lỗi chạy pipeline: ${getErrorMessage(err, "Không thể thực hiện phân tích.")}`;
       setStatusMsg({ text: errorText, type: "error" });
@@ -471,7 +499,7 @@ export default function UploadPage() {
               Đã chọn {mriFiles.length} file {mriFiles.length === 1 ? `(${mriFiles[0].name})` : ""}
             </div>
           )}
-          {!uploadedStatus.mri ? (
+          {mriFiles.length > 0 ? (
             <button
               onClick={handleUploadDicom}
               disabled={uploading || !patientId.trim() || mriFiles.length === 0}
@@ -480,7 +508,7 @@ export default function UploadPage() {
               {uploading && activeTab === "dicom" ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
               Tải lên MRI
             </button>
-          ) : (
+          ) : uploadedStatus.mri ? (
             <div className="flex gap-2 w-full mt-2">
               <div className="flex-1 px-6 py-3 bg-slate-700 text-slate-400 font-bold rounded-xl flex justify-center items-center cursor-not-allowed">
                 Đã tải (MRI)
@@ -492,14 +520,14 @@ export default function UploadPage() {
                 Cập nhật
               </button>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     );
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-6rem)]">
+    <div className="grid min-h-[calc(100vh-6rem)] grid-cols-1 gap-6 lg:h-[calc(100vh-6rem)] lg:grid-cols-3">
       <div className="lg:col-span-2 flex flex-col">
         <div className="flex items-center justify-between mb-6">
           <div>

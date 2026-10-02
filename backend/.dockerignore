@@ -8,3 +8,5 @@ test_output_manual
 test_prognosis_output
 scratch
 *.log
+.env
+.env.*

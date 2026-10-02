@@ -13,7 +13,7 @@ services:
     networks:
       - neuro_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-neuroproject} -d ${POSTGRES_DB:-neuroproject}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-neuroproject} -d ${POSTGRES_DB:-neuroproject}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -33,10 +33,12 @@ services:
       retries: 10
 
   backend:
-    image: neuroproject-ai:latest
+    image: neuroproject-ai:tunnel-cpu
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cpu
     restart: unless-stopped
     env_file:
       - .env.tunnel
@@ -46,9 +48,11 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       PYTHONPATH: /app
+      PYTHONDONTWRITEBYTECODE: "1"
       PORT: ${PORT:-8000}
     volumes:
       - ./backend:/app
+      - torch_cache:/root/.cache/torch
     depends_on:
       db:
         condition: service_healthy
@@ -58,16 +62,15 @@ services:
       - "8000:8000"
     networks:
       - neuro_net
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      start_period: 60s
+      retries: 12
 
   worker:
-    image: neuroproject-ai:latest
+    image: neuroproject-ai:tunnel-cpu
     restart: unless-stopped
     env_file:
       - .env.tunnel
@@ -77,23 +80,16 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       PYTHONPATH: /app
+      PYTHONDONTWRITEBYTECODE: "1"
     command: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
     volumes:
       - ./backend:/app
+      - torch_cache:/root/.cache/torch
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
+      backend:
         condition: service_healthy
     networks:
       - neuro_net
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
 
 networks:
   neuro_net:
@@ -102,3 +98,4 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  torch_cache:

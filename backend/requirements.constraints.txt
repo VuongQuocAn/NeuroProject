@@ -1,0 +1,25 @@
+# Keep CPU/CUDA wheel versions aligned and existing checkpoint loading compatible.
+torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
+monai==1.5.2
+numpy==1.26.4
+opencv-python==4.11.0.86
+opencv-python-headless==4.11.0.86
+ultralytics==8.4.171
+grad-cam==1.5.7
+
+# Tested legacy Gemini SDK dependency set; avoid slow protobuf/grpc backtracking.
+google-generativeai==0.8.6
+google-ai-generativelanguage==0.6.15
+google-api-core==2.33.0
+grpcio-status==1.71.2
+protobuf==5.29.6
+
+# Agent/Chatbox dependencies used by the full application.
+langchain-google-genai==4.2.5
+langchain-core==1.4.8
+langgraph==1.2.6
+langgraph-checkpoint==4.1.1
+langgraph-checkpoint-postgres==3.1.0
+psycopg==3.3.4

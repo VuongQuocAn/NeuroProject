@@ -1,14 +1,19 @@
 import io
 import os
+from contextvars import ContextVar
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Tuple
 
 import pydicom
+from dotenv import load_dotenv
 from minio import Minio
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 
 # ============================================================
 # MINIO CLIENT
@@ -21,6 +26,40 @@ minio_client = Minio(
     secure=os.getenv("MINIO_SECURE", "false").lower() in {"1", "true", "yes", "on"},
     region=os.getenv("MINIO_REGION") or None,
 )
+
+_request_public_base_url: ContextVar[str | None] = ContextVar("request_public_base_url", default=None)
+
+
+def set_request_public_base_url(base_url: str | None):
+    return _request_public_base_url.set((base_url or "").strip().rstrip("/") or None)
+
+
+def reset_request_public_base_url(token) -> None:
+    _request_public_base_url.reset(token)
+
+
+def get_backend_public_base_url() -> str:
+    """Trả về base URL công khai của backend, dùng cho proxy media qua /media/..."""
+    return (
+        _request_public_base_url.get()
+        or os.getenv("BACKEND_PUBLIC_URL")
+        or os.getenv("PUBLIC_API_BASE_URL")
+        or "http://localhost:8000"
+    ).strip().rstrip("/")
+
+
+def build_minio_presigned_url(bucket_name: str, object_name: str, expires: timedelta | None = None) -> str:
+    """Trả về URL browser-safe. Mặc định proxy qua backend để chỉ cần 1 biến public API URL."""
+    object_name = object_name.lstrip("/")
+    backend_base = get_backend_public_base_url()
+    if backend_base and backend_base != "http://localhost:8000":
+        return f"{backend_base}/media/{bucket_name}/{object_name}"
+
+    public_base = (os.getenv("MINIO_PUBLIC_URL") or os.getenv("PUBLIC_MINIO_URL") or "").strip().rstrip("/")
+    if public_base and "localhost" not in public_base and "127.0.0.1" not in public_base:
+        return f"{public_base}/{bucket_name}/{object_name}"
+
+    return f"/media/{bucket_name}/{object_name}"
 
 
 def ensure_bucket_exists(bucket_name: str):

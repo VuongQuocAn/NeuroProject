@@ -1,36 +1,10 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NeuroDiagnosis AI frontend
 
-## Getting Started
+Frontend Next.js của [NeuroProject](https://github.com/VuongQuocAn/NeuroProject).
+Website Vercel: [neurodiagnosisai.vercel.app/login](https://neurodiagnosisai.vercel.app/login).
 
-First, run the development server:
+Chạy toàn bộ frontend/backend/database/worker bằng Docker theo [README gốc](../README.md#getting-started) và [SETUP_GUIDE.md](../SETUP_GUIDE.md). Hướng dẫn backend local + tunnel + biến môi trường Vercel nằm trong [TUNNEL_DEPLOY_GUIDE.md](../TUNNEL_DEPLOY_GUIDE.md).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Nếu chạy frontend ngoài Docker, cài Node.js 20 trở lên, tạo `frontend/.env.local` với `NEXT_PUBLIC_API_URL=http://localhost:8000`, chạy `npm ci` rồi `npm run dev`. Backend và Celery worker vẫn phải chạy. Dừng frontend container trước nếu nó đang giữ cổng 3000.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Khi deploy Vercel, chọn Root Directory `frontend`, preset Next.js và Build Command `npm run build`. Đặt `NEXT_PUBLIC_API_URL` trong môi trường Production bằng URL HTTPS backend/tunnel đang hoạt động, sau đó redeploy. Không đưa khóa backend vào biến `NEXT_PUBLIC_*`.

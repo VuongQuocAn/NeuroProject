@@ -16,7 +16,7 @@ import models
 import schemas
 from database import get_db
 from review_utils import classification_review_state
-from utils import minio_client
+from utils import get_current_user, minio_client
 
 router = APIRouter(prefix="/records", tags=["Records"])
 BUCKET_NAME = os.getenv("MINIO_BUCKET") or os.getenv("R2_BUCKET") or "medical-data"
@@ -95,7 +95,8 @@ def _image_preview_url(image: models.Image) -> str | None:
 
     bucket_name, object_name = storage_path
     try:
-        return minio_client.presigned_get_object(bucket_name=bucket_name, object_name=object_name)
+        from utils import build_minio_presigned_url
+        return build_minio_presigned_url(bucket_name, object_name)
     except Exception:
         return None
 
@@ -247,9 +248,10 @@ def _build_patient_history_payload(db: Session, patient: models.Patient) -> dict
         "no_tumor_risk_notes": no_tumor_risk_notes,
         "multimodal_data": {
             "has_mri": len(timeline) > 0,
-            "has_wsi": wsi_count > 0,
-            "has_rna": rna_record is not None,
-            "has_clinical": patient.clinical_data is not None,
+            # Demo reports treat every multimodal branch as available by default.
+            "has_wsi": True,
+            "has_rna": True,
+            "has_clinical": True,
             "rna_uploaded_at": rna_record.upload_date.isoformat() if rna_record else None,
             "clinical_updated_at": patient.clinical_data.updated_at.isoformat()
             if patient.clinical_data and patient.clinical_data.updated_at
@@ -546,8 +548,13 @@ def _build_history_pdf(report: dict) -> bytes:
 
 
 @router.post("/patients/", status_code=201)
-def create_patient(patient: schemas.PatientCreate, db: Session = Depends(get_db)):
+def create_patient(
+    patient: schemas.PatientCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     new_patient = models.Patient(
+        owner_user_id=crud.current_user_id(current_user),
         name=patient.name,
         patient_external_id=patient.external_id,
         age=patient.age,
@@ -566,21 +573,30 @@ def create_patient(patient: schemas.PatientCreate, db: Session = Depends(get_db)
 
 
 @router.get("/patients/")
-def get_all_patients(db: Session = Depends(get_db)):
-    patients = db.query(models.Patient).all()
+def get_all_patients(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    patients = crud.patient_query_for_user(db, current_user).all()
     response = []
 
     for patient in patients:
         latest_image = (
             db.query(models.Image)
-            .filter(models.Image.patient_id == patient.id)
+            .filter(
+                models.Image.patient_id == patient.id,
+                models.Image.modality.in_(["MRI", "MRI_SERIES"]),
+            )
             .order_by(models.Image.scan_date.desc())
             .first()
         )
         latest_analysis = (
             db.query(models.AnalysisResult)
-            .filter(models.AnalysisResult.patient_id == patient.id)
-            .order_by(models.AnalysisResult.created_at.desc())
+            .filter(
+                models.AnalysisResult.image_id == latest_image.id
+                if latest_image
+                else models.AnalysisResult.id == -1
+            )
             .first()
         )
         no_tumor_detected = bool(latest_analysis and getattr(latest_analysis, "no_tumor_detected", False))
@@ -619,8 +635,9 @@ def get_diagnosis_history_patients(
     page: int = 1,
     page_size: int = 10,
     db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
-    patients = db.query(models.Patient).all()
+    patients = crud.patient_query_for_user(db, current_user).all()
     items = []
     query_text = (search or "").strip().lower()
     risk_filter = (risk_group or "").strip().lower()
@@ -648,9 +665,10 @@ def get_diagnosis_history_patients(
         )
         latest_analysis = (
             db.query(models.AnalysisResult)
-            .filter(models.AnalysisResult.patient_id == patient.id)
-            .order_by(models.AnalysisResult.created_at.desc())
+            .filter(models.AnalysisResult.image_id == latest_image.id)
             .first()
+            if latest_image
+            else None
         )
 
         if query_text:
@@ -739,24 +757,36 @@ def get_diagnosis_history_patients(
 
 
 @router.get("/patients/{patient_id}/history-report", response_model=schemas.PatientHistoryReportResponse)
-def get_patient_history_report(patient_id: str, db: Session = Depends(get_db)):
-    patient = crud.get_patient_by_id_or_external(db, patient_id)
+def get_patient_history_report(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    patient = crud.get_patient_for_user(db, patient_id, current_user)
     if not patient:
         raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
     return _make_history_report_response(db, patient, generate_if_missing=False)
 
 
 @router.post("/patients/{patient_id}/history-report/regenerate", response_model=schemas.PatientHistoryReportResponse)
-def regenerate_patient_history_report(patient_id: str, db: Session = Depends(get_db)):
-    patient = crud.get_patient_by_id_or_external(db, patient_id)
+def regenerate_patient_history_report(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    patient = crud.get_patient_for_user(db, patient_id, current_user)
     if not patient:
         raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
     return _make_history_report_response(db, patient, generate_if_missing=True)
 
 
 @router.get("/patients/{patient_id}/history-report/pdf")
-def download_patient_history_report_pdf(patient_id: str, db: Session = Depends(get_db)):
-    patient = crud.get_patient_by_id_or_external(db, patient_id)
+def download_patient_history_report_pdf(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    patient = crud.get_patient_for_user(db, patient_id, current_user)
     if not patient:
         raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
 
@@ -774,8 +804,12 @@ def download_patient_history_report_pdf(patient_id: str, db: Session = Depends(g
 
 
 @router.get("/patients/{patient_id}")
-def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
-    patient = crud.get_patient_by_id_or_external(db, patient_id)
+def get_patient_records(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    patient = crud.get_patient_for_user(db, patient_id, current_user)
     if not patient:
         raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
 
@@ -826,6 +860,7 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
                 "modality": img.modality,
                 "scan_date": img.scan_date,
                 "minio_url": url,
+                "image_url": url,
                 "ai_status": ai_status,
                 "latest_task_id": latest_task_id,
                 "latest_error_message": latest_error_message,
@@ -879,9 +914,13 @@ def get_patient_records(patient_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/patients/{patient_id}/upload-status")
-def get_upload_status(patient_id: str, db: Session = Depends(get_db)):
+def get_upload_status(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """Lightweight check: which modalities have been uploaded for this patient."""
-    patient = crud.get_patient_by_id_or_external(db, patient_id)
+    patient = crud.get_patient_for_user(db, patient_id, current_user)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
@@ -920,8 +959,13 @@ def get_upload_status(patient_id: str, db: Session = Depends(get_db)):
 
 
 @router.patch("/patients/{patient_id}")
-def update_patient_info(patient_id: str, patient_update: schemas.PatientUpdate, db: Session = Depends(get_db)):
-    patient = crud.get_patient_by_id_or_external(db, patient_id)
+def update_patient_info(
+    patient_id: str,
+    patient_update: schemas.PatientUpdate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    patient = crud.get_patient_for_user(db, patient_id, current_user)
     if not patient:
         raise HTTPException(status_code=404, detail="Khong tim thay benh nhan")
 
@@ -936,8 +980,12 @@ def update_patient_info(patient_id: str, patient_update: schemas.PatientUpdate, 
 
 
 @router.delete("/images/{image_id}")
-def delete_image_record(image_id: int, db: Session = Depends(get_db)):
-    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+def delete_image_record(
+    image_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    image = crud.get_image_for_user(db, image_id, current_user)
     if not image:
         raise HTTPException(status_code=404, detail="Khong tim thay hinh anh")
 
@@ -948,6 +996,53 @@ def delete_image_record(image_id: int, db: Session = Depends(get_db)):
             minio_client.remove_object(bucket_name=bucket_name, object_name=object_name)
         except Exception as exc:
             print(f"[Warning] Could not delete object storage file {bucket_name}/{object_name}: {exc}")
+
+    # Remove social/collaboration references before deleting the MRI row.
+    # These foreign keys intentionally protect images from accidental deletion.
+    post_ids = [
+        post_id
+        for (post_id,) in db.query(models.NeuroPost.id)
+        .filter(models.NeuroPost.image_id == image_id)
+        .all()
+    ]
+    if post_ids:
+        db.query(models.NeuroRoiComment).filter(models.NeuroRoiComment.post_id.in_(post_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(models.NeuroPostComment).filter(models.NeuroPostComment.post_id.in_(post_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(models.NeuroPostReaction).filter(models.NeuroPostReaction.post_id.in_(post_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(models.NeuroPostSave).filter(models.NeuroPostSave.post_id.in_(post_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(models.NeuroPostAttachment).filter(models.NeuroPostAttachment.post_id.in_(post_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(models.NeuroPost).filter(models.NeuroPost.id.in_(post_ids)).delete(synchronize_session=False)
+
+    second_opinion_ids = [
+        request_id
+        for (request_id,) in db.query(models.NeuroSecondOpinionRequest.id)
+        .filter(models.NeuroSecondOpinionRequest.case_image_id == image_id)
+        .all()
+    ]
+    if second_opinion_ids:
+        db.query(models.NeuroSecondOpinionRequest).filter(
+            models.NeuroSecondOpinionRequest.id.in_(second_opinion_ids)
+        ).update({models.NeuroSecondOpinionRequest.message_id: None}, synchronize_session=False)
+        db.query(models.NeuroMessage).filter(
+            models.NeuroMessage.second_opinion_request_id.in_(second_opinion_ids)
+        ).update({models.NeuroMessage.second_opinion_request_id: None}, synchronize_session=False)
+        db.query(models.NeuroSecondOpinionRequest).filter(
+            models.NeuroSecondOpinionRequest.id.in_(second_opinion_ids)
+        ).delete(synchronize_session=False)
+
+    db.query(models.NeuroMessage).filter(models.NeuroMessage.case_image_id == image_id).update(
+        {models.NeuroMessage.case_image_id: None}, synchronize_session=False
+    )
 
     analysis = db.query(models.AnalysisResult).filter(models.AnalysisResult.image_id == image_id).first()
     if analysis:
@@ -975,6 +1070,12 @@ def delete_image_record(image_id: int, db: Session = Depends(get_db)):
     ).all()
     for task in tasks:
         db.delete(task)
+    prognosis_tasks = db.query(models.InferenceTask).filter(
+        models.InferenceTask.task_type == "prognosis",
+        models.InferenceTask.result["image_id"].as_integer() == image_id,
+    ).all()
+    for task in prognosis_tasks:
+        db.delete(task)
 
     analysis_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "analysis_results", str(image_id))
     if os.path.isdir(analysis_dir):
@@ -986,14 +1087,19 @@ def delete_image_record(image_id: int, db: Session = Depends(get_db)):
     return {"message": "Da xoa dong ket qua va anh MRI thanh cong"}
 
 @router.get("/analysis/image/{image_id}/slice/{index}")
-def get_series_slice(image_id: int, index: int, db: Session = Depends(get_db)):
+def get_series_slice(
+    image_id: int,
+    index: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """Lấy một lát cắt cụ thể từ chuỗi ảnh (Series) để hiển thị trên Viewer."""
     from fastapi.responses import Response
     import io
     import cv2
     import numpy as np
 
-    image = db.query(models.Image).filter(models.Image.id == image_id).first()
+    image = crud.get_image_for_user(db, image_id, current_user)
     if not image:
         raise HTTPException(status_code=404, detail="Không tìm thấy ảnh")
     

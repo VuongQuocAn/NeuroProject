@@ -1,0 +1,28 @@
+# Optional overlay for docker-compose.local.yml OR docker-compose.tunnel.yml.
+services:
+  backend:
+    image: neuroproject-ai:gpu
+    build:
+      args:
+        PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu118
+    environment:
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  worker:
+    image: neuroproject-ai:gpu
+    environment:
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

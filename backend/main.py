@@ -1,15 +1,19 @@
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 load_dotenv()
 
 import models
 from database import engine, SessionLocal
-from utils import hash_password
+from utils import hash_password, reset_request_public_base_url, set_request_public_base_url
 from routers import upload, records, multimodal, inference, analysis, auth, admin
+from agent.router import router as agent_router
+from neuroboard.router import router as neuroboard_router
+from neuroboard.seed import seed_neuroboard_demo
 
 # Tự động tạo tất cả bảng trong PostgreSQL khi khởi động
 models.Base.metadata.create_all(bind=engine)
@@ -26,31 +30,92 @@ app = FastAPI(
 # CORS — cấu hình cho môi trường phát triển
 def _get_cors_origins() -> list[str]:
     configured = os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_URL") or ""
+    local_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
     origins = [origin.strip() for origin in configured.split(",") if origin.strip()]
-    return origins or ["http://localhost:3000", "http://127.0.0.1:3000"]
+    return list(dict.fromkeys([*origins, *local_origins]))
+
+
+def _get_cors_origin_regex() -> str | None:
+    configured = os.getenv("CORS_ORIGIN_REGEX", "").strip()
+    if configured:
+        return configured
+
+    allow_vercel_previews = os.getenv("ALLOW_VERCEL_PREVIEWS", "true").strip().lower()
+    if allow_vercel_previews not in {"0", "false", "no", "off"}:
+        return r"https://.*\.vercel\.app"
+
+    return None
 
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_get_cors_origins(),
+    allow_origin_regex=_get_cors_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+def _request_public_base_url(request: Request) -> str:
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip()
+    forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
+    host = forwarded_host or request.headers.get("host") or request.url.netloc
+    scheme = forwarded_proto or request.url.scheme
+    return f"{scheme}://{host}".rstrip("/")
+
+
+@app.middleware("http")
+async def bind_public_base_url(request: Request, call_next):
+    token = set_request_public_base_url(_request_public_base_url(request))
+    try:
+        return await call_next(request)
+    finally:
+        reset_request_public_base_url(token)
+
 @app.on_event("startup")
 def init_default_admin():
     db = SessionLocal()
-    existing_user = db.query(models.User).filter(models.User.username == "admin").first()
-    if not existing_user:
-        new_user = models.User(
-            username="admin",
-            hashed_password=hash_password("123456"),
-            role="researcher"
+    try:
+        demo_users = [
+            ("admin", "123456", "researcher"),
+            ("doctor_lan", "123456", "doctor"),
+            ("doctor_minh", "123456", "doctor"),
+        ]
+        seeded_users = {}
+        for username, password, role in demo_users:
+            user = db.query(models.User).filter(models.User.username == username).first()
+            if not user:
+                user = models.User(
+                    username=username,
+                    hashed_password=hash_password(password),
+                    role=role,
+                )
+                db.add(user)
+                db.flush()
+            else:
+                user.role = role
+                if not user.hashed_password:
+                    user.hashed_password = hash_password(password)
+            seeded_users[username] = user
+
+        admin_user = seeded_users["admin"]
+        legacy_patients = (
+            db.query(models.Patient)
+            .filter(models.Patient.owner_user_id.is_(None))
+            .all()
         )
-        db.add(new_user)
+        for patient in legacy_patients:
+            patient.owner_user_id = admin_user.id
         db.commit()
-    db.close()
+
+        seed_enabled = os.getenv("NEUROBOARD_SEED_DEMO", "true").strip().lower()
+        if seed_enabled not in {"0", "false", "no", "off"}:
+            created_count = seed_neuroboard_demo(db)
+            if created_count:
+                print(f"[NEUROBOARD] Seeded {created_count} demo posts")
+    finally:
+        db.close()
 
 # ============================================================
 # ĐĂNG KÝ CÁC ROUTER
@@ -76,6 +141,33 @@ app.include_router(auth.router)
 
 # --- Nhóm Quản trị (Access Log) ---
 app.include_router(admin.router)
+
+# --- Agent Chatbox ---
+app.include_router(agent_router)
+
+# --- NeuroBoard collaboration feed ---
+app.include_router(neuroboard_router)
+
+
+@app.get("/media/{bucket_name}/{object_name:path}")
+def proxy_media(bucket_name: str, object_name: str):
+    from utils import minio_client
+
+    try:
+        response = minio_client.get_object(bucket_name, object_name)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy media: {bucket_name}/{object_name}") from exc
+
+    content_type = response.headers.get("Content-Type", "application/octet-stream")
+
+    def iter_content():
+        try:
+            yield from response.stream(64 * 1024)
+        finally:
+            response.close()
+            response.release_conn()
+
+    return StreamingResponse(iter_content(), media_type=content_type)
 
 
 # ============================================================
