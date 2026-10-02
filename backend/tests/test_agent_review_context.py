@@ -86,3 +86,23 @@ def test_agent_analysis_context_uses_expert_label_as_final_label_after_review():
     assert payload["review_required"] is False
     assert payload["review_status"] == "corrected"
     db.close()
+
+
+def test_agent_analysis_context_requires_review_at_exactly_95_percent():
+    db = _session()
+    analysis = _analysis_fixture(db, confidence=0.95)
+    payload = serialize_analysis_with_visuals(db, analysis)
+    assert payload["review_required"] is True
+    assert payload["review_status"] == "needs_review"
+    db.close()
+
+
+def test_agent_review_statistics_include_95_percent_boundary():
+    from agent.tool_registry import get_review_statistics
+
+    db = _session()
+    _analysis_fixture(db, confidence=0.95)
+    stats = get_review_statistics(db)
+    assert stats["low_confidence_diagnoses"] == 1
+    assert stats["pending_doctor_review"] == 1
+    db.close()

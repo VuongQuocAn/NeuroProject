@@ -476,7 +476,7 @@ def notifications(
         .filter(
             models.AnalysisResult.no_tumor_detected.is_(False),
             models.AnalysisResult.classification_confidence.isnot(None),
-            models.AnalysisResult.classification_confidence < 0.95,
+            models.AnalysisResult.classification_confidence <= 0.95,
         )
     )
     stale_risk_query = (

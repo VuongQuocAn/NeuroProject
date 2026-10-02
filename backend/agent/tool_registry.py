@@ -42,7 +42,7 @@ TOOL_SPECS: dict[str, dict[str, Any]] = {
         "required_args": [],
     },
     "get_diagnoses_requiring_review": {
-        "description": "Số chẩn đoán cần bác sĩ phân tích lại: confidence < threshold và chưa có review.",
+        "description": "Số chẩn đoán cần bác sĩ phân tích lại: confidence <= threshold và chưa có review.",
         "required_args": [],
     },
 }
@@ -66,7 +66,7 @@ def get_notifications(db: Session, owner_user_id: int | None = None) -> dict[str
         .filter(
             models.AnalysisResult.no_tumor_detected.is_(False),
             models.AnalysisResult.classification_confidence.isnot(None),
-            models.AnalysisResult.classification_confidence < 0.95,
+            models.AnalysisResult.classification_confidence <= 0.95,
         )
     )
     stale_risk_query = (
@@ -226,7 +226,7 @@ def get_review_statistics(
         .filter(
             models.AnalysisResult.no_tumor_detected.is_(False),
             models.AnalysisResult.classification_confidence.isnot(None),
-            models.AnalysisResult.classification_confidence < threshold,
+            models.AnalysisResult.classification_confidence <= threshold,
         )
     )
     pending_review_diagnoses = (
@@ -243,7 +243,7 @@ def get_review_statistics(
         "low_confidence_diagnoses": low_confidence_query.count(),
         "pending_doctor_review": pending_review_diagnoses,
         "completed_reviews": _patient_scope(completed_reviews, owner_user_id).count(),
-        "definition": "pending_doctor_review = classification_confidence < threshold AND no completed classification review exists",
+        "definition": "pending_doctor_review = classification_confidence <= threshold AND no completed classification review exists",
     }
 
 

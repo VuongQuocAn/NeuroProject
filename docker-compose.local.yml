@@ -19,6 +19,8 @@ x-backend-environment: &backend-environment
   PYTHONPATH: /app
   PYTHONUNBUFFERED: "1"
   PYTHONDONTWRITEBYTECODE: "1"
+  LOCAL_DEMO_SEED: ${LOCAL_DEMO_SEED:-true}
+  BACKEND_PUBLIC_URL: http://localhost:${LOCAL_BACKEND_PORT:-8001}
 
 services:
   db:
@@ -94,7 +96,7 @@ services:
       - .env
     environment: *backend-environment
     ports:
-      - "8000:8000"
+      - "${LOCAL_BACKEND_PORT:-8001}:8000"
     volumes:
       - ./backend:/app
       - torch_cache:/root/.cache/torch
@@ -115,7 +117,7 @@ services:
   worker:
     image: neuroproject-ai:local-cpu
     restart: unless-stopped
-    command: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
+    command: celery -A celery_app.celery_app worker --loglevel=info --pool=threads --concurrency=1
     env_file:
       - .env
     environment: *backend-environment
@@ -137,7 +139,7 @@ services:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: http://localhost:${LOCAL_BACKEND_PORT:-8001}
       NEXT_PUBLIC_USE_MOCK_DATA: "false"
       NODE_OPTIONS: --max-old-space-size=4096
       WATCHPACK_POLLING: "true"

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
+import zipfile
 
 
 REQUIRED_WEIGHTS = (
@@ -39,6 +40,13 @@ def check_assets(backend_dir: Path) -> list[str]:
             errors.append(f"Model file is too small: {relative_path.as_posix()}")
         elif path.suffix == ".npy" and not header.startswith(b"\x93NUMPY"):
             errors.append(f"Invalid NumPy embedding file: {relative_path.as_posix()}")
+    demo_archive = backend_dir / "demo_data" / "local-demo.zip"
+    try:
+        with zipfile.ZipFile(demo_archive) as archive:
+            if "manifest.json" not in archive.namelist() or archive.testzip() is not None:
+                errors.append("Incomplete or corrupt demo_data/local-demo.zip; restore it from Git")
+    except (OSError, zipfile.BadZipFile):
+        errors.append("Missing or invalid demo_data/local-demo.zip; restore it from Git")
     return errors
 
 
@@ -54,7 +62,7 @@ def main() -> int:
             print(f"ERROR: {error}")
         return 1
 
-    print("OK: all four model files and four RAG assets are present (no LFS pointers).")
+    print("OK: four model files, four RAG assets and the bundled local demo archive are present.")
     if args.load_models:
         sys.path.insert(0, str(backend_dir))
         import torch

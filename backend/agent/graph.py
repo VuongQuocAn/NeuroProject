@@ -33,7 +33,7 @@ Nguyên tắc bắt buộc:
 - Không tự đưa chẩn đoán cuối cùng thay bác sĩ.
 - Không tự chỉnh nhãn nếu chưa có xác nhận của bác sĩ.
 - Luôn phân biệt AI label, expert label, final label và review status nếu có.
-- Neu chua co expert_tumor_label thi khong can nhac expert label. Neu confidence >= 0.95 thi chi trinh bay AI label/confidence; neu confidence < 0.95 thi phai khuyen can bac si xem xet/xac nhan lai.
+- Neu chua co expert_tumor_label thi khong can nhac expert label. Neu confidence > 0.95 thi chi trinh bay AI label/confidence; neu confidence <= 0.95 thi phai khuyen can bac si xem xet/xac nhan lai.
 - Neu co expert_tumor_label thi phai noi ro AI label ban dau, bac si da xac nhan hay chinh sua, va final label hien tai.
 - Nếu no_tumor_detected = true thì không nói risk score như một kết quả hợp lệ.
 - Heatmap/XAI giải thích hành vi mô hình, không phải bằng chứng mô bệnh học.
@@ -169,7 +169,7 @@ def build_response_prompt(db: Session, state: AgentState) -> str:
         "Náº¿u tool_errors bÃ¡o thiáº¿u patient_id/image_id, hÃ£y há»i láº¡i bÃ¡c sÄ© cáº§n chá»n bá»‡nh nhÃ¢n/áº£nh nÃ o. "
             "Náº¿u khÃ´ng cÃ³ tool_results vÃ¬ cÃ¢u há»i lÃ  kiáº¿n thá»©c chung, tráº£ lá»i kiáº¿n thá»©c chung. "
             "Neu answer_mode la system_analytics thi chi dung so lieu trong tool_results, phan biet patient count, diagnosis count va image count; "
-            "dinh nghia chan doan can phan tich lai la classification_confidence < 0.95 va chua co review hoan thanh. "
+            "dinh nghia chan doan can phan tich lai la classification_confidence <= 0.95 va chua co review hoan thanh. "
             "KhÃ´ng bá»‹a dá»¯ liá»‡u bá»‡nh nhÃ¢n."
         )
 
@@ -227,10 +227,10 @@ def build_response_prompt(db: Session, state: AgentState) -> str:
         "Neu tool_errors bao thieu patient_id/image_id thi hay hoi lai bac si can chon benh nhan hoac anh nao. "
         "Neu cau hoi la kien thuc chung va khong co tool_results thi tra loi kien thuc chung. "
         "Neu answer_mode la system_analytics thi chi dung so lieu trong tool_results, phan biet patient count, diagnosis count va image count; "
-        "dinh nghia chan doan can phan tich lai la classification_confidence < 0.95 va chua co review hoan thanh. "
+        "dinh nghia chan doan can phan tich lai la classification_confidence <= 0.95 va chua co review hoan thanh. "
         "Khi noi ve nhan phan loai MRI: neu khong co expert_tumor_label thi khong nhac expert label; "
-        "neu classification_confidence >= 0.95 thi chi trinh bay AI label/confidence nhu ket qua AI, khong can noi can review; "
-        "neu classification_confidence < 0.95 va chua co expert_tumor_label thi phai khuyen can bac si xem xet/xac nhan lai; "
+        "neu classification_confidence > 0.95 thi chi trinh bay AI label/confidence nhu ket qua AI, khong can noi can review; "
+        "neu classification_confidence <= 0.95 va chua co expert_tumor_label thi phai khuyen can bac si xem xet/xac nhan lai; "
         "neu co expert_tumor_label thi phai trinh bay AI label ban dau, sau do bac si da xac nhan/chinh sua thanh expert_tumor_label, va final_tumor_label hien tai."
     )
 

@@ -109,6 +109,17 @@ def init_default_admin():
             patient.owner_user_id = admin_user.id
         db.commit()
 
+        if os.getenv("LOCAL_DEMO_SEED", "false").strip().lower() in {"1", "true", "yes", "on"}:
+            from local_demo import seed_local_demo
+            from storage_io import build_storage_http_client
+            from utils import create_minio_client
+
+            created_count = seed_local_demo(
+                db, create_minio_client(http_client=build_storage_http_client()), admin_user.id,
+            )
+            if created_count:
+                print(f"[LOCAL DEMO] Seeded {created_count} patients with bundled files and results")
+
         seed_enabled = os.getenv("NEUROBOARD_SEED_DEMO", "true").strip().lower()
         if seed_enabled not in {"0", "false", "no", "off"}:
             created_count = seed_neuroboard_demo(db)

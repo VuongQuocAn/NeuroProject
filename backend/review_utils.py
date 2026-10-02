@@ -60,7 +60,7 @@ def classification_review_state(
     if not ai_display:
         status = "not_available"
         required = False
-    elif ai_confidence is not None and ai_confidence < CLASSIFICATION_REVIEW_THRESHOLD:
+    elif ai_confidence is not None and ai_confidence <= CLASSIFICATION_REVIEW_THRESHOLD:
         status = "needs_review"
         required = True
     else:

@@ -822,11 +822,7 @@ def get_patient_records(
     image_list = []
 
     for img in images:
-        object_name = img.file_path.split("/")[-1]
-        try:
-            url = minio_client.presigned_get_object(bucket_name=BUCKET_NAME, object_name=object_name)
-        except Exception:
-            url = None
+        url = _image_preview_url(img)
 
         latest_task = (
             db.query(models.InferenceTask)

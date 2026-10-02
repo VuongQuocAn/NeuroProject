@@ -81,7 +81,7 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       PYTHONPATH: /app
       PYTHONDONTWRITEBYTECODE: "1"
-    command: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
+    command: celery -A celery_app.celery_app worker --loglevel=info --pool=threads --concurrency=1
     volumes:
       - ./backend:/app
       - torch_cache:/root/.cache/torch
