@@ -18,6 +18,8 @@ An end-to-end research prototype that combines MRI tumor detection, segmentation
 
 **Web demo:** [neurodiagnosisai.vercel.app/login](https://neurodiagnosisai.vercel.app/login)
 
+**Lưu ý:** Kinh phí duy trì backend trên AWS đã hết nên backend hiện không còn chạy trên AWS. Để sử dụng đầy đủ dự án, hãy [clone repo và chạy local bằng Docker](#getting-started). Frontend Vercel chỉ hoạt động đầy đủ khi backend local được kết nối qua tunnel theo [hướng dẫn deploy](#website-deployment).
+
 </div>
 
 > [!IMPORTANT]
